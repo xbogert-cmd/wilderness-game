@@ -1,0 +1,75 @@
+class_name Ambience extends Node2D
+## Layered ambience driven by clock + weather. Each bed's gain is a small rule, so the
+## soundscape itself carries information: birds fall silent before rain, wind builds,
+## crickets take over at night, and the creek is heard from where it is.
+
+const FADE := 0.6 ## gain change per second
+
+var player: Node2D
+var terrain: Terrain
+var beds := {} ## name -> AudioStreamPlayer
+var creek: AudioStreamPlayer2D
+var owl: AudioStreamPlayer2D
+var _owl_timer := 30.0
+var _rng := RandomNumberGenerator.new()
+
+func _ready() -> void:
+	for n in ["forest_day", "dusk", "night_crickets", "wind_trees"]:
+		beds[n] = _bed(n, &"Ambience")
+	beds["rain"] = _bed("rain", &"Weather")
+	creek = AudioStreamPlayer2D.new()
+	creek.stream = load("res://assets/audio/creek.wav")
+	creek.bus = &"Ambience"
+	creek.max_distance = 3200.0
+	creek.attenuation = 1.6
+	creek.position = Vector2(Terrain.CREEK_X, terrain.water_surface_at(Terrain.CREEK_X))
+	add_child(creek)
+	creek.play(_rng.randf() * 30.0)
+	owl = AudioStreamPlayer2D.new()
+	owl.stream = load("res://assets/audio/owl.wav")
+	owl.bus = &"Ambience"
+	owl.max_distance = 4000.0
+	owl.volume_db = -8.0
+	add_child(owl)
+
+func _bed(n: String, bus: StringName) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.stream = load("res://assets/audio/%s.wav" % n)
+	p.bus = bus
+	p.volume_db = -80.0
+	add_child(p)
+	p.play(_rng.randf() * 20.0) # desync loops so seams never line up
+	return p
+
+func _process(delta: float) -> void:
+	var c := GameClock.clock
+	var w := GameClock.weather
+	var h := c.hour_of_day()
+	var day := c.daylight()
+	var twilight := exp(-pow((h - 6.3) / 1.2, 2.0)) + exp(-pow((h - 20.0) / 1.2, 2.0))
+	var night := 1.0 - smoothstep(0.0, 0.15, day)
+	var hush := 1.0 - (0.85 if w.storm_warning() else 0.0) # wildlife goes quiet before rain
+	var rain_mask := 1.0 - w.precip * 0.8
+	_gain("forest_day", smoothstep(0.05, 0.4, day) * hush * rain_mask * 0.9, delta)
+	_gain("dusk", clampf(twilight, 0.0, 1.0) * hush * rain_mask * 0.7, delta)
+	_gain("night_crickets", night * rain_mask * (1.0 if w.air_temp_c(c) > 4.0 else 0.2) * 0.6, delta)
+	_gain("wind_trees", clampf(w.wind * 1.1, 0.05, 1.0), delta)
+	_gain("rain", w.precip, delta)
+
+	_owl_timer -= delta
+	if _owl_timer <= 0.0:
+		_owl_timer = _rng.randf_range(35.0, 110.0)
+		if night > 0.5 and w.precip < 0.3:
+			owl.global_position = player.global_position + Vector2(_rng.randf_range(-2200, 2200), -500)
+			owl.pitch_scale = _rng.randf_range(0.95, 1.05)
+			owl.play()
+
+func _gain(n: String, target: float, delta: float) -> void:
+	var p: AudioStreamPlayer = beds[n]
+	var cur := db_to_linear(p.volume_db)
+	p.volume_db = linear_to_db(maxf(move_toward(cur, target, FADE * delta), 0.0001))
+
+func _exit_tree() -> void:
+	for p in beds.values():
+		p.stop()
+	creek.stop()

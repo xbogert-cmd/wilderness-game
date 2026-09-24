@@ -30,7 +30,12 @@ func _process(delta: float) -> void:
 	_time += delta
 	var speed := absf(body.velocity.x)
 	_gait = GAITS.run if body.running else (GAITS.crouch if body.crouching else GAITS.walk)
+	var prev := phase
 	phase = fposmod(phase + speed * delta / (_gait.stride * 2.0), 1.0)
+	if speed > 5.0 and body.is_on_floor():
+		for o in [0.0, 0.5]: # a foot plants when its cycle wraps back to the start of stance
+			if fposmod(prev + o, 1.0) > fposmod(phase + o, 1.0):
+				body.footsteps.step()
 	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching else 0.0)
 	_lean = lerpf(_lean, want_lean, 1.0 - exp(-delta * 8.0))
 	queue_redraw()

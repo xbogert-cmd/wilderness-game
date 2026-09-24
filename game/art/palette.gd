@@ -1,5 +1,5 @@
 class_name Palette extends RefCounted
-## The locked placeholder palette. Muted western mixed forest. See docs/art/ART_DIRECTION.md.
+## The locked placeholder palette. Muted western mixed forest. See assets/ASSET_MANIFEST.md.
 
 # Vegetation
 const FIR_DARK := Color("2b4536")

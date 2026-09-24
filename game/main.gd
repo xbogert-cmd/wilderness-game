@@ -54,6 +54,11 @@ func _ready() -> void:
 	atmo.rain = rain
 	add_child(atmo)
 
+	var ambience := Ambience.new()
+	ambience.player = player
+	ambience.terrain = world.terrain
+	add_child(ambience)
+
 	var ui := CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)

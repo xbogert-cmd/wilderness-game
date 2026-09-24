@@ -11,6 +11,7 @@ const FALL_INJURY_SPEED := 1150.0
 const HOP_STAMINA := 6.0
 
 var world: World
+var footsteps: Footsteps
 var cond: Condition
 var facing := 1
 var running := false
@@ -33,6 +34,9 @@ func _ready() -> void:
 	floor_snap_length = 28.0
 	floor_max_angle = deg_to_rad(52.0)
 	floor_constant_speed = true
+	footsteps = Footsteps.new()
+	footsteps.body = self
+	add_child(footsteps)
 	var rig := PlayerRig.new()
 	rig.body = self
 	add_child(rig)
@@ -65,6 +69,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
 		_on_landed(_fall_vy)
+		footsteps.step()
 		_fall_vy = 0.0
 	if dir != 0.0:
 		facing = 1 if dir > 0.0 else -1
