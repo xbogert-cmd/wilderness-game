@@ -22,3 +22,6 @@ func step() -> void:
 	stream = _mud if wet else _grass
 	volume_db = -14.0 if body.crouching else (-2.0 if body.running else -7.0)
 	play()
+
+func _exit_tree() -> void:
+	stop()

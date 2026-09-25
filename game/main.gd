@@ -91,6 +91,12 @@ func _ready() -> void:
 		player.auto_run = true
 	if args.has("zoom"):
 		camera.zoom_override = float(args.zoom)
+	if args.has("camp"): # preview a finished camp next to the player
+		world.spawn({"kind": "lean_to", "x": x + 260.0})
+		world.spawn({"kind": "campfire", "x": x + 520.0, "fuel": 6.0, "lit": true})
+		world.spawn({"kind": "log", "size": "medium", "x": x - 160.0, "y": world.terrain.height_at(x - 160.0) - 30.0})
+		world.spawn({"kind": "log", "size": "short", "x": x + 620.0, "y": world.terrain.height_at(x + 620.0) - 30.0})
+		player.draw_slot(0)
 	if args.has("pack"):
 		pack_ui.toggle.call_deferred()
 	if args.has("debug"):

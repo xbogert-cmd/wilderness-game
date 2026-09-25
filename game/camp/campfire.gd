@@ -36,7 +36,7 @@ func _ready() -> void:
 	tex.width = 256
 	tex.height = 256
 	_light.texture = tex
-	_light.texture_scale = 7.0
+	_light.texture_scale = 4.5
 	_light.color = Color(1.0, 0.62, 0.3)
 	_light.position = Vector2(0, -30)
 	add_child(_light)
@@ -110,7 +110,8 @@ func _process(delta: float) -> void:
 	_t += delta
 	var strength := clampf(fuel / 2.0, 0.25, 1.0) if lit else 0.0
 	_light.visible = lit
-	_light.energy = strength * (1.1 + 0.15 * sin(_t * 11.0) + 0.1 * sin(_t * 23.0))
+	var dark := 1.0 - GameClock.clock.daylight() * (1.0 - GameClock.weather.cloud * 0.5)
+	_light.energy = strength * lerpf(0.12, 1.1, dark) * (1.0 + 0.14 * sin(_t * 11.0) + 0.09 * sin(_t * 23.0))
 	_embers.emitting = lit
 	_smoke.emitting = lit or fuel > 0.0 and fuel < START_FUEL * 0.5
 	if lit != _sound.playing:
@@ -228,3 +229,6 @@ func _draw() -> void:
 			for i in 3:
 				var y := -66.0 - fmod(_t * 30.0 + i * 12.0, 36.0)
 				draw_circle(Vector2(-8 + i * 8, y), 3.0, Color(1, 1, 1, 0.35))
+
+func _exit_tree() -> void:
+	_sound.stop() # a playing stream at shutdown is reported as a leak

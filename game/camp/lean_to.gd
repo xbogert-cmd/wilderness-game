@@ -44,6 +44,7 @@ func _draw() -> void:
 	var dark := Palette.BARK_DARK
 	var top := Vector2(95, -175)
 	var back := Vector2(-125, 4)
+	draw_colored_polygon(PackedVector2Array([top, Vector2(100, 4), back]), Color(0.08, 0.07, 0.06, 0.75)) # shade inside
 	draw_line(Vector2(100, 4), top, dark, 11.0) # front post
 	draw_line(top + Vector2(-6, -8), top + Vector2(14, 8), dark, 8.0) # fork
 	var along := (back - top).normalized()
@@ -55,5 +56,7 @@ func _draw() -> void:
 	rng.seed = 3
 	for i in 10: # bough thatch laid along the roof
 		var p := top.lerp(back, (i + 0.5) / 10.0) + across * rng.randf_range(-14, -4)
-		draw_colored_polygon(SceneryArt.blob(p, 30.0, rng, 8, 0.3), Palette.FIR_DARK.lightened(0.06 * (i % 2)))
+		var bough := Palette.FIR_LIGHT.lerp(Palette.GRASS_DRY, 0.25 * (i % 3))
+		draw_colored_polygon(SceneryArt.blob(p, 28.0, rng, 8, 0.3), bough)
+	draw_line(top, back, bark.lightened(0.15), 5.0) # top pole over the thatch
 	draw_rect(Rect2(-80, -9, 170, 9), Palette.FIR_LIGHT.darkened(0.25)) # bedding
