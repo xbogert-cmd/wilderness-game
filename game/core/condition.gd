@@ -13,13 +13,15 @@ var hunger := 100.0
 var thirst := 100.0
 var warmth := 50.0 ## 0 freezing, 50 comfortable, 100 overheated
 var wetness := 0.0 ## 0..1
+var fatigue := 0.0 ## 0 rested, 100 exhausted
 var injuries := {} ## region -> {"kind": String, "severity": float 0..1, "treated": bool}
 
 func _init(tuning: Tuning = null) -> void:
 	t = tuning if tuning else Tuning.new()
 
 ## Advance by game hours. env keys (all optional):
-## air_c, precip, sheltered, heat (0..1 fire proximity), exertion (0..1), wading (0..1), sleeping
+## air_c, precip, sheltered, heat (0..1 fire proximity), exertion (0..1), wading (0..1),
+## sleeping, sleep_quality (0..1), insulation_c (extra felt warmth, e.g. a sleeping bag)
 func tick(dh: float, env: Dictionary) -> void:
 	var exertion: float = env.get("exertion", 0.0)
 	var sleeping: bool = env.get("sleeping", false)
@@ -32,9 +34,15 @@ func tick(dh: float, env: Dictionary) -> void:
 	var dry := t.dry_per_hour * (1.0 + heat * 4.0)
 	wetness = clampf(wetness + (wet_in - dry) * dh, 0.0, 1.0)
 
-	var felt: float = env.get("air_c", 15.0) + heat * t.fire_heat_c - wetness * 10.0 + t.clothing_c
+	var felt: float = env.get("air_c", 15.0) + heat * t.fire_heat_c - wetness * 10.0 + t.clothing_c + env.get("insulation_c", 0.0)
 	var target := clampf(50.0 + (felt - 20.0) * 2.5, 0.0, 100.0)
 	warmth = move_toward(warmth, target, t.warmth_rate_per_hour * dh)
+
+	var quality: float = env.get("sleep_quality", 1.0)
+	if sleeping:
+		fatigue = maxf(fatigue - t.sleep_recovery_per_hour * quality * dh, 0.0)
+	else:
+		fatigue = minf(fatigue + t.fatigue_per_hour * (1.0 + 0.5 * exertion) * dh, 100.0)
 
 	var drain := 0.0
 	if hunger <= 0.0: drain += t.starving_damage_per_hour
@@ -43,7 +51,7 @@ func tick(dh: float, env: Dictionary) -> void:
 	if drain > 0.0:
 		health = maxf(health - drain * dh, 0.0)
 	elif hunger > 40.0 and thirst > 40.0 and warmth > 30.0:
-		health = minf(health + t.regen_per_hour * dh * (t.sleep_regen_mult if sleeping else 1.0), 100.0)
+		health = minf(health + t.regen_per_hour * dh * (t.sleep_regen_mult * quality if sleeping else 1.0), 100.0)
 
 	var comfy := hunger > 30.0 and thirst > 30.0 and warmth > 30.0
 	for region in injuries.keys():
@@ -62,7 +70,7 @@ func spend_stamina(amount: float) -> bool:
 	return true
 
 func recover_stamina(real_sec: float) -> void:
-	var mult := 0.5 if hunger < 20.0 or thirst < 20.0 else 1.0
+	var mult := (0.5 if hunger < 20.0 or thirst < 20.0 else 1.0) * (0.5 if fatigue > 80.0 else 1.0)
 	stamina = minf(stamina + t.stamina_regen_per_sec * mult * real_sec, 100.0)
 
 func injure(region: String, kind: String, severity: float) -> void:
@@ -85,7 +93,7 @@ func move_speed_mult() -> float:
 	return 1.0 - severity("legs") * 0.55
 
 func tool_speed_mult() -> float:
-	return (1.0 - severity("arms") * 0.5) * (0.8 if warmth < 20.0 else 1.0)
+	return (1.0 - severity("arms") * 0.5) * (0.8 if warmth < 20.0 else 1.0) * (0.85 if fatigue > 80.0 else 1.0)
 
 func eat(amount: float) -> void:
 	hunger = minf(hunger + amount, 100.0)
@@ -98,7 +106,7 @@ func is_dead() -> bool:
 
 func to_dict() -> Dictionary:
 	return {"health": health, "stamina": stamina, "hunger": hunger, "thirst": thirst,
-		"warmth": warmth, "wetness": wetness, "injuries": injuries.duplicate(true)}
+		"warmth": warmth, "wetness": wetness, "fatigue": fatigue, "injuries": injuries.duplicate(true)}
 
 func from_dict(d: Dictionary) -> void:
 	health = float(d.health)
@@ -107,4 +115,5 @@ func from_dict(d: Dictionary) -> void:
 	thirst = float(d.thirst)
 	warmth = float(d.warmth)
 	wetness = float(d.wetness)
+	fatigue = float(d.get("fatigue", 0.0))
 	injuries = (d.injuries as Dictionary).duplicate(true)

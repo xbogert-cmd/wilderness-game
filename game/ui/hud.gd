@@ -15,9 +15,15 @@ const TEXT := Color(0.95, 0.92, 0.85)
 var player: Player
 var _font: Font
 var _msgs: Array = [] ## [text, time_left]
+var fade := 0.0 ## full-screen black, for death and waking
+
+func fade_to(target: float, seconds: float) -> Tween:
+	var tw := create_tween()
+	tw.tween_property(self, "fade", target, seconds)
+	return tw
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = get_theme_default_font()
 	player.message.connect(func(t: String): _msgs.append([t, MSG_SECONDS]))
@@ -56,6 +62,7 @@ func _draw() -> void:
 	elif cond.warmth > 80.0: notes.append("Overheated")
 	if player.world.heat_at(player.global_position + Vector2(0, -60)) > 0.1: notes.append("By the fire")
 	if cond.wetness > 0.15: notes.append("Soaked" if cond.wetness > 0.6 else "Damp")
+	if cond.fatigue > 60.0: notes.append("Exhausted" if cond.fatigue > 85.0 else "Tired")
 	if player.world.sheltered_at(player.global_position.x): notes.append("Sheltered")
 	for region in cond.injuries:
 		notes.append("%s %s%s" % [INJURY_TEXT.get(cond.injuries[region].kind, "Hurt"), region, " (treated)" if cond.injuries[region].treated else ""])
@@ -76,7 +83,7 @@ func _draw() -> void:
 	var lines: PackedStringArray = []
 	if player.working > 0.0:
 		lines.append(player.work_label + "…")
-	else:
+	elif not (player.sleeping or player.dead):
 		if player.chop_target:
 			lines.append("[Click] " + player.chop_target.chop_label(player))
 		if player.focus:
@@ -87,10 +94,22 @@ func _draw() -> void:
 	for k in lines.size():
 		_text(head + Vector2(0, (k - lines.size() + 1) * 20.0), lines[k], 15, TEXT, true)
 
+	if player.sleeping: # letterbox + clock while time runs fast
+		var bar := size.y * 0.09
+		draw_rect(Rect2(0, 0, size.x, bar), Color(0, 0, 0, 0.85))
+		draw_rect(Rect2(0, size.y - bar, size.x, bar), Color(0, 0, 0, 0.85))
+		var c := GameClock.clock
+		_text(Vector2(size.x * 0.5, size.y - bar * 0.4), "Sleeping  ·  %02d:%02d  ·  rested %d%%  ·  any key to wake" % [int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60.0), int(100.0 - cond.fatigue)], 18, TEXT, true)
+
 	var y := size.y - 110.0
 	for k in _msgs.size():
 		var m: Array = _msgs[_msgs.size() - 1 - k]
 		_text(Vector2(size.x * 0.5, y - k * 22.0), m[0], 16, Color(TEXT, clampf(m[1], 0.0, 1.0)), true)
+	_draw_fade()
+
+func _draw_fade() -> void:
+	if fade > 0.0:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, fade))
 
 func _log_nearby() -> bool:
 	for l in get_tree().get_nodes_in_group("log"):

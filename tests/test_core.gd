@@ -106,3 +106,25 @@ func test_condition_roundtrip() -> void:
 	b.from_dict(JSON.parse_string(JSON.stringify(a.to_dict())))
 	t.near(b.wetness, a.wetness, "wetness")
 	t.near(b.severity("arms"), a.severity("arms"), "injury")
+
+func test_fatigue_builds_awake_and_sleep_restores() -> void:
+	var c := Condition.new()
+	for i in 18: c.tick(1.0, {"air_c": 18.0})
+	t.ok(c.fatigue > 90.0, "a long day is exhausting (%.0f)" % c.fatigue)
+	var good := Condition.new()
+	var poor := Condition.new()
+	good.fatigue = 90.0
+	poor.fatigue = 90.0
+	for i in 4:
+		good.tick(1.0, {"air_c": 18.0, "sleeping": true, "sleep_quality": 1.0})
+		poor.tick(1.0, {"air_c": 18.0, "sleeping": true, "sleep_quality": 0.3})
+	t.ok(good.fatigue < poor.fatigue - 20.0, "better sleep restores more (%.0f vs %.0f)" % [good.fatigue, poor.fatigue])
+	t.ok(c.to_dict().has("fatigue"), "fatigue saved")
+
+func test_sleeping_bag_insulates() -> void:
+	var bag := Condition.new()
+	var none := Condition.new()
+	for i in 20:
+		bag.tick(0.3, {"air_c": 2.0, "sleeping": true, "insulation_c": 8.0})
+		none.tick(0.3, {"air_c": 2.0, "sleeping": true})
+	t.ok(bag.warmth > none.warmth + 10.0, "bag keeps you warmer (%.0f vs %.0f)" % [bag.warmth, none.warmth])

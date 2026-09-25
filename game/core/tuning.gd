@@ -15,6 +15,11 @@ class_name Tuning extends Resource
 @export var regen_per_hour := 2.0
 @export var sleep_regen_mult := 4.0
 
+@export_group("Fatigue (per game hour)")
+@export var fatigue_per_hour := 5.5 ## awake; ~18 h from rested to exhausted
+@export var sleep_recovery_per_hour := 15.0 ## asleep at quality 1.0
+@export var sleeping_bag_c := 8.0 ## insulation while sleeping in the bag
+
 @export_group("Stamina (per real second)")
 @export var stamina_regen_per_sec := 14.0
 @export var run_stamina_per_sec := 9.0

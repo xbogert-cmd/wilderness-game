@@ -2,6 +2,8 @@ class_name Player extends CharacterBody2D
 ## Movement, hands, and survival wiring. Presentation lives in PlayerRig, which only reads this node.
 
 signal message(text: String)
+signal died
+signal made_camp ## slept at or built a shelter: autosave and respawn point
 
 const WALK := 150.0
 const RUN := 390.0
@@ -17,6 +19,7 @@ const SWING_TIME := 0.6
 const SWING_IMPACT := 0.62 ## fraction of the swing where the blade lands
 const SWING_STAMINA := 4.0
 const CARRY_STAMINA_PER_SEC := 2.5
+const DEATH_LOSS_CHANCE := 0.2 ## per consumable stack (doubled roll, loses half the stack)
 
 var world: World
 var footsteps: Footsteps
@@ -42,6 +45,10 @@ var _can_run := true
 var _fall_vy := 0.0
 var _work_done: Callable
 var aim_override := Vector2.INF ## scripted checks aim without a mouse
+var sleeping := false
+var dead := false
+var start_x := 0.0 ## where the trail begins; respawn point until a camp exists
+var camp_x := -1.0 ## last camp (shelter) used; -1 = none yet
 
 func _ready() -> void:
 	add_to_group("player")
@@ -80,6 +87,13 @@ func _starting_kit() -> void:
 # --- Movement ----------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	if sleeping or dead:
+		velocity.x = 0.0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		if sleeping:
+			_auto_wake()
+		return
 	var dir := 0.0
 	if working <= 0.0 and swing < 0.0:
 		dir = auto_dir if auto_dir != 0.0 else Input.get_axis("move_left", "move_right")
@@ -136,8 +150,16 @@ func exertion() -> float:
 	return 0.3 if absf(velocity.x) > 1.0 else 0.0
 
 func _on_tick(dh: float) -> void:
+	if dead:
+		return
+	if cond.is_dead(): # damage dealt outside the tick (falls, spoiled food) must not regenerate away
+		_die()
+		return
 	var w := GameClock.weather
 	cond.tick(dh, {
+		"sleeping": sleeping,
+		"sleep_quality": sleep_quality() if sleeping else 1.0,
+		"insulation_c": GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0,
 		"air_c": w.air_temp_c(GameClock.clock),
 		"precip": w.precip,
 		"sheltered": world.sheltered_at(global_position.x),
@@ -145,11 +167,22 @@ func _on_tick(dh: float) -> void:
 		"exertion": exertion(),
 		"wading": clampf(wade_depth / 100.0, 0.0, 1.0),
 	})
+	if cond.is_dead():
+		_die()
 
 # --- Input -------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	if working > 0.0:
+	if dead or working > 0.0:
+		return
+	if sleeping:
+		for a in ["move_left", "move_right", "hop", "interact", "rest", "use"]:
+			if event.is_action_pressed(a):
+				wake()
+				get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("rest"):
+		sleep()
 		return
 	if event.is_action_pressed("interact") and focus:
 		focus.interact(self)
@@ -334,3 +367,128 @@ func _advance_work(delta: float) -> void:
 		GameClock.time_scale = 1.0
 		work_label = ""
 		_work_done.call()
+
+# --- Sleep ---------------------------------------------------------------------
+
+## Better with a sleeping bag, a roof, a fire nearby, dry clothes, warmth and a fed belly.
+func sleep_quality() -> float:
+	var q := 0.45
+	if backpack.count_of("sleeping_bag") > 0: q += 0.25
+	if world.sheltered_at(global_position.x): q += 0.1
+	if world.heat_at(global_position + Vector2(0, -40)) > 0.1: q += 0.1
+	q -= cond.wetness * 0.3
+	if cond.warmth < 30.0: q -= 0.2
+	if cond.hunger < 20.0 or cond.thirst < 20.0: q -= 0.15
+	return clampf(q, 0.15, 1.0)
+
+func sleep() -> void:
+	if not world.sheltered_at(global_position.x):
+		message.emit("You need shelter to sleep. A lean-to will do.")
+		return
+	stow()
+	drop_carried()
+	sleeping = true
+	GameClock.time_scale = GameClock.tuning.sleep_time_scale
+	for s in get_tree().get_nodes_in_group("shelter"):
+		if s.covers(global_position.x):
+			camp_x = s.global_position.x
+	message.emit("You settle in. Any key to wake.")
+	made_camp.emit()
+
+func wake(reason := "") -> void:
+	if not sleeping:
+		return
+	sleeping = false
+	GameClock.time_scale = 1.0
+	message.emit(reason if reason != "" else "You wake. (%s)" % ("rested" if cond.fatigue < 20.0 else "still tired"))
+
+func _auto_wake() -> void:
+	if cond.hunger < 8.0: wake("Hunger wakes you.")
+	elif cond.thirst < 8.0: wake("Thirst wakes you.")
+	elif cond.health < 25.0: wake("You wake shivering and hurt.")
+
+# --- Death and recovery -------------------------------------------------------
+
+func _die() -> void:
+	dead = true
+	sleeping = false
+	working = 0.0
+	swing = -1.0
+	GameClock.time_scale = 1.0
+	drop_carried()
+	if held and not backpack.add(held):
+		drop_stack(held)
+	held = null
+	held_slot = -1
+	message.emit("Everything goes dark.")
+	died.emit()
+
+## Called once the screen is black: leave the pack where you fell, wake at camp.
+func respawn() -> void:
+	var lost := _death_losses()
+	world.spawn({"kind": "pack", "x": global_position.x, "pack": backpack.to_dict()})
+	backpack = Backpack.new()
+	var x := camp_x if camp_x >= 0.0 else start_x
+	global_position = Vector2(x, world.terrain.height_at(x) - 4.0)
+	velocity = Vector2.ZERO
+	world.update_focus(x)
+	cond.health = 45.0
+	cond.stamina = 100.0
+	cond.hunger = maxf(cond.hunger, 35.0)
+	cond.thirst = maxf(cond.thirst, 35.0)
+	cond.warmth = 50.0
+	cond.wetness = 0.0
+	cond.fatigue = 30.0
+	cond.injuries.clear()
+	dead = false
+	message.emit("You come to at %s. Your pack lies where you fell." % ("camp" if camp_x >= 0.0 else "the trailhead"))
+	if lost != "":
+		message.emit("Lost along the way: " + lost)
+
+## Most of the pack survives. Food spoils, tools come back duller and worn, and some
+## consumables (bandages, sticks) scatter. Nothing you can't replace is ever lost:
+## single items (tools, lighter, containers, gear, anything "unique") always stay.
+func _death_losses() -> String:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(GameClock.clock.hours * 1000.0)
+	var lost: PackedStringArray = []
+	for s in backpack.all_stacks():
+		if s.def.has("food") and s.def.spoil_hours > 0.0:
+			s.made_hour = minf(s.made_hour, GameClock.clock.hours - s.def.spoil_hours)
+		elif s.def.has("tool"):
+			s.sharpness = maxf(0.35, s.sharpness - 0.25)
+			s.condition = maxf(0.3, s.condition - 0.2)
+		elif s.def.max_stack > 1 and not s.def.has("unique") and rng.randf() < DEATH_LOSS_CHANCE * 2.0:
+			var n := maxi(1, s.count / 2)
+			s.count -= n
+			lost.append("%d %s" % [n, s.def.name.to_lower()])
+			if s.count <= 0:
+				backpack.remove(s)
+	return ", ".join(lost)
+
+# --- Saving ---------------------------------------------------------------------
+
+## "" when it's safe to save, otherwise why not.
+func unsafe_reason() -> String:
+	if dead: return "You can't save now."
+	if not is_on_floor(): return "Get your feet on the ground first."
+	if wade_depth > 0.0: return "Get out of the water first."
+	if carrying: return "Set the log down first."
+	if working > 0.0 or swing >= 0.0: return "Finish what you're doing first."
+	if cond.health < 15.0: return "You're in too much danger to save."
+	return ""
+
+func to_dict() -> Dictionary:
+	return {"x": global_position.x, "y": global_position.y, "facing": facing, "cond": cond.to_dict(),
+		"pack": backpack.to_dict(), "held": held.to_dict() if held else null, "held_slot": held_slot,
+		"recipes": Array(known_recipes), "camp_x": camp_x}
+
+func from_dict(d: Dictionary) -> void:
+	global_position = Vector2(float(d.x), float(d.y))
+	facing = int(d.facing)
+	cond.from_dict(d.cond)
+	backpack.from_dict(d.pack)
+	held = ItemStack.from_dict(d.held) if d.held else null
+	held_slot = int(d.held_slot)
+	known_recipes = PackedStringArray(d.recipes)
+	camp_x = float(d.camp_x)

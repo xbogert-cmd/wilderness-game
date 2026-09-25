@@ -1,6 +1,6 @@
 class_name LeanTo extends Node2D
-## A quick log shelter: keeps rain off whoever is under it, and becomes a camp
-## (respawn, rest and save point once sleep and saving land).
+## A quick log shelter: keeps rain off whoever is under it. Sleeping here (or building it)
+## makes it your camp: the respawn point and an autosave.
 
 const COVER := 110.0
 
@@ -15,6 +15,11 @@ func _ready() -> void:
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)))
+	if d.get("fresh", false):
+		var p: Player = get_tree().get_first_node_in_group("player")
+		p.camp_x = global_position.x
+		p.message.emit("The lean-to is up. This is your camp now.")
+		p.made_camp.emit()
 
 func to_state() -> Dictionary:
 	return {"kind": "lean_to", "x": global_position.x}
@@ -31,11 +36,12 @@ func covers(x: float) -> bool:
 func interact_pos() -> Vector2:
 	return global_position
 
-func interact_label(_p: Player) -> String:
-	return "Lean-to (dry here; rest and camp saves arrive next milestone)"
+func interact_label(p: Player) -> String:
+	var q := p.sleep_quality()
+	return "Sleep  (%s rest%s)" % ["good" if q > 0.75 else ("fair" if q > 0.5 else "poor"), "" if p.backpack.count_of("sleeping_bag") > 0 else ", no sleeping bag"]
 
 func interact(p: Player) -> void:
-	p.message.emit("It's dry under here. Rain won't soak you while you stay close.")
+	p.sleep()
 
 ## Side profile: a tall front post and ridge, roof poles sloping to the ground behind,
 ## bough thatch on the roof, bedding underneath.

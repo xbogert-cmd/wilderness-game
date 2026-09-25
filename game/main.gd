@@ -3,8 +3,14 @@ extends Node2D
 ##   --hour=H  --weather=clear|overcast|drizzle|rain  --x=WORLD_X
 ##   --shot=path.png   capture after settling, then quit
 ##   --tour            teleport across every chunk, verify streaming, then quit
+##   --load=SLOT       start from a save slot (1, 2, 3, auto)
+##   --scenario[=life] scripted end-to-end checks (see game/debug/scenario.gd)
 
 const START_X := 2600.0
+const AUTOSAVE_SECONDS := 300.0
+
+var hud: Hud
+var _autosave_t := 0.0
 
 var world: World
 var player: Player
@@ -13,11 +19,19 @@ var backdrop: Backdrop
 
 func _ready() -> void:
 	var args := _args()
+	if args.has("load"):
+		SaveGame.pending = SaveGame.read(args.load)
+	var save := SaveGame.pending
+	SaveGame.pending = {}
+	if save:
+		GameClock.clock.from_dict(save.clock)
+		GameClock.weather.from_dict(save.weather)
+		GameClock.time_scale = 1.0
 
 	var sky_layer := CanvasLayer.new()
 	sky_layer.layer = -10
 	var sky := ColorRect.new()
-	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = preload("res://game/world/sky.gdshader")
 	sky.material = sky_mat
@@ -26,13 +40,21 @@ func _ready() -> void:
 
 	world = World.new()
 	add_child(world)
+	if save:
+		world.restore(save.world)
 	player = Player.new()
 	player.world = world
 	player.z_index = 5
+	player.start_x = START_X
 	var x := float(args.get("x", START_X))
 	player.position = Vector2(x, world.terrain.height_at(x) - 4.0)
 	add_child(player)
+	if save:
+		player.from_dict(save.player)
+		x = player.global_position.x
 	world.update_focus(x)
+	player.died.connect(_on_player_died)
+	player.made_camp.connect(func(): save_to("auto"))
 
 	camera = FollowCamera.new()
 	camera.target = player
@@ -62,9 +84,13 @@ func _ready() -> void:
 	var ui := CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
-	var hud := Hud.new()
+	hud = Hud.new()
 	hud.player = player
 	ui.add_child(hud)
+	var pause := PauseMenu.new()
+	pause.player = player
+	pause.main = self
+	ui.add_child(pause) # before the pack UI so the pack gets Esc first while open
 	var build_menu := VBoxContainer.new()
 	build_menu.position = Vector2(60, 120)
 	ui.add_child(build_menu)
@@ -81,7 +107,7 @@ func _ready() -> void:
 	dbg.world = world
 	ui.add_child(dbg)
 
-	if args.has("hour"):
+	if args.has("hour") and not save:
 		GameClock.clock.hours = float(args.hour)
 	if args.has("weather"):
 		GameClock.force_weather(Weather.NAMES.find(args.weather))
@@ -97,6 +123,11 @@ func _ready() -> void:
 		world.spawn({"kind": "log", "size": "medium", "x": x - 160.0, "y": world.terrain.height_at(x - 160.0) - 30.0})
 		world.spawn({"kind": "log", "size": "short", "x": x + 620.0, "y": world.terrain.height_at(x + 620.0) - 30.0})
 		player.draw_slot(0)
+	if args.has("sleep"): # preview: asleep under a lean-to
+		world.spawn({"kind": "lean_to", "x": x})
+		player.sleep.call_deferred()
+	if args.has("menu"):
+		pause.toggle.call_deferred()
 	if args.has("pack"):
 		pack_ui.toggle.call_deferred()
 	if args.has("debug"):
@@ -106,11 +137,52 @@ func _ready() -> void:
 		sc.player = player
 		sc.world = world
 		sc.shot = args.get("shot", "")
+		sc.mode = args.scenario if args.scenario != "" else "camp"
 		add_child(sc)
 	elif args.has("tour"):
 		_tour()
 	elif args.has("shot"):
 		_shot(args.shot)
+
+func _process(delta: float) -> void:
+	_autosave_t += delta
+	if _autosave_t >= AUTOSAVE_SECONDS and player.unsafe_reason() == "":
+		_autosave_t = 0.0
+		save_to("auto")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("quicksave"):
+		var why := player.unsafe_reason()
+		if why != "":
+			player.message.emit("Can't save: " + why)
+		elif save_to("1") == OK:
+			player.message.emit("Saved to slot 1.")
+
+func snapshot() -> Dictionary:
+	return {"clock": GameClock.clock.to_dict(), "weather": GameClock.weather.to_dict(),
+		"player": player.to_dict(), "world": world.snapshot()}
+
+func save_to(slot: String) -> Error:
+	var err := SaveGame.write(slot, snapshot())
+	if err != OK:
+		push_error("save to slot %s failed: %s" % [slot, error_string(err)])
+	return err
+
+func load_from(slot: String) -> void:
+	var d := SaveGame.read(slot)
+	if d.is_empty():
+		player.message.emit("That save can't be loaded.")
+		return
+	SaveGame.pending = d
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+func _on_player_died() -> void:
+	await hud.fade_to(1.0, 1.6).finished
+	await get_tree().create_timer(1.0).timeout
+	player.respawn()
+	camera.reset_smoothing()
+	hud.fade_to(0.0, 2.2)
 
 func _args() -> Dictionary:
 	var out := {}

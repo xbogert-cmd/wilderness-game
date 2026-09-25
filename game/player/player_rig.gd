@@ -71,6 +71,9 @@ static func ik(root: Vector2, target: Vector2, l1: float, l2: float, bend: float
 	return root + Vector2.from_angle((target - root).angle() - a * bend) * l1
 
 func _draw() -> void:
+	if body.sleeping or body.dead:
+		_draw_lying()
+		return
 	var moving := absf(body.velocity.x) > 5.0 and body.is_on_floor()
 	var airborne := not body.is_on_floor()
 	var feet := [_foot(0.0, moving, airborne), _foot(0.5, moving, airborne)]
@@ -229,3 +232,27 @@ func _limb(a: Vector2, b: Vector2, wa: float, wb: float, color: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([a + n * wa * 0.5, b + n * wb * 0.5, b - n * wb * 0.5, a - n * wa * 0.5]), color)
 	draw_circle(a, wa * 0.5, color)
 	draw_circle(b, wb * 0.5, color)
+
+## On the back, head on the pack; under the sleeping bag when asleep with one.
+func _draw_lying() -> void:
+	var g := _ground(0.0)
+	var breath := sin(_time * 1.2) * 1.4 if body.sleeping else 0.0
+	var hip := Vector2(8, g - 12)
+	var knee := Vector2(48, g - 16)
+	var ankle := Vector2(86, g - 9)
+	var shoulder := Vector2(-50, g - 14 - breath)
+	var head := Vector2(-68, g - 16)
+	draw_colored_polygon(PackedVector2Array([Vector2(-96, g), Vector2(-66, g), Vector2(-70, g - 14), Vector2(-94, g - 12)]), Palette.PACK) # pillow
+	_limb(hip, knee, 15.0, 12.0, Palette.PANTS)
+	_limb(knee, ankle, 12.0, 9.0, Palette.PANTS)
+	draw_colored_polygon(PackedVector2Array([ankle + Vector2(-4, 6), ankle + Vector2(6, 6), ankle + Vector2(6, -14), ankle + Vector2(0, -14)]), Palette.BOOTS)
+	_limb(hip, shoulder, 22.0, 26.0, Palette.JACKET)
+	draw_circle(head, 10.5, Palette.SKIN)
+	_limb(shoulder + Vector2(6, -6), hip + Vector2(-18, -14), 10.0, 9.0, Palette.JACKET) # arm across the chest
+	draw_circle(hip + Vector2(-16, -14), 5.0, Palette.SKIN)
+	if body.sleeping and body.backpack.count_of("sleeping_bag") > 0:
+		var bag := Items.get_def("sleeping_bag").color
+		draw_colored_polygon(PackedVector2Array([shoulder + Vector2(-6, 14), shoulder + Vector2(-2, -10 - breath),
+			hip + Vector2(0, -14 - breath), ankle + Vector2(14, -8), ankle + Vector2(16, 10)]), bag)
+	# hat tipped over the face
+	draw_colored_polygon(PackedVector2Array([head + Vector2(-6, -14), head + Vector2(8, -16), head + Vector2(14, -2), head + Vector2(-2, 2)]), Palette.HAT)

@@ -3,15 +3,22 @@ class_name Scenario extends Node
 ## fell → strip → buck → haul logs → build lean-to → gather sticks → build + light fire →
 ## fill pot at creek → boil → pour → drink → leave and return (persistence + catch-up).
 ## Run: godot --headless --fixed-fps 60 -- --scenario     (exit code = failed checks)
+## Mode "life": sleep, autosave, save to slot 3, die, respawn, recover the pack.
+## Mode "verify": run with --load=3 after "life"; checks the save came back exactly.
 
 var player: Player
 var world: World
 var shot := ""
+var mode := "camp"
+const EXPECT := "user://saves/scenario_expect.json"
 var failures := 0
 
 func _ready() -> void:
 	player.message.connect(func(t): print("  msg: ", t))
-	_run.call_deferred()
+	match mode:
+		"life": _life.call_deferred()
+		"verify": _verify.call_deferred()
+		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
 	print(("PASS " if ok else "FAIL ") + what)
@@ -193,5 +200,105 @@ func _run() -> void:
 		get_viewport().get_camera_2d().reset_smoothing()
 		await frames(60)
 		get_viewport().get_texture().get_image().save_png(shot)
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+# --- Mode "life" ------------------------------------------------------------------
+
+func _life() -> void:
+	await frames(10)
+	var main := get_parent()
+	DirAccess.remove_absolute(SaveGame.path("auto"))
+	player.sleep()
+	check(not player.sleeping, "can't sleep without shelter")
+	var lean_x := player.global_position.x + 200.0
+	world.spawn({"kind": "lean_to", "x": lean_x, "fresh": true})
+	check(absf(player.camp_x - lean_x) < 1.0, "a new lean-to becomes camp")
+	check(not SaveGame.read("auto").is_empty(), "building camp autosaved")
+	await teleport(lean_x)
+	player.cond.fatigue = 80.0
+	var h0 := GameClock.clock.hours
+	player.sleep()
+	check(player.sleeping, "sleeps under the lean-to")
+	await frames(240)
+	check(GameClock.clock.hours - h0 > 3.0, "time runs fast while asleep (%.1f h in 4 s)" % (GameClock.clock.hours - h0))
+	check(player.cond.fatigue < 50.0, "sleep restores (fatigue %.0f)" % player.cond.fatigue)
+	player.wake()
+	check(not player.sleeping and GameClock.time_scale == 1.0, "wakes on demand, time back to normal")
+	player.cond.hunger = 9.0
+	player.sleep()
+	await frames(120)
+	check(not player.sleeping, "hunger wakes you")
+	player.cond.hunger = 80.0
+
+	# Set up a distinctive state, save it, and record what to expect after loading.
+	world.spawn({"kind": "campfire", "x": lean_x + 300.0, "fuel": 5.0, "lit": true})
+	var jerky: ItemStack = player.backpack.find(func(s): return s.def.id == "jerky")
+	player.drop_stack(jerky)
+	var bottle: ItemStack = player.backpack.find(func(s): return s.def.id == "water_bottle")
+	bottle.water = 0.0
+	bottle.add_water(0.6, false)
+	GameClock.force_weather(Weather.Kind.DRIZZLE)
+	await frames(5)
+	check(main.save_to("3") == OK, "saved to slot 3")
+	var ids := player.backpack.entries.map(func(e): return "%s@%d,%d" % [e.stack.def.id, e.pos.x, e.pos.y])
+	ids.sort()
+	var expect := {"x": player.global_position.x, "hours": GameClock.clock.hours, "weather": GameClock.weather.kind,
+		"health": player.cond.health, "fatigue": player.cond.fatigue, "camp_x": player.camp_x, "pack": ids,
+		"bottle": bottle.water, "bottle_clean": bottle.water_clean}
+	var f := FileAccess.open(EXPECT, FileAccess.WRITE)
+	f.store_string(JSON.stringify(expect))
+	f.close()
+
+	# Death: the pack stays where you fell, you wake at camp, then go get it.
+	var death_x := lean_x + 1500.0
+	await teleport(death_x)
+	var carried := player.backpack.all_stacks().size()
+	player.cond.health = 0.0
+	await frames(5)
+	check(player.dead, "health at zero kills")
+	await frames(60 * 5)
+	check(not player.dead, "respawned after the fade")
+	check(absf(player.global_position.x - lean_x) < 5.0, "woke at camp")
+	check(player.backpack.all_stacks().is_empty(), "arrived without the pack")
+	var dropped: DroppedPack = null
+	for n in get_tree().get_nodes_in_group("interactable"):
+		if n is DroppedPack:
+			dropped = n
+	check(dropped != null and absf(dropped.global_position.x - death_x) < 5.0, "pack lies where you fell")
+	player.receive(ItemStack.make("sticks", GameClock.clock.hours, 2)) # gathered on the way back
+	await teleport(death_x)
+	if dropped: dropped.interact(player)
+	var back := player.backpack.all_stacks().size()
+	check(back >= carried, "recovered the pack (%d stacks + sticks, had %d)" % [back - 1, carried])
+	check(player.backpack.count_of("axe") == 1 and player.backpack.count_of("lighter") == 1, "essential tools never lost")
+	var axe: ItemStack = player.backpack.find(func(s): return s.def.id == "axe")
+	check(axe.sharpness < 1.0, "tools come back duller (%d%%)" % int(axe.sharpness * 100))
+	var food: ItemStack = player.backpack.find(func(s): return s.def.has("food"))
+	check(food == null or food.freshness(GameClock.clock.hours) == ItemStack.Fresh.SPOILED, "food spoiled")
+	check(player.backpack.count_of("sticks") >= 2, "things gathered since were kept")
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+# --- Mode "verify" (run with --load=3) -------------------------------------------
+
+func _verify() -> void:
+	await frames(10)
+	var e: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(EXPECT))
+	check(absf(player.global_position.x - float(e.x)) < 5.0, "position restored")
+	check(absf(GameClock.clock.hours - float(e.hours)) < 0.05, "time restored")
+	check(GameClock.weather.kind == int(e.weather), "weather restored")
+	check(absf(player.cond.health - float(e.health)) < 0.5 and absf(player.cond.fatigue - float(e.fatigue)) < 0.5, "condition restored")
+	check(absf(player.camp_x - float(e.camp_x)) < 1.0, "camp restored")
+	var ids := player.backpack.entries.map(func(x): return "%s@%d,%d" % [x.stack.def.id, x.pos.x, x.pos.y])
+	ids.sort()
+	check(ids == e.pack, "pack layout restored exactly")
+	var bottle: ItemStack = player.backpack.find(func(s): return s.def.id == "water_bottle")
+	check(bottle and absf(bottle.water - float(e.bottle)) < 0.01 and bottle.water_clean == bool(e.bottle_clean), "dirty bottle stays dirty")
+	check(get_tree().get_first_node_in_group("shelter") != null, "lean-to restored")
+	var fire := find_fire()
+	check(fire != null and fire.lit, "campfire restored, still lit")
+	var jerky := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is WorldItem and n.stack.def.id == "jerky")
+	check(jerky.size() == 1, "dropped jerky still on the ground")
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)

@@ -21,7 +21,7 @@ var _font: Font
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	visible = false
 	_font = get_theme_default_font()
 	_side = VBoxContainer.new()

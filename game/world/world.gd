@@ -15,6 +15,7 @@ const KINDS := {
 	"campfire": preload("res://game/camp/campfire.gd"),
 	"blueprint": preload("res://game/camp/blueprint.gd"),
 	"lean_to": preload("res://game/camp/lean_to.gd"),
+	"pack": preload("res://game/world/dropped_pack.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)
@@ -97,6 +98,26 @@ func _initial_objects(i: int) -> Array:
 		if terrain.water_surface_at(x) == INF and x > 500.0 and x < Terrain.WORLD_W - 500.0:
 			out.append({"kind": "item", "x": x, "stack": ItemStack.make("sticks", 0.0, rng.randi_range(1, 3)).to_dict()})
 	return out
+
+## Everything needed to bring the world back exactly: stored chunk state plus live objects.
+func snapshot() -> Dictionary:
+	var now := GameClock.clock.hours
+	var out: Dictionary = state.duplicate(true)
+	for key in out:
+		if chunks.has(int(key)):
+			out[key].left = now
+	for n in get_tree().get_nodes_in_group("persist"):
+		if n.is_queued_for_deletion():
+			continue
+		var key := str(terrain.chunk_of(n.global_position.x))
+		if not out.has(key):
+			out[key] = {"felled": {}, "picked": {}, "objects": [], "left": now}
+		out[key].objects.append(n.to_state())
+	return out
+
+## Call before the first update_focus on a fresh world.
+func restore(saved: Dictionary) -> void:
+	state = saved.duplicate(true)
 
 func heat_at(p: Vector2) -> float:
 	var h := 0.0

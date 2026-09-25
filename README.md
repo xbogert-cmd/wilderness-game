@@ -23,7 +23,12 @@ godot
 | Q | Put away what's in hand |
 | B | Build menu (campfire, lean-to), then click to place a blueprint and right-click to cancel |
 | F3 | Debug overlay |
-| W/S, Z, Esc, F5 | Bound; the features behind them arrive in later milestones |
+| Z | Sleep under a shelter; time runs about 60× faster, and any key wakes you |
+| Esc | Pause menu: save to slots 1–3 (only when safe), load any slot or the autosave |
+| F5 | Quicksave to slot 1 |
+| W/S | Bound; climbing and deeper wading arrive later |
+
+**Camp, sleep, and death:** building or sleeping in a lean-to makes it your camp, which is your respawn point and triggers an autosave (the game also autosaves every 5 minutes when you're safe). If you die, you wake at camp without your pack, which stays where you fell. Food spoils, tools come back duller, and some consumables scatter, but nothing irreplaceable is ever lost. Walk back and press E to recover it.
 
 **First camp:** gather fallen sticks (E), press B to place a campfire blueprint and deliver 3 sticks, build it, then light it with E. For a lean-to, fell a tree with the hatchet, strip its branches, cut 2 long and 4 medium logs at the marks, and haul them to a lean-to blueprint. To make water safe, fill the cook pot at the creek, set it on a lit fire until it boils, take it back, and pour it into your bottle from the backpack.
 
@@ -34,9 +39,11 @@ godot --headless -s tests/run.gd          # unit tests (exit code = failure coun
 godot --headless --quit-after 600         # smoke run
 godot --headless -- --tour                # walk every chunk and back, verify streaming
 godot --headless --fixed-fps 60 -- --scenario   # full camp loop end to end (~3 min)
+godot --headless --fixed-fps 60 -- --scenario=life                # sleep, autosave, save slot 3, die, respawn, recover
+godot --headless --fixed-fps 60 -- --load=3 --scenario=verify     # then cold-load slot 3 and check it matches
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
-Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`.
+Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--load=SLOT`.
 
 ## Layout
 - `game/core/`: pure rules with no nodes (clock, weather, condition, tuning). All unit-tested.
