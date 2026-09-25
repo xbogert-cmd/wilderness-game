@@ -5,12 +5,16 @@ class_name Ambience extends Node2D
 
 const FADE := 0.6 ## gain change per second
 
-var player: Node2D
+var player: Player
 var terrain: Terrain
 var beds := {} ## name -> AudioStreamPlayer
 var creek: AudioStreamPlayer2D
 var owl: AudioStreamPlayer2D
 var _owl_timer := 30.0
+var music: AudioStreamPlayer
+var _was_warning := false
+var _music_cooldown := 0.0
+const MUSIC_COOLDOWN := 600.0 ## real seconds between cues: music stays rare so it means something
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -25,6 +29,10 @@ func _ready() -> void:
 	creek.position = Vector2(Terrain.CREEK_X, terrain.water_surface_at(Terrain.CREEK_X))
 	add_child(creek)
 	creek.play(_rng.randf() * 30.0)
+	music = AudioStreamPlayer.new()
+	music.stream = load("res://assets/audio/music/storm_cue.wav")
+	music.bus = &"Music"
+	add_child(music)
 	owl = AudioStreamPlayer2D.new()
 	owl.stream = load("res://assets/audio/owl.wav")
 	owl.bus = &"Ambience"
@@ -56,6 +64,14 @@ func _process(delta: float) -> void:
 	_gain("wind_trees", clampf(w.wind * 1.1, 0.05, 1.0), delta)
 	_gain("rain", w.precip, delta)
 
+	# A storm building is one of the few moments that earns music.
+	_music_cooldown = maxf(_music_cooldown - delta, 0.0)
+	var warning := w.storm_warning()
+	if warning and not _was_warning and _music_cooldown == 0.0 and not player.sleeping and not music.playing:
+		music.play()
+		_music_cooldown = MUSIC_COOLDOWN
+	_was_warning = warning
+
 	_owl_timer -= delta
 	if _owl_timer <= 0.0:
 		_owl_timer = _rng.randf_range(35.0, 110.0)
@@ -70,6 +86,6 @@ func _gain(n: String, target: float, delta: float) -> void:
 	p.volume_db = linear_to_db(maxf(move_toward(cur, target, FADE * delta), 0.0001))
 
 func _exit_tree() -> void: # release playbacks so shutdown doesn't report them as leaks
-	for p in beds.values() + [creek, owl]:
+	for p in beds.values() + [creek, owl, music]:
 		p.stop()
 		p.stream = null

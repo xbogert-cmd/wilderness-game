@@ -3,7 +3,7 @@ class_name Campfire extends Node2D
 ## Runs on game time, including catch-up for hours spent away.
 
 const MAX_FUEL := 12.0
-const START_FUEL := 0.6 ## the kindling it was built from
+const START_FUEL := 1.0 ## the kindling it was built from: enough to light it and boil one pot
 const BOIL_HOURS := 0.35
 const HEAT_RADIUS := 320.0
 

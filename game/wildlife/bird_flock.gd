@@ -42,6 +42,7 @@ func _process(delta: float) -> void:
 func flush() -> void:
 	flushed = true
 	_t = 0.0
+	Sfx.play_at(self, global_position + Vector2(0, -20), Sfx.wings(), -4.0)
 	var away := signf(global_position.x - player.global_position.x)
 	for b in birds:
 		b.v = Vector2(away * _rng.randf_range(160, 320), -_rng.randf_range(260, 420))

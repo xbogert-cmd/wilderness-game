@@ -79,6 +79,7 @@ func _strike() -> void:
 		FishFight.Result.LANDED:
 			var cm := fight.length_cm()
 			var fish := ItemStack.make(fight.spec.item, GameClock.clock.hours)
+			Sfx.play_at(self, bobber, Sfx.splash(), -2.0)
 			_reel_in("Landed a %d cm %s." % [cm, fight.spec.name])
 			player.receive(fish)
 		FishFight.Result.ESCAPED:
@@ -106,6 +107,7 @@ func _process(delta: float) -> void:
 			if _wait <= 0.0:
 				state = State.BITE
 				_t = 0.0
+				Sfx.play_at(self, bobber, Sfx.splash(), -10.0, 1.3)
 		State.BITE:
 			_t += delta
 			if _t > GameClock.tuning.hook_window_sec:

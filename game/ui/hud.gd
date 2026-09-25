@@ -16,6 +16,13 @@ var player: Player
 var _font: Font
 var _msgs: Array = [] ## [text, time_left]
 var fade := 0.0 ## full-screen black, for death and waking
+var _tip := ""
+var _tip_t := 0.0
+const TIP_SECONDS := 7.0
+
+func tip(text: String) -> void:
+	_tip = text
+	_tip_t = TIP_SECONDS
 
 func fade_to(target: float, seconds: float) -> Tween:
 	var tw := create_tween()
@@ -32,6 +39,7 @@ func _process(delta: float) -> void:
 	for m in _msgs:
 		m[1] -= delta
 	_msgs = _msgs.filter(func(m): return m[1] > 0.0).slice(-4)
+	_tip_t = maxf(_tip_t - delta, 0.0)
 	_highlight()
 	queue_redraw()
 
@@ -101,6 +109,15 @@ func _draw() -> void:
 	for k in _msgs.size():
 		var m: Array = _msgs[_msgs.size() - 1 - k]
 		_text(Vector2(size.x * 0.5, y - k * 22.0), m[0], 16, Color(TEXT, clampf(m[1], 0.0, 1.0)), true)
+	if _tip_t > 0.0: # one-time hint, top centre, calm styling
+		var a := clampf(_tip_t, 0.0, 1.0) * clampf((TIP_SECONDS - _tip_t) * 3.0, 0.0, 1.0)
+		var w := minf(_font.get_string_size(_tip, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 36.0, size.x - 40.0)
+		var r := Rect2(Vector2(size.x * 0.5 - w * 0.5, 26.0), Vector2(w, 38.0))
+		var box := _panel.duplicate()
+		box.bg_color.a *= a
+		box.border_color = Color(0.93, 0.85, 0.6, 0.5 * a)
+		draw_style_box(box, r)
+		draw_string(_font, r.position + Vector2(18, 25), _tip, HORIZONTAL_ALIGNMENT_LEFT, w - 36.0, 16, Color(TEXT, a))
 	_draw_fade()
 
 func _draw_fade() -> void:

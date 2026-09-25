@@ -10,6 +10,7 @@ const START_X := 2600.0
 const AUTOSAVE_SECONDS := 300.0
 
 var hud: Hud
+var tips: Tips
 var _autosave_t := 0.0
 
 var world: World
@@ -52,6 +53,9 @@ func _ready() -> void:
 	if save:
 		player.from_dict(save.player)
 		x = player.global_position.x
+	var sign := TrailSign.new()
+	sign.position = Vector2(START_X - 180.0, world.terrain.height_at(START_X - 180.0))
+	world.add_child(sign)
 	world.update_focus(x)
 	player.died.connect(_on_player_died)
 	player.made_camp.connect(func(): save_to("auto"))
@@ -101,6 +105,13 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.player = player
 	ui.add_child(hud)
+	tips = Tips.new()
+	tips.player = player
+	tips.hud = hud
+	if save and save.has("tips"):
+		for k in save.tips:
+			tips.seen[k] = true
+	add_child(tips)
 	var fish_ui := FishingUI.new()
 	fish_ui.fishing = fishing
 	ui.add_child(fish_ui)
@@ -193,7 +204,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func snapshot() -> Dictionary:
 	return {"clock": GameClock.clock.to_dict(), "weather": GameClock.weather.to_dict(),
-		"player": player.to_dict(), "world": world.snapshot(), "tracks": world.tracks.to_array()}
+		"player": player.to_dict(), "world": world.snapshot(), "tracks": world.tracks.to_array(),
+		"tips": tips.seen.keys()}
 
 func save_to(slot: String) -> Error:
 	var err := SaveGame.write(slot, snapshot())
@@ -248,7 +260,9 @@ func _shot(path: String) -> void:
 		await get_tree().process_frame
 		frames += 1
 	get_viewport().get_texture().get_image().save_png(path)
-	print("saved ", path, "  fps ", frames / 2.0)
+	print("saved ", path, "  fps ", frames / 2.0, "  frame cpu %.2f ms  draw calls %d  nodes %d  objects %d" % [
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.OBJECT_NODE_COUNT), Performance.get_monitor(Performance.OBJECT_COUNT)])
 	get_tree().quit()
 
 ## Walks the chunk streamer across the whole world and back; exit code 1 on any mismatch.

@@ -67,6 +67,8 @@ func _physics_process(delta: float) -> void:
 		_since_print = 0.0
 		tracks.add(position.x + facing * 20.0, def.track, facing)
 		tracks.add(position.x - facing * 35.0, def.track, facing)
+		if state == State.FLEE:
+			Sfx.play_at(self, global_position, Sfx.hoof(), -6.0, 1.5)
 
 func _routine() -> void:
 	_timer = _rng.randf_range(3.0, 9.0)
@@ -114,11 +116,13 @@ func _perceive(delta: float) -> void:
 		facing = int(signf(player.global_position.x - position.x))
 		_timer = _rng.randf_range(4.0, 8.0)
 
-func bolt() -> void:
+func bolt(alarm := true) -> void:
 	if state == State.FLEE:
 		return
+	if alarm: # the first to spot you snorts a warning; the rest just run
+		Sfx.play_at(self, global_position + Vector2(facing * 60.0, -140.0), Sfx.snort(), 0.0)
 	state = State.FLEE
 	awareness = def.flee_at * 1.3
 	for other in get_tree().get_nodes_in_group("animals"): # the herd follows the first to bolt
 		if other != self and other.def == def and absf(other.position.x - position.x) < 900.0:
-			other.bolt.call_deferred()
+			other.bolt.call_deferred(false)

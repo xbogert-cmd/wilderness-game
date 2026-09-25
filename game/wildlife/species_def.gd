@@ -19,7 +19,7 @@ class_name SpeciesDef extends Resource
 @export_group("Life")
 @export var group_min := 1
 @export var group_max := 3
-@export var groups_per_chunk := 2
+@export var groups_per_chunk := 1 ## sparse on purpose: meeting deer should feel like an event
 @export var active_hours: PackedVector2Array = [Vector2(4.5, 10.5), Vector2(15.5, 22.0)] ## grazing/wandering; bedded otherwise
 @export_group("Look")
 @export var body_color := Color("8a7a66")
