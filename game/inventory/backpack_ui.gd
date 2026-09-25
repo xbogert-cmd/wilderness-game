@@ -1,6 +1,7 @@
 class_name BackpackUI extends Control
 ## Tab: the pack, fully paused. Drag items to rearrange (R rotates while dragging), onto the
-## exterior slots, into your hands, or off the panel to drop them. Click to select for actions.
+## exterior slots, into your hands, onto a clothing slot to wear them, or off the panel to
+## drop them. Click to select for actions.
 ## Also shows every condition and the recipes you know. Opened from a storage chest, the
 ## chest's grid shows beside the pack and items drag between them.
 
@@ -56,6 +57,19 @@ func _slot_rect(i: int) -> Rect2:
 func _hands_rect() -> Rect2:
 	return Rect2(GRID_POS + Vector2(0, Backpack.H * CELL + 30.0), Vector2(CELL * 3, CELL * 2))
 
+const WEAR_SIZE := 68.0
+const WEAR_NAMES := {"head": "Head", "body": "Coat", "hands": "Mitts", "legs": "Legs"}
+
+## Clothing slots, in a row beside Hands under the grid.
+func _wear_rect(i: int) -> Rect2:
+	return Rect2(_hands_rect().end.x + 24.0 + i * (WEAR_SIZE + 6.0), _hands_rect().position.y, WEAR_SIZE, WEAR_SIZE)
+
+func _wear_slot_at(p: Vector2) -> String:
+	for i in Backpack.WEAR.size():
+		if _wear_rect(i).has_point(p):
+			return Backpack.WEAR[i]
+	return ""
+
 func _store_pos() -> Vector2:
 	return Vector2(_side.position.x + maxf(430.0, _side.size.x) + 50.0, GRID_POS.y) # after the side text, however wide it grew
 
@@ -70,7 +84,8 @@ func _panel_rect() -> Rect2:
 	var right := maxf(_panel_right() + 470.0, _side.position.x + _side.size.x + 30.0) # grows to fit the side text
 	if storage:
 		right = maxf(right, _store_pos().x + Backpack.W * CELL + 30.0)
-	return Rect2(GRID_POS - Vector2(30, 70), Vector2(right - GRID_POS.x + 30.0, Backpack.H * CELL + 260.0))
+	var bottom := maxf(GRID_POS.y + Backpack.H * CELL + 190.0, _side.position.y + _side.size.y + 24.0) # grows to fit the side text too
+	return Rect2(GRID_POS - Vector2(30, 70), Vector2(right - GRID_POS.x + 30.0, bottom - GRID_POS.y + 70.0))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("backpack") or (visible and event.is_action_pressed("menu")):
@@ -129,6 +144,9 @@ func _stack_at(p: Vector2) -> Dictionary:
 			hit = {"stack": player.backpack.attachments[i], "rot": false, "grab": Vector2.ZERO}
 	if _hands_rect().has_point(p) and player.held:
 		hit = {"stack": player.held, "rot": false, "grab": Vector2.ZERO}
+	var ws := _wear_slot_at(p)
+	if ws != "" and player.backpack.worn[ws]:
+		hit = {"stack": player.backpack.worn[ws], "rot": false, "grab": Vector2.ZERO}
 	if _in_store(p):
 		var e := storage.entry_at(_store_cell(p))
 		if e:
@@ -168,6 +186,11 @@ func _release(p: Vector2) -> void:
 		if from_store:
 			storage.remove(s)
 		player.hold(s)
+	elif _wear_slot_at(p) != "":
+		if s.def.slot != _wear_slot_at(p):
+			player.message.emit("That isn't worn there." if s.def.slot != "" else "You can't wear that.")
+		else:
+			_wear(s)
 	else:
 		var slot := -1
 		for i in Backpack.ATTACH_SLOTS:
@@ -223,7 +246,16 @@ func _refresh() -> void:
 			var sticks := player.backpack.count_of("sticks")
 			var rb := _button(("Repair the handle — sticks %d/%d (%.2f h)" % [sticks, REPAIR_STICKS, REPAIR_HOURS]) if at_bench else "Repair the handle (at a workbench)", _repair)
 			rb.disabled = not at_bench or sticks < REPAIR_STICKS
-		if player.held != selected:
+		if d.slot != "":
+			_info.text += "\nWarmth +%d °C (%s)" % [int(d.warmth_c), WEAR_NAMES[d.slot].to_lower()]
+			if player.backpack.worn[d.slot] == selected:
+				_button("Take it off", func():
+					if not player.backpack.take_off(d.slot):
+						player.message.emit("No room in the pack to take it off."))
+			else:
+				var on: ItemStack = player.backpack.worn[d.slot]
+				_button("Wear it" + (" (instead of the %s)" % on.def.name.to_lower() if on else ""), _wear.bind(selected))
+		if player.held != selected and not player.backpack.worn.values().has(selected):
 			_button("Hold in hands", func(): player.hold(selected))
 		if d.has("food"):
 			_button("Eat", func(): _use_now())
@@ -242,28 +274,61 @@ func _refresh() -> void:
 			_button("Use on %s" % d.treats, func(): _use_now())
 		_button("Drop", func(): player.drop_stack(selected); selected = null)
 	else:
-		_info.text = "Drag to rearrange · %s rotates while dragging" % Keys.label("rotate_item") + "\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrag off the panel to drop · click to select"
+		_info.text = "Drag to rearrange · %s rotates while dragging" % Keys.label("rotate_item") + "\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrop clothing on Head, Coat, Mitts or Legs to wear it\nDrag off the panel to drop · click to select"
 	_actions.add_child(HSeparator.new())
 	var head := Label.new()
 	head.text = "Recipes"
 	head.add_theme_color_override("font_color", TEXT)
 	_actions.add_child(head)
+	var later: PackedStringArray = [] # recipes you have none of the makings for: one line, not a button each
 	for id in player.known_recipes:
 		var r: Dictionary = Builds.RECIPES[id]
 		var have := {}
 		var ok := true
+		var some := false
 		for k in r.needs:
 			have[k] = player.backpack.count_of(k)
 			ok = ok and have[k] >= r.needs[k]
+			some = some or (have[k] > 0 and k != "sticks" and not k.begins_with("#"))
+		if not some and not ok and r.needs.keys().any(func(k): return k != "sticks" and not k.begins_with("#")):
+			later.append("%s (%s)" % [Items.get_def(id).name.to_lower(), ", ".join(r.needs.keys().filter(func(k): return k != "sticks" and not k.begins_with("#")).map(func(k): return Items.get_def(k).name.to_lower()))])
+			continue
 		var bench_ok: bool = not r.get("bench", false) or Workbench.near(player)
 		var b := _button("Craft %s — %s (%.2f h)%s" % [Items.get_def(id).name.to_lower(), Builds.needs_text(r.needs, have), r.hours,
 			"" if bench_ok else " · at a workbench"], _craft.bind(id))
 		b.disabled = not ok or not bench_ok
+	if later:
+		var more := Label.new()
+		more.text = "Also: " + ", ".join(later)
+		more.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		more.custom_minimum_size = Vector2(430, 0)
+		more.add_theme_font_size_override("font_size", 13)
+		more.add_theme_color_override("font_color", Color(TEXT, 0.6))
+		_actions.add_child(more)
 	var c := player.cond
-	_status.text = "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%% · Air %d °C\nInjuries: %s\nPack %.1f kg%s" % [
-		c.health, c.stamina, c.hunger, c.thirst, c.warmth, int(c.wetness * 100), roundi(GameClock.weather.air_temp_c(GameClock.clock)),
+	_status.text = "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%% · Air %d °C · Clothing +%d °C\nInjuries: %s\nPack %.1f kg%s" % [
+		c.health, c.stamina, c.hunger, c.thirst, c.warmth, int(c.wetness * 100), roundi(GameClock.weather.air_temp_c(GameClock.clock)), int(player.backpack.insulation()),
 		", ".join(c.injuries.keys().map(func(k): return "%s %s%s" % [c.injuries[k].kind, k, " (treated)" if c.injuries[k].treated else ""])) if c.injuries else "none",
 		player.backpack.weight(), " (heavy: slower)" if player.backpack.encumbrance_mult() < 1.0 else ""]
+
+## Puts on clothing from the pack, hands or chest; what it replaces goes into the pack.
+func _wear(s: ItemStack) -> void:
+	var from_store := storage != null and storage.contains(s)
+	var from_hands := player.held == s
+	if from_store:
+		storage.remove(s)
+	if from_hands:
+		player.held = null
+		player.held_slot = -1
+	if not player.backpack.wear(s):
+		player.message.emit("No room in the pack for what you'd take off.")
+		if from_store:
+			storage.add(s)
+		elif from_hands:
+			player.held = s
+		elif not player.backpack.contains(s):
+			player.backpack.add(s)
+	_refresh()
 
 func _button(text: String, fn: Callable) -> Button:
 	var b := Button.new()
@@ -360,6 +425,20 @@ func _draw() -> void:
 		for e in storage.entries:
 			if not (_drag and _drag.moved and _drag.stack == e.stack):
 				_item(e.stack, _store_pos() + Vector2(e.pos) * CELL, e.rot)
+	for i in Backpack.WEAR.size():
+		var r := _wear_rect(i)
+		var slot: String = Backpack.WEAR[i]
+		draw_rect(r, Color(1, 1, 1, 0.06))
+		draw_rect(r, Color(1, 1, 1, 0.2), false, 1.5)
+		_text(r.position + Vector2(4, -6), WEAR_NAMES[slot], 13)
+		var w: ItemStack = player.backpack.worn[slot]
+		if w and not (_drag and _drag.moved and _drag.stack == w):
+			var sz := Vector2(w.def.size())
+			var cell := (WEAR_SIZE - 10.0) / maxf(sz.x, sz.y)
+			if w == selected:
+				draw_rect(r.grow(-2), Color(1, 1, 1, 0.9), false, 1.5)
+			ItemIcons.draw(self, w, r.position + (r.size - sz * cell) * 0.5, cell)
+	_text(_wear_rect(0).position + Vector2(0, WEAR_SIZE + 18.0), "Wearing: +%d °C" % int(player.backpack.insulation()), 13)
 	var h := _hands_rect()
 	draw_rect(h, Color(1, 1, 1, 0.06))
 	draw_rect(h, Color(1, 1, 1, 0.2), false, 1.5)

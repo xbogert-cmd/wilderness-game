@@ -5,6 +5,7 @@ extends Node2D
 ##   --tour            teleport across every chunk, verify streaming, then quit
 ##   --load=SLOT       start from a save slot (1, 2, 3, auto)
 ##   --scenario[=life] scripted end-to-end checks (see game/debug/scenario.gd)
+##   previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] (and many more below)
 
 const START_X := 2600.0
 const AUTOSAVE_SECONDS := 300.0
@@ -240,6 +241,38 @@ func _ready() -> void:
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
 		player.bow_draw = 0.0
+	if args.has("wolves"): # preview: a pack at a carcass, ravens overhead, you with a torch
+		world.spawn({"kind": "carcass", "x": x + 520.0, "facing": -1, "species": "mule_deer", "hour": GameClock.clock.hours - 2.0})
+		for k in 3:
+			var w := wildlife.spawn_predator(Wildlife.WOLF, x + 420.0 + k * 130.0, k)
+			w.state = [Predator.State.FEED, Predator.State.STALK, Predator.State.ROAM][k]
+			w.facing = -1 if k != 0 else 1
+			w.set_physics_process(false)
+			w.position.y = world.ground_y(w.position.x)
+		if args.wolves == "torch":
+			player.hold(ItemStack.make("torch", GameClock.clock.hours))
+	if args.has("bear"): # preview: the bear, and what it leaves behind
+		var b := wildlife.spawn_predator(Wildlife.BEAR, x + 520.0, 1)
+		b.state = [Predator.State.ROAM, Predator.State.BLUFF, Predator.State.FEED][int(args.bear) if args.bear != "" else 0]
+		b.facing = -1
+		b.speed = 0.0
+		b.set_physics_process(false)
+		b.position.y = world.ground_y(b.position.x)
+		world.spawn({"kind": "carcass", "x": x - 420.0, "facing": 1, "species": "wolf", "hour": GameClock.clock.hours})
+		world.spawn({"kind": "gut_pile", "x": x - 700.0, "hour": GameClock.clock.hours - 1.0})
+		world.spawn({"kind": "snare", "x": x + 180.0, "caught": true})
+		player.hold(ItemStack.make("spear", GameClock.clock.hours))
+	if args.has("choices"): # preview: E pressed at a lit fire, its list of choices open
+		world.spawn({"kind": "campfire", "x": x + 50.0, "fuel": 6.0, "lit": true, "tripod": true})
+		player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 3))
+		_open_choices.call_deferred()
+	if args.has("wear"): # preview: dressed in winter furs (or buckskin)
+		for id in (["hide_coat", "buckskin_leggings"] if args.wear == "buckskin" else ["bear_coat", "wolf_hat", "wolf_mittens", "wolf_leggings"]):
+			var st := ItemStack.make(id, GameClock.clock.hours)
+			player.backpack.add(st)
+			player.backpack.wear(st)
+		for id in ["wolf_fur", "bear_hide", "hide_coat", "rabbit_raw", "snare"]:
+			player.backpack.add(ItemStack.make(id, GameClock.clock.hours))
 	if args.has("fish"): # preview: mid-fight with a trout at the creek bank
 		_preview_fish.call_deferred(fishing)
 	if args.has("flee"): # preview: a deer bounding away
@@ -278,6 +311,11 @@ func _ready() -> void:
 		_tour()
 	elif args.has("shot"):
 		_shot(args.shot)
+
+func _open_choices() -> void:
+	for i in 10:
+		await get_tree().physics_frame
+	player.open_or_interact()
 
 func _preview_notch() -> void:
 	var best: ChoppableTree = null

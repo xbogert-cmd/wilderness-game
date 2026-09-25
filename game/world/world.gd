@@ -25,6 +25,8 @@ const KINDS := {
 	"workbench": preload("res://game/camp/workbench.gd"),
 	"chest": preload("res://game/camp/storage_chest.gd"),
 	"bait": preload("res://game/hunting/bait_pile.gd"),
+	"gut_pile": preload("res://game/hunting/gut_pile.gd"),
+	"snare": preload("res://game/hunting/snare.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)

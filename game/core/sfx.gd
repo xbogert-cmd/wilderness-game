@@ -42,6 +42,18 @@ static func chop() -> AudioStream:
 static func bleat() -> AudioStream:
 	return pool("bleat", ["res://assets/audio/sfx/bleat_1.wav", "res://assets/audio/sfx/bleat_2.wav"], 1.05, 1.5)
 
+static func howl() -> AudioStream:
+	return pool("howl", ["res://assets/audio/sfx/howl_1.wav", "res://assets/audio/sfx/howl_2.wav"], 1.06, 2.0)
+
+static func growl() -> AudioStream:
+	return pool("growl", ["res://assets/audio/sfx/growl.wav"], 1.1, 2.0)
+
+static func roar() -> AudioStream:
+	return pool("roar", ["res://assets/audio/sfx/roar.wav"], 1.05, 1.0)
+
+static func caw() -> AudioStream:
+	return pool("caw", ["res://assets/audio/sfx/caw_1.wav", "res://assets/audio/sfx/caw_2.wav"], 1.1, 2.0)
+
 ## Hooves: grass footsteps pitched up and lighter.
 static func hoof() -> AudioStream:
 	var paths: PackedStringArray = []

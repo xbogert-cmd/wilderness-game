@@ -22,6 +22,11 @@ const CARRY_STAMINA_PER_SEC := 2.5
 const DRAW_TIME := 0.9 ## seconds to full draw
 const ARROW_SPEED := Vector2(1100.0, 2800.0) ## px/s at a light and a full draw
 const KNIFE_REACH := 150.0
+const SPEAR_REACH := 250.0
+const THRUST_TIME := 0.45
+const THRUST_STAMINA := 5.0
+const TORCH_HOURS := 3.0 ## a torch burns this long (faster in rain)
+const HAUL_SPEED := 0.42 ## dragging a whole deer
 const DEATH_LOSS_CHANCE := 0.2 ## per consumable stack (doubled roll, loses half the stack)
 
 var world: World
@@ -31,17 +36,26 @@ var backpack := Backpack.new()
 var held: ItemStack ## the one object in hand
 var held_slot := -1 ## attachment slot it came from, to return it there
 var carrying: WorldLog ## oversized object on the shoulder or dragged
+var hauling: Carcass: ## a whole carcass dragged by the neck
+	get: return hauling if is_instance_valid(hauling) else null
 ## Interactable in reach. Getters hide nodes freed since the last focus update (a finished
 ## blueprint, a fully bucked trunk) so nothing reads a dead reference.
 var focus: Node:
 	get: return focus if is_instance_valid(focus) else null
 var chop_target: Node:
 	get: return chop_target if is_instance_valid(chop_target) else null
+## The thing whose list of choices is open (E on something with more than one thing to do);
+## number keys pick. Closes when you move off or step away.
+var menu: Node:
+	get: return menu if is_instance_valid(menu) else null
 var swing := -1.0 ## 0..1 through a tool swing, -1 idle
+var thrust := -1.0 ## 0..1 through a spear thrust, -1 idle
+var _torch_light: PointLight2D
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
-const RECIPES: PackedStringArray = ["splint", "vine_cord", "fishing_pole", "bow", "arrows", "hide_coat", "deer_call"]
+const RECIPES: PackedStringArray = ["splint", "vine_cord", "snare", "fishing_pole", "bow", "arrows", "spear", "deer_call",
+	"hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat"]
 const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never breaks
 var known_recipes := RECIPES
 var bow_draw := -1.0 ## 0..1, -1 not drawing
@@ -83,6 +97,23 @@ func _ready() -> void:
 	var rig := PlayerRig.new()
 	rig.body = self
 	add_child(rig)
+	_torch_light = PointLight2D.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, 0.0)
+	tex.width = 128
+	tex.height = 128
+	_torch_light.texture = tex
+	_torch_light.texture_scale = 3.2
+	_torch_light.color = Color(1.0, 0.66, 0.34)
+	_torch_light.position = Vector2(0, -170)
+	_torch_light.visible = false
+	add_child(_torch_light)
 	GameClock.ticked.connect(_on_tick)
 	_starting_kit()
 
@@ -116,7 +147,7 @@ func _physics_process(delta: float) -> void:
 		_can_run = false
 	elif cond.stamina > 20.0:
 		_can_run = true
-	running = (Input.is_action_pressed("run") or auto_run) and dir != 0.0 and not crouching and _can_run and carrying == null
+	running = (Input.is_action_pressed("run") or auto_run) and dir != 0.0 and not crouching and _can_run and carrying == null and hauling == null
 	wade_depth = world.terrain.water_depth_at(global_position.x, global_position.y)
 
 	if bow_draw >= 0.0:
@@ -132,10 +163,12 @@ func _physics_process(delta: float) -> void:
 	speed *= cond.move_speed_mult() * (1.0 - clampf(wade_depth / 130.0, 0.0, 0.65)) * backpack.encumbrance_mult() * snow_mult()
 	if carrying:
 		speed *= carrying.speed_mult()
+	if hauling:
+		speed *= HAUL_SPEED
 	velocity.x = move_toward(velocity.x, dir * speed, ACCEL * delta)
 	if running:
 		cond.spend_stamina(GameClock.tuning.run_stamina_per_sec * delta)
-	elif carrying and dir != 0.0:
+	elif (carrying or hauling) and dir != 0.0:
 		cond.stamina = maxf(cond.stamina - CARRY_STAMINA_PER_SEC * delta, 0.0)
 	elif swing < 0.0:
 		cond.recover_stamina(delta * (0.5 if dir != 0.0 else 1.0))
@@ -143,7 +176,7 @@ func _physics_process(delta: float) -> void:
 	if not was_on_floor:
 		velocity.y += GRAVITY * delta
 		_fall_vy = maxf(_fall_vy, velocity.y)
-	elif Input.is_action_just_pressed("hop") and carrying == null and working <= 0.0 and cond.spend_stamina(HOP_STAMINA):
+	elif Input.is_action_just_pressed("hop") and carrying == null and hauling == null and working <= 0.0 and cond.spend_stamina(HOP_STAMINA):
 		velocity.y = -HOP
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
@@ -155,8 +188,16 @@ func _physics_process(delta: float) -> void:
 	world.update_focus(global_position.x)
 
 	_advance_swing(delta)
+	_advance_thrust(delta)
 	_advance_work(delta)
+	var torch := holding("torch")
+	_torch_light.visible = torch
+	if torch:
+		_torch_light.position = Vector2(facing * 34.0, -175.0)
+		_torch_light.energy = (0.9 + 0.12 * sin(Time.get_ticks_msec() * 0.019) + 0.07 * sin(Time.get_ticks_msec() * 0.043)) * lerpf(0.25, 1.0, 1.0 - GameClock.clock.daylight())
 	_update_focus()
+	if menu and (menu != focus or dir != 0.0 or working > 0.0):
+		menu = null
 
 func _on_landed(vy: float) -> void:
 	if vy > FALL_INJURY_SPEED:
@@ -180,7 +221,7 @@ func noise() -> float:
 		n = 1.0
 	elif moving:
 		n = 0.13 if crouching else 0.42
-	if swing >= 0.0 or (carrying and moving):
+	if swing >= 0.0 or ((carrying or hauling) and moving):
 		n = maxf(n, 0.9)
 	if bow_draw >= 0.0:
 		n = maxf(n, 0.1)
@@ -200,7 +241,7 @@ func visibility() -> float:
 	return 1.0 if moving else 0.6
 
 func exertion() -> float:
-	if running or (carrying and absf(velocity.x) > 1.0): return 1.0
+	if running or ((carrying or hauling) and absf(velocity.x) > 1.0): return 1.0
 	if swing >= 0.0: return 0.8
 	if working > 0.0: return 0.4
 	return 0.3 if absf(velocity.x) > 1.0 else 0.0
@@ -216,7 +257,7 @@ func _on_tick(dh: float) -> void:
 		"sleeping": sleeping,
 		"sleep_quality": sleep_quality() if sleeping else 1.0,
 		"insulation_c": (GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0) \
-			+ (GameClock.tuning.hide_coat_c if backpack.count_of("hide_coat") > 0 else 0.0),
+			+ backpack.insulation(),
 		"air_c": w.air_temp_c(GameClock.clock),
 		"precip": w.rain() + w.snowfall() * 0.25, # snow wets you far less than rain
 		"sheltered": world.sheltered_at(global_position.x),
@@ -224,8 +265,25 @@ func _on_tick(dh: float) -> void:
 		"exertion": exertion(),
 		"wading": clampf(wade_depth / 100.0, 0.0, 1.0),
 	})
+	if holding("torch"):
+		held.condition -= dh / TORCH_HOURS * (1.0 + 2.0 * w.rain())
+		if held.condition <= 0.0:
+			held = null
+			held_slot = -1
+			message.emit("The torch gutters out.")
 	if cond.is_dead():
 		_die()
+
+func holding(tag: String) -> bool:
+	return held != null and held.def.has(tag)
+
+## Raw meat on you (in the pack, in hand, or a carcass in tow) or an open wound: wolves smell it.
+func smells_of_meat() -> bool:
+	if hauling or (held and held.def.has("raw") and held.def.id != "trout_raw" and held.def.id != "whitefish_raw"):
+		return true
+	if backpack.find(func(s): return s.def.id in ["venison_raw", "rabbit_raw"]) != null:
+		return true
+	return cond.injuries.values().any(func(i): return i.kind == "cut" and not i.treated)
 
 # --- Input -------------------------------------------------------------------
 
@@ -241,10 +299,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("rest"):
 		sleep()
 		return
-	if event.is_action_pressed("interact") and focus:
-		focus.interact(self)
+	if menu and event is InputEventKey and event.pressed and not event.echo:
+		var k: int = event.physical_keycode - KEY_1
+		if k >= 0 and k < 9:
+			choose(k)
+			get_viewport().set_input_as_handled()
+			return
+	if event.is_action_pressed("interact") and menu:
+		menu = null
+	elif event.is_action_pressed("interact") and focus:
+		open_or_interact()
 	elif event.is_action_pressed("lift"):
-		toggle_carry()
+		if hauling:
+			drop_haul()
+		else:
+			toggle_carry()
 	elif event.is_action_pressed("stow"):
 		stow()
 	elif event.is_action_pressed("slot_1"):
@@ -255,6 +324,42 @@ func _unhandled_input(event: InputEvent) -> void:
 		use_held()
 	elif event.is_action_released("use") and bow_draw >= 0.0:
 		loose()
+
+## Everything E could do with n right now: [[label, Callable]], best first. An invalid
+## Callable is a note (why something can't be done yet) rather than a choice.
+static func options_of(n: Node, p: Player) -> Array:
+	if n.has_method("interact_options"):
+		return n.interact_options(p)
+	var l: String = n.interact_label(p)
+	return [[l, n.interact.bind(p)]] if l != "" else []
+
+static func choices_of(n: Node, p: Player) -> Array:
+	return options_of(n, p).filter(func(o): return o[1].is_valid())
+
+## For things with a list of options: the first one's label, and running it (scripted checks
+## and single-choice E both come through here).
+static func first_label(opts: Array) -> String:
+	return opts[0][0] if opts else ""
+
+static func run_first(opts: Array) -> void:
+	if opts and opts[0][1].is_valid():
+		opts[0][1].call()
+
+## E: one thing to do does it; several open the list of choices.
+func open_or_interact() -> void:
+	var c := choices_of(focus, self)
+	if c.size() > 1:
+		menu = focus
+	elif c.size() == 1 and focus.has_method("interact_options"):
+		c[0][1].call()
+	else:
+		focus.interact(self)
+
+func choose(i: int) -> void:
+	var opts := choices_of(menu, self)
+	menu = null
+	if i < opts.size():
+		opts[i][1].call()
 
 func aim_point() -> Vector2:
 	return aim_override if aim_override != Vector2.INF else get_global_mouse_position()
@@ -292,6 +397,11 @@ func use_held() -> void:
 			bow_draw = 0.0
 	elif d.has("knife"):
 		_knife()
+	elif d.has("spear"):
+		if thrust < 0.0 and cond.spend_stamina(THRUST_STAMINA):
+			thrust = 0.0
+	elif d.has("torch"):
+		_wave_torch()
 	elif d.has("call"):
 		_call()
 	elif d.has("axe"):
@@ -306,7 +416,7 @@ func use_held() -> void:
 		cond.eat(d.food * ItemStack.FOOD_MULT[fresh])
 		if d.has("raw"):
 			cond.health -= 6.0
-			message.emit("Raw fish. It sits badly; cooking it would be better.")
+			message.emit("That was raw. It sits badly; cooking it would be better.")
 		elif fresh == ItemStack.Fresh.SPOILED:
 			cond.health -= 8.0
 			message.emit("That was spoiled. Your stomach turns.")
@@ -367,8 +477,55 @@ func _call() -> void:
 		if absf(a.position.x - global_position.x) < CALL_REACH:
 			a.hear_call(global_position.x)
 
-## Close work: only an animal that hasn't noticed you can be taken with the knife.
+## Waving a torch: anything wild close by backs away from the flame.
+func _wave_torch() -> void:
+	swing = 0.0
+	for p in get_tree().get_nodes_in_group("predators"):
+		if absf(p.position.x - global_position.x) < 800.0:
+			p.scare(global_position.x)
+
+## Something wild close in front (a wolf or the bear at your throat, a rabbit): the nearest
+## one within reach, or null.
+func _nearest_in(group: String, reach: float) -> Node2D:
+	var best: Node2D = null
+	for a in get_tree().get_nodes_in_group(group):
+		var dx: float = a.position.x - global_position.x
+		if absf(dx) < reach and (signf(dx) == facing or absf(dx) < 40.0) and (best == null or absf(dx) < absf(best.position.x - global_position.x)):
+			best = a
+	return best
+
+## The spear's point lands partway through the thrust: predators are hurt, small game and
+## unaware deer taken, a deer that's seen you bolts.
+func _advance_thrust(delta: float) -> void:
+	if thrust < 0.0:
+		return
+	var before := thrust
+	thrust += delta / THRUST_TIME
+	if before < 0.4 and thrust >= 0.4:
+		var pr := _nearest_in("predators", SPEAR_REACH)
+		var small := _nearest_in("small_game", SPEAR_REACH)
+		var deer := _nearest_in("animals", SPEAR_REACH) as Animal
+		if pr:
+			pr.hurt(0.7, global_position.x)
+		elif small:
+			small.hurt(1.0, global_position.x)
+		elif deer:
+			if deer.wound < 0.0 and deer.state in [Animal.State.GRAZE, Animal.State.WALK, Animal.State.BEDDED] and deer.awareness < deer.def.alert_at:
+				deer.kill()
+				message.emit("One clean thrust.")
+			else:
+				deer.bolt()
+	if thrust >= 1.0:
+		thrust = -1.0
+
+## Close work: only an animal that hasn't noticed you can be taken with the knife. A wolf or
+## the bear on top of you can be fought off with it.
 func _knife() -> void:
+	var pr := _nearest_in("predators", KNIFE_REACH)
+	if pr:
+		swing = 0.0
+		pr.hurt(0.45, global_position.x)
+		return
 	var best: Animal = null
 	for a: Animal in get_tree().get_nodes_in_group("animals"):
 		var d := absf(a.position.x - global_position.x)
@@ -430,6 +587,11 @@ func hold(stack: ItemStack) -> void:
 func stow() -> void:
 	if held == null:
 		return
+	if held.def.has("torch"):
+		held = null
+		held_slot = -1
+		message.emit("You snuff the torch in the dirt.")
+		return
 	var s := held
 	held = null
 	if held_slot >= 0 and backpack.attachments[held_slot] == null:
@@ -448,6 +610,9 @@ func draw_slot(i: int) -> void:
 		hold(s)
 
 func drop_stack(s: ItemStack) -> void:
+	if s.def.has("torch"):
+		stow()
+		return
 	if held == s:
 		held = null
 		held_slot = -1
@@ -466,6 +631,20 @@ func nearest_log() -> WorldLog:
 			best = l
 			best_d = d
 	return best
+
+## Takes hold of a carcass to drag it home whole: slow, hard work, both hands.
+func start_haul(c: Carcass) -> void:
+	stow()
+	drop_carried()
+	hauling = c
+	c.hauler = self
+	message.emit("You take hold and start dragging. Slow going. (%s to let go)" % Keys.label("lift"))
+
+func drop_haul() -> void:
+	if hauling:
+		hauling.hauler = null
+		hauling.queue_redraw()
+	hauling = null
 
 func toggle_carry() -> void:
 	if carrying:
@@ -490,7 +669,8 @@ func drop_carried() -> void:
 
 ## Busy for `seconds` of real time while `hours` of game time pass visibly, then `done` runs.
 func work(seconds: float, hours: float, label: String, done: Callable) -> void:
-	stow()
+	if not holding("torch"): # a torch stays lit in your hand while you work
+		stow()
 	working = seconds
 	work_label = label
 	_work_done = done
@@ -524,6 +704,7 @@ func sleep() -> void:
 		return
 	stow()
 	drop_carried()
+	drop_haul()
 	sleeping = true
 	GameClock.time_scale = GameClock.tuning.sleep_time_scale
 	for s in get_tree().get_nodes_in_group("shelter"):
@@ -553,6 +734,9 @@ func _die() -> void:
 	swing = -1.0
 	GameClock.time_scale = 1.0
 	drop_carried()
+	drop_haul()
+	if held and held.def.has("torch"):
+		held = null
 	if held and not backpack.add(held):
 		drop_stack(held)
 	held = null
@@ -563,8 +747,12 @@ func _die() -> void:
 ## Called once the screen is black: leave the pack where you fell, wake at camp.
 func respawn() -> void:
 	var lost := _death_losses()
+	var worn := backpack.worn.duplicate() # your clothes stay on you
+	for k in Backpack.WEAR:
+		backpack.worn[k] = null
 	world.spawn({"kind": "pack", "x": global_position.x, "pack": backpack.to_dict()})
 	backpack = Backpack.new()
+	backpack.worn = worn
 	var x := camp_x if camp_x >= 0.0 else start_x
 	global_position = Vector2(x, world.terrain.height_at(x) - 4.0)
 	velocity = Vector2.ZERO
@@ -611,6 +799,7 @@ func unsafe_reason() -> String:
 	if not is_on_floor(): return "Get your feet on the ground first."
 	if wade_depth > 0.0: return "Get out of the water first."
 	if carrying: return "Set the log down first."
+	if hauling: return "Let go of the carcass first."
 	if working > 0.0 or swing >= 0.0: return "Finish what you're doing first."
 	if cond.health < 15.0: return "You're in too much danger to save."
 	return ""
@@ -633,4 +822,7 @@ func from_dict(d: Dictionary) -> void:
 	for r in RECIPES:
 		if r not in known_recipes:
 			known_recipes.append(r)
+	var coat := backpack.find(func(s): return s.def.id == "hide_coat")
+	if coat and backpack.worn.body == null: # before clothing slots a coat in the pack was worn
+		backpack.wear(coat)
 	camp_x = float(d.camp_x)

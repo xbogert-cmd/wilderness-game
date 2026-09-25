@@ -19,7 +19,6 @@ class_name Tuning extends Resource
 @export var fatigue_per_hour := 5.5 ## awake; ~18 h from rested to exhausted
 @export var sleep_recovery_per_hour := 15.0 ## asleep at quality 1.0
 @export var sleeping_bag_c := 8.0 ## insulation while sleeping in the bag
-@export var hide_coat_c := 12.0 ## extra warmth while the hide coat is in the pack
 
 @export_group("Stamina (per real second)")
 @export var stamina_regen_per_sec := 14.0

@@ -12,6 +12,7 @@ func _ready() -> void:
 	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
 	add_to_group("shelter")
+	add_to_group("camp_safe") # nothing wild comes near camp
 	z_as_relative = false
 	z_index = 2
 

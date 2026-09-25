@@ -53,7 +53,18 @@ func _rules() -> Array:
 		["woodpile", p.carrying != null and p.carrying.size == "short", "Short logs keep best in a woodpile ({build}). At a fire close by, {interact} feeds it a log straight from the pile."],
 		["rod", p.backpack.count_of("fishing_pole") > 0, "Hold the pole (select it in your pack), then click toward the creek to cast."],
 		["fire", f is Campfire and not f.lit, "Press {interact} to light the fire. Feed it sticks or logs to keep it going."],
+		["choices", f != null and f.is_in_group("camp") and Player.choices_of(f, p).size() > 1, "More than one thing to do here: {interact} shows the choices, then press a number."],
+		["wolves", _near("wolf", 2200.0), "Wolves. They're after food: anything dead left lying out. They won't come near camp, a fire or a torch; hurt one and the pack scatters."],
+		["bear", _near("black_bear", 2200.0), "A black bear. Don't walk up on it or its food: it charges to warn you. Back away. Push it and the next charge is real."],
+		["torch", p.holding("torch"), "A torch lights the dark, and nothing wild comes near the flame. Click to wave it. Put it away and it goes out."],
+		["spear", p.holding("spear"), "Click to thrust. Face a wolf or the bear with the spear and it won't close in."],
+		["butcher", f is Carcass and f.deer() and not f.dressed, "Butcher it here and the meat goes in your pack, but the gut pile draws wolves. Or drag the whole deer home to camp."],
+		["wear", p.backpack.find(func(s): return s.def.slot != "") != null, "Clothing only warms you when you wear it: open the pack ({backpack}) and drag it onto a clothing slot."],
+		["snare", p.backpack.count_of("snare") > 0, "Set a snare from the build menu ({build}) and check it at dawn. A rabbit left hanging too long gets taken."],
 	]
+
+func _near(species: String, reach: float) -> bool:
+	return get_tree().get_nodes_in_group("predators").any(func(a): return a.def.id == species and absf(a.position.x - player.global_position.x) < reach)
 
 func _deer_near() -> bool:
 	for a in get_tree().get_nodes_in_group("animals"):

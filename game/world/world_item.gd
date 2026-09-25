@@ -12,6 +12,8 @@ func _ready() -> void:
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	stack = ItemStack.from_dict(d.stack)
+	if stack.def.has("food"):
+		add_to_group("food_scent") # meat on the ground draws wolves; the bear eats anything
 	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)) + 2.0)
 	queue_redraw()
 
@@ -20,6 +22,13 @@ func to_state() -> Dictionary:
 
 func can_unload() -> bool:
 	return true
+
+func appeals(kind: String) -> bool:
+	return stack.def.has("raw") or kind == "black_bear"
+
+func gnaw(_amount: float, _kind: String) -> bool:
+	queue_free() # gone in a mouthful
+	return false
 
 func interact_pos() -> Vector2:
 	return global_position

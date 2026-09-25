@@ -6,9 +6,11 @@ const W := 6
 const H := 7
 const ATTACH_SLOTS := 2
 const COMFORT_KG := 14.0
+const WEAR := ["head", "body", "hands", "legs"] ## clothing slots; empty = just your own clothes
 
 var entries: Array[Dictionary] = [] ## {stack: ItemStack, pos: Vector2i, rot: bool}
 var attachments: Array = [null, null] ## ItemStack or null
+var worn := {"head": null, "body": null, "hands": null, "legs": null} ## on you, not in the pack
 
 ## Grid cells of a def, rotated 90° clockwise when rot.
 static func cells(def: ItemDef, rot: bool) -> Array[Vector2i]:
@@ -26,6 +28,8 @@ func entry_at(cell: Vector2i) -> Dictionary:
 	return {}
 
 func fits(stack: ItemStack, pos: Vector2i, rot: bool, ignore: ItemStack = null) -> bool:
+	if stack.def.has("torch"):
+		return false # a burning torch never goes in the pack
 	for c in cells(stack.def, rot):
 		var p := pos + c
 		if p.x < 0 or p.y < 0 or p.x >= W or p.y >= H:
@@ -50,9 +54,12 @@ func remove(stack: ItemStack) -> void:
 	for i in ATTACH_SLOTS:
 		if attachments[i] == stack:
 			attachments[i] = null
+	for k in WEAR:
+		if worn[k] == stack:
+			worn[k] = null
 
 func contains(stack: ItemStack) -> bool:
-	return stack in attachments or entries.any(func(e): return e.stack == stack)
+	return stack in attachments or stack in worn.values() or entries.any(func(e): return e.stack == stack)
 
 ## Merge into matching stacks first, then first free spot (either rotation).
 func add(stack: ItemStack) -> bool:
@@ -80,6 +87,40 @@ func attach(stack: ItemStack, slot: int) -> bool:
 	remove(stack)
 	attachments[slot] = stack
 	return true
+
+## Puts clothing on from wherever it is; what was in that slot goes into the pack. False (and
+## nothing changes) if there's no room in the pack for what would come off.
+func wear(stack: ItemStack) -> bool:
+	var slot := stack.def.slot
+	if slot == "":
+		return false
+	var off: ItemStack = worn[slot]
+	remove(stack)
+	worn[slot] = stack
+	if off and not add(off):
+		worn[slot] = off # no room for what you'd take off: keep it on
+		add(stack)
+		return false
+	return true
+
+## Takes clothing off into the pack. False if there's no room.
+func take_off(slot: String) -> bool:
+	var s: ItemStack = worn[slot]
+	if s == null or not add(s):
+		return false
+	worn[slot] = null
+	return true
+
+## Extra felt warmth from everything worn, °C.
+func insulation() -> float:
+	var c := 0.0
+	for k in WEAR:
+		if worn[k]:
+			c += worn[k].def.warmth_c
+	return c
+
+func wearing(id: String) -> bool:
+	return WEAR.any(func(k): return worn[k] != null and worn[k].def.id == id)
 
 func all_stacks() -> Array[ItemStack]:
 	var out: Array[ItemStack] = []
@@ -136,10 +177,16 @@ func to_dict() -> Dictionary:
 	var es := []
 	for e in entries:
 		es.append({"s": e.stack.to_dict(), "x": e.pos.x, "y": e.pos.y, "r": e.rot})
-	return {"entries": es, "attach": attachments.map(func(a): return a.to_dict() if a else null)}
+	var w := {}
+	for k in WEAR:
+		w[k] = worn[k].to_dict() if worn[k] else null
+	return {"entries": es, "attach": attachments.map(func(a): return a.to_dict() if a else null), "worn": w}
 
 func from_dict(d: Dictionary) -> void:
 	entries.clear()
 	for e in d.entries:
 		entries.append({"stack": ItemStack.from_dict(e.s), "pos": Vector2i(int(e.x), int(e.y)), "rot": bool(e.r)})
 	attachments = (d.attach as Array).map(func(a): return ItemStack.from_dict(a) if a else null)
+	var w: Dictionary = d.get("worn", {})
+	for k in WEAR:
+		worn[k] = ItemStack.from_dict(w[k]) if w.get(k) else null

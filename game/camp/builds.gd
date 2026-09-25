@@ -14,6 +14,7 @@ const STRUCTURES := {
 	"chest": {"name": "Storage chest", "width": 120.0, "h": 75.0, "needs": {"medium": 1, "sticks": 3}, "hours": 0.5, "seconds": 2.5},
 	"bait": {"name": "Bait pile", "width": 60.0, "h": 30.0, "needs": {"berries": 4}, "hours": 0.05, "seconds": 1.0},
 	"blind": {"name": "Hunting blind", "width": 160.0, "h": 105.0, "needs": {"sticks": 6}, "hours": 0.4, "seconds": 2.5},
+	"snare": {"name": "Snare", "width": 40.0, "h": 30.0, "needs": {"snare": 1}, "hours": 0.1, "seconds": 1.0},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 }
 
@@ -26,6 +27,14 @@ const RECIPES := {
 	"arrows": {"needs": {"sticks": 2}, "hours": 0.5, "seconds": 2.5, "count": 4, "bench": true},
 	"hide_coat": {"needs": {"hide": 2, "#cord": 1}, "hours": 2.0, "seconds": 4.0, "bench": true},
 	"deer_call": {"needs": {"sticks": 1}, "hours": 0.5, "seconds": 2.5, "bench": true},
+	"snare": {"needs": {"#cord": 1, "sticks": 1}, "hours": 0.3, "seconds": 2.0, "count": 2},
+	"spear": {"needs": {"sticks": 3}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	# Clothing. Buckskin is fair-weather gear; wolf and bear fur are what gets you through winter.
+	"buckskin_leggings": {"needs": {"hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
+	"wolf_hat": {"needs": {"wolf_fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	"wolf_mittens": {"needs": {"wolf_fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	"wolf_leggings": {"needs": {"wolf_fur": 2, "#cord": 1}, "hours": 2.0, "seconds": 4.0, "bench": true},
+	"bear_coat": {"needs": {"bear_fur": 1, "#cord": 1}, "hours": 3.0, "seconds": 4.5, "bench": true},
 }
 
 static func is_log(key: String) -> bool:

@@ -17,6 +17,7 @@ func _ready() -> void:
 	add_to_group("structure")
 	add_to_group("shelter")
 	add_to_group("heat")
+	add_to_group("camp_safe") # nothing wild comes near camp
 	z_as_relative = false
 	z_index = 2
 	_lamp = PointLight2D.new()

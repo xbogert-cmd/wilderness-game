@@ -27,7 +27,8 @@ func tick(dh: float, env: Dictionary) -> void:
 	var sleeping: bool = env.get("sleeping", false)
 	var heat: float = env.get("heat", 0.0)
 	hunger = maxf(hunger - t.hunger_per_hour * dh * (1.0 + exertion), 0.0)
-	thirst = maxf(thirst - t.thirst_per_hour * dh * (1.0 + exertion), 0.0)
+	var sweat := 1.5 if warmth > 80.0 else 1.0 # overdressed for the weather: you sweat it out
+	thirst = maxf(thirst - t.thirst_per_hour * dh * (1.0 + exertion) * sweat, 0.0)
 
 	var rain: float = 0.0 if env.get("sheltered", false) else env.get("precip", 0.0)
 	var wet_in: float = rain * t.rain_wet_per_hour + env.get("wading", 0.0) * t.wade_wet_per_hour

@@ -31,6 +31,7 @@ func interact(p: Player) -> void:
 	var recovered := Backpack.new()
 	recovered.from_dict(pack_data)
 	var extra := p.backpack.all_stacks() # whatever was gathered since
+	recovered.worn = p.backpack.worn # the clothes you're in
 	p.backpack = recovered
 	for s in extra:
 		var strapped := false

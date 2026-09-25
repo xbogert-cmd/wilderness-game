@@ -36,7 +36,7 @@ func _process(delta: float) -> void:
 		for o in [0.0, 0.5]: # a foot plants when its cycle wraps back to the start of stance
 			if fposmod(prev + o, 1.0) > fposmod(phase + o, 1.0):
 				body.footsteps.step()
-	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching or body.working > 0.0 else 0.0) + (0.12 if body.carrying else 0.0)
+	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching or body.working > 0.0 else 0.0) + (0.12 if body.carrying else 0.0) + (0.3 if body.hauling else 0.0)
 	_lean = lerpf(_lean, want_lean, 1.0 - exp(-delta * 8.0))
 	queue_redraw()
 
@@ -104,27 +104,27 @@ func _draw() -> void:
 
 	var back := 0.72
 	var back_sleeve := _jacket().darkened(1.0 - back)
-	var back_skin := Palette.SKIN.darkened(1.0 - back)
+	var back_skin := _hand().darkened(1.0 - back)
 	var targets := _hand_targets(hip, shoulder) # [near, far] or []
 	if targets:
 		_arm_to(shoulder, targets[1], back_sleeve, back_skin)
 	else:
 		_arm(shoulder, phase, swing, elbow, arm_up, back_sleeve, back_skin)
-	_leg(hip, feet[1], Palette.PANTS.darkened(1.0 - back), Palette.BOOTS.darkened(0.3), airborne)
+	_leg(hip, feet[1], _pants().darkened(1.0 - back), Palette.BOOTS.darkened(0.3), airborne)
 	_pack(hip, shoulder)
-	draw_circle(hip, 10.0, Palette.PANTS)
-	_leg(hip, feet[0], Palette.PANTS, Palette.BOOTS, airborne)
+	draw_circle(hip, 10.0, _pants())
+	_leg(hip, feet[0], _pants(), Palette.BOOTS, airborne)
 	_torso(hip, shoulder)
 	draw_circle(head, 10.5, Palette.SKIN)
 	_hat(head)
 	_breath(head)
 	var hand: Array # [hand, forearm direction]
 	if body.swing >= 0.0:
-		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, _jacket(), Palette.SKIN)
+		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, _jacket(), _hand())
 	elif targets:
-		hand = _arm_to(shoulder, targets[0], _jacket(), Palette.SKIN)
+		hand = _arm_to(shoulder, targets[0], _jacket(), _hand())
 	else:
-		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, _jacket(), Palette.SKIN)
+		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, _jacket(), _hand())
 	if body.held:
 		_held_item(body.held, hand[0], hand[1])
 	if body.bow_draw >= 0.5:
@@ -132,6 +132,12 @@ func _draw() -> void:
 
 ## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
 func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
+	if body.hauling: # both hands on the neck behind, leaning into the pull
+		var g := _to_local_space(body.hauling.grip())
+		return [g, g + Vector2(6, -4)]
+	if body.thrust >= 0.0: # both hands drive the spear forward and draw it back
+		var ext := sin(body.thrust * PI)
+		return [shoulder + Vector2(18.0 + 38.0 * ext, 20.0), shoulder + Vector2(-10.0 + 36.0 * ext, 24.0)]
 	if body.carrying:
 		if body.carrying.dragged():
 			var g := _to_local_space(body.carrying.grip())
@@ -143,6 +149,8 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 		return [shoulder + aim * 50.0, shoulder + aim * (46.0 - 40.0 * body.bow_draw)]
 	if body.held and body.held.def.has("rod") and body.fishing and body.fishing.state != Fishing.State.IDLE:
 		return [shoulder + Vector2(20, 14), shoulder + Vector2(12, 18)] # pole held out over the water
+	if body.holding("torch") and body.swing < 0.0 and body.working <= 0.0: # the torch held up and out
+		return [shoulder + Vector2(26, -6), shoulder + Vector2(-4, 44)]
 	if body.working > 0.0:
 		var w := Vector2(sin(_time * 7.0) * 6.0, cos(_time * 7.0) * 4.0)
 		return [hip + Vector2(30, -8) + w, hip + Vector2(24, -4) - w]
@@ -178,9 +186,18 @@ func _breath(head: Vector2) -> void:
 	for i in 3:
 		draw_circle(mouth + Vector2(8.0 + k * 40.0 + i * 5.0, -k * 10.0 - i * 2.0), 3.0 + k * 10.0 - i, Color(0.92, 0.94, 0.97, a * (1.0 - i * 0.25)))
 
-## Buckskin once the hide coat is in the pack.
+## What you're wearing shows: a buckskin or bear-fur coat, fur or buckskin leggings, mittens.
 func _jacket() -> Color:
-	return Color("a78a5d") if body.backpack.count_of("hide_coat") > 0 else Palette.JACKET
+	var c: ItemStack = body.backpack.worn.body
+	return c.def.color if c else Palette.JACKET
+
+func _pants() -> Color:
+	var l: ItemStack = body.backpack.worn.legs
+	return l.def.color.darkened(0.1) if l else Palette.PANTS
+
+func _hand() -> Color:
+	var m: ItemStack = body.backpack.worn.hands
+	return m.def.color if m else Palette.SKIN
 
 func _to_local_space(world_point: Vector2) -> Vector2:
 	var d := world_point - body.global_position
@@ -252,6 +269,21 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			draw_polyline(PackedVector2Array([top, nock, bot]), Color(0.9, 0.88, 0.8, 0.8), 1.2)
 			if body.bow_draw >= 0.0:
 				draw_line(nock, hand + fwd * 16.0, Color("b0966b"), 2.0)
+		"torch": # held up, the flame flickering
+			var up := Vector2(0.3, -1.0).normalized()
+			var tip := hand + up * 42.0
+			draw_line(hand - up * 10.0, tip, Color("6a4e36"), 5.0)
+			draw_rect(Rect2(tip - Vector2(5, 3), Vector2(10, 7)), Color("3a2e24"))
+			var f := 1.0 + 0.18 * sin(_time * 17.0) + 0.1 * sin(_time * 29.0)
+			var lean := Vector2(-GameClock.weather.wind_dir * body.facing * 6.0 * GameClock.weather.wind, 0)
+			draw_colored_polygon(PackedVector2Array([tip + Vector2(-9, 0), tip + Vector2(0, -34 * f) + lean, tip + Vector2(9, 0)]), Color(0.96, 0.46, 0.12))
+			draw_colored_polygon(PackedVector2Array([tip + Vector2(-5, 0), tip + Vector2(0, -20 * f) + lean * 0.6, tip + Vector2(5, 0)]), Color(1.0, 0.85, 0.45))
+		"spear":
+			var fwd := Vector2(1, 0.04).normalized() if body.thrust >= 0.0 else Vector2.from_angle(-1.05)
+			var tail := hand - fwd * (60.0 if body.thrust >= 0.0 else 26.0)
+			var point := hand + fwd * (140.0 if body.thrust >= 0.0 else 118.0)
+			draw_line(tail, point, c, 4.0)
+			draw_colored_polygon(PackedVector2Array([point + fwd.orthogonal() * 4.0, point + fwd * 16.0, point - fwd.orthogonal() * 4.0]), c.darkened(0.5))
 		"sticks":
 			for i in 3:
 				draw_line(hand + Vector2(-14, -2 + i * 4), hand + Vector2(20, -6 + i * 5), c, 3.0)
@@ -282,6 +314,12 @@ func _pack(hip: Vector2, shoulder: Vector2) -> void:
 
 func _hat(head: Vector2) -> void:
 	var t := Transform2D(_lean * 0.6, head)
+	var fur: ItemStack = body.backpack.worn.head
+	if fur: # a round fur hat, ear flaps down
+		draw_colored_polygon(t * PackedVector2Array([Vector2(-12, -2), Vector2(-11, -13), Vector2(0, -19), Vector2(11, -13), Vector2(12, -2)]), fur.def.color)
+		draw_colored_polygon(t * PackedVector2Array([Vector2(-13, -6), Vector2(13, -6), Vector2(13, -1), Vector2(-13, -1)]), fur.def.color.lightened(0.15))
+		draw_colored_polygon(t * PackedVector2Array([Vector2(-10, -2), Vector2(-4, -2), Vector2(-5, 9), Vector2(-9, 8)]), fur.def.color.darkened(0.08))
+		return
 	draw_colored_polygon(t * PackedVector2Array([Vector2(-19, -6), Vector2(19, -6), Vector2(21, -4), Vector2(-17, -3)]), Palette.HAT)
 	draw_colored_polygon(t * PackedVector2Array([Vector2(-9, -6), Vector2(9, -6), Vector2(8, -17), Vector2(1, -14), Vector2(-8, -17)]), Palette.HAT)
 
@@ -303,8 +341,8 @@ func _draw_lying() -> void:
 	var shoulder := Vector2(-50, g - 14 - breath)
 	var head := Vector2(-68, g - 16)
 	draw_colored_polygon(PackedVector2Array([Vector2(-96, g), Vector2(-66, g), Vector2(-70, g - 14), Vector2(-94, g - 12)]), Palette.PACK) # pillow
-	_limb(hip, knee, 15.0, 12.0, Palette.PANTS)
-	_limb(knee, ankle, 12.0, 9.0, Palette.PANTS)
+	_limb(hip, knee, 15.0, 12.0, _pants())
+	_limb(knee, ankle, 12.0, 9.0, _pants())
 	draw_colored_polygon(PackedVector2Array([ankle + Vector2(-4, 6), ankle + Vector2(6, 6), ankle + Vector2(6, -14), ankle + Vector2(0, -14)]), Palette.BOOTS)
 	_limb(hip, shoulder, 22.0, 26.0, _jacket())
 	draw_circle(head, 10.5, Palette.SKIN)

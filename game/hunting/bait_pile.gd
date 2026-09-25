@@ -1,6 +1,7 @@
 class_name BaitPile extends Node2D
 ## A heap of berries set out to draw deer. While it lasts, active deer within reach drift to it
-## and feed there; it shrinks as they eat and goes off after a couple of days.
+## and feed there; it shrinks as they eat and goes off after a couple of days. The bear smells
+## it from a long way off, and likes it even more than the deer do.
 
 const DRAW_REACH := 2600.0
 const EAT_PER_HOUR := 0.2
@@ -14,6 +15,7 @@ func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("structure")
 	add_to_group("bait")
+	add_to_group("food_scent")
 	z_as_relative = false
 	z_index = 2
 	GameClock.ticked.connect(_on_tick)
@@ -32,6 +34,17 @@ func can_unload() -> bool:
 
 func width() -> float:
 	return Builds.STRUCTURES.bait.width
+
+func appeals(kind: String) -> bool:
+	return kind == "black_bear" and amount > 0.05
+
+func gnaw(n: float, _kind: String) -> bool:
+	amount -= n * 0.4
+	if amount <= 0.0:
+		queue_free()
+		return false
+	queue_redraw()
+	return true
 
 ## The nearest bait still worth walking to, or null.
 static func nearest(tree: SceneTree, x: float) -> BaitPile:

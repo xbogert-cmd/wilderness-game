@@ -27,10 +27,10 @@ func _physics_process(delta: float) -> void:
 	var steps := maxi(1, int(from.distance_to(position) / 10.0))
 	for i in steps: # sample the path so fast arrows can't skip through a deer
 		var p := from.lerp(position, float(i + 1) / steps)
-		for a: Animal in get_tree().get_nodes_in_group("animals"):
+		for a in _targets():
 			if (p.x - arm_x) * signf(velocity.x) < -6.0:
 				break
-			var z := a.zone_at(p)
+			var z: int = a.zone_at(p)
 			if z > 0:
 				a.shot(z)
 				queue_free()
@@ -42,6 +42,11 @@ func _physics_process(delta: float) -> void:
 			return
 	if _life <= 0.0 or position.x < 0.0 or position.x > Terrain.WORLD_W:
 		queue_free()
+
+## Deer, wolves, the bear, rabbits: anything an arrow can strike.
+func _targets() -> Array:
+	var t := get_tree()
+	return t.get_nodes_in_group("animals") + t.get_nodes_in_group("predators") + t.get_nodes_in_group("small_game")
 
 func _land(p: Vector2, on_ground: bool) -> void:
 	for a: Animal in get_tree().get_nodes_in_group("animals"):

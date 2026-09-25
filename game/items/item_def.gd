@@ -15,6 +15,8 @@ class_name ItemDef extends Resource
 @export var uses := 0 ## e.g. lighter strikes
 @export var treats := "" ## injury region a medical item treats
 @export var cooks_into := "" ## item id this becomes over a fire
+@export var slot := "" ## clothing: head, body, hands or legs
+@export var warmth_c := 0.0 ## clothing: how many °C warmer it makes you feel
 @export var description := ""
 
 func has(tag: String) -> bool:

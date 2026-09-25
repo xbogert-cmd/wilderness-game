@@ -8,6 +8,8 @@ class_name Scenario extends Node
 ## Mode "winter": woodpile, seasons, snow, tracks in snow, frozen creek, snow in the pot,
 ## then the camp builds: hide frame and coat, drying rack, log cabin.
 ## Mode "world": the foothills, the rock shelter, the fire lookout, the map, and the herd.
+## Mode "predators": choice menus, torch, wolves and the bear around food and camps, the spear,
+## butchering and dragging, snares and rabbits, pelts and clothing.
 
 var player: Player
 var world: World
@@ -26,6 +28,7 @@ func _ready() -> void:
 		"verify": _verify.call_deferred()
 		"wild": _wild.call_deferred()
 		"winter": _winter.call_deferred()
+		"predators": _predators.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -535,11 +538,15 @@ func _hunt() -> void:
 
 	var carcass: Carcass = _carcasses()[0]
 	await teleport(carcass.global_position.x)
-	check(carcass.interact_label(player) == "Field dress", "carcass offers field dressing")
+	check(carcass.interact_label(player) == "Butcher it here", "carcass offers butchering")
+	check(Player.choices_of(carcass, player).size() == 2, "two choices: butcher it here, or drag it home")
 	carcass.interact(player)
 	await frames(int(Carcass.DRESS_SECONDS * 60.0) + 10)
-	check(player.backpack.count_of("venison_raw") == Carcass.MEAT and _carcasses().is_empty(), "field dressed: %d venison" % player.backpack.count_of("venison_raw"))
+	check(player.backpack.count_of("venison_raw") == int(Carcass.MEAT) and _carcasses().is_empty(), "butchered: %d venison straight into the pack" % player.backpack.count_of("venison_raw"))
+	check(get_tree().get_nodes_in_group("food_scent").any(func(n): return n is GutPile), "butchering in the field leaves a gut pile")
 	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
+	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw")) # make room for what follows
+	player.backpack.take("deer_hide", player.backpack.count_of("deer_hide"))
 
 	# Scent: the same still, standing player, 700 px off: smelled downwind, not upwind.
 	player.stow()
@@ -839,12 +846,15 @@ func _builds() -> void:
 		check(player.backpack.take(k, r.needs[k]), "have %s for the coat" % k)
 	player.receive(ItemStack.make("hide_coat", h))
 	check(player.backpack.count_of("hide_coat") == 1, "sewed a hide coat")
+	var sewn := player.backpack.find(func(st): return st.def.id == "hide_coat")
+	check(player.backpack.insulation() == 0.0, "a coat in the pack doesn't warm you")
+	check(player.backpack.wear(sewn) and player.backpack.worn.body == sewn and player.backpack.count_of("hide_coat") == 0, "wearing it moves it out of the pack into the coat slot")
 	var cold := {"air_c": -10.0}
 	var bare_c := Condition.new(GameClock.tuning)
 	bare_c.tick(3.0, cold)
 	var coat_c := Condition.new(GameClock.tuning)
-	coat_c.tick(3.0, cold.merged({"insulation_c": GameClock.tuning.hide_coat_c}))
-	check(coat_c.warmth > bare_c.warmth + 10.0, "the coat keeps you warmer at -10 °C (%d vs %d)" % [coat_c.warmth, bare_c.warmth])
+	coat_c.tick(3.0, cold.merged({"insulation_c": player.backpack.insulation()}))
+	check(coat_c.warmth > bare_c.warmth + 8.0, "the coat keeps you warmer at -10 °C (%d vs %d)" % [coat_c.warmth, bare_c.warmth])
 
 	# Drying rack: raw meat hangs, dries (faster by a fire), and comes down as jerky.
 	var rack := world.spawn({"kind": "drying_rack", "x": x + 320.0}) as DryingRack
@@ -1027,6 +1037,292 @@ func _wild() -> void:
 	await frames(120)
 	player.auto_dir = 0.0
 	check(flock.flushed, "birds flush as you approach")
+
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+
+# --- Mode "predators" ------------------------------------------------------------------
+
+func _wl() -> Wildlife:
+	return get_parent().find_children("*", "Wildlife", false, false)[0]
+
+func _clear_wild() -> void:
+	for g in ["animals", "predators", "small_game"]:
+		for a in get_tree().get_nodes_in_group(g):
+			a.queue_free()
+	await frames(2)
+
+func _wait_until(cond: Callable, max_frames: int) -> int:
+	var n := 0
+	while not cond.call() and n < max_frames:
+		await frames(1)
+		n += 1
+	return n
+
+func _predators() -> void:
+	await frames(10)
+	var x := 9000.0
+	var h := GameClock.clock.hours
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.clock.hours = floorf(h / 24.0) * 24.0 + 23.0 # night
+	await teleport(x)
+	player.cond.health = 100.0
+
+	# --- Choices: E on something with several things to do opens a numbered list.
+	var fire := world.spawn({"kind": "campfire", "x": x + 60.0, "fuel": 4.0, "lit": true}) as Campfire
+	player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 4))
+	await frames(4)
+	check(player.focus == fire, "standing at the fire")
+	var opts := Player.choices_of(fire, player)
+	check(opts.size() >= 3, "a lit fire offers several choices (%s)" % ", ".join(opts.map(func(o): return o[0])))
+	player.open_or_interact()
+	check(player.menu == fire, "E opens the list of choices")
+	var fuel := fire.fuel
+	var torch_i := opts.map(func(o): return o[0]).find("Light a torch from the fire")
+	check(torch_i >= 0, "one of them lights a torch")
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_1 + torch_i
+	ev.pressed = true
+	player._unhandled_input(ev)
+	check(player.menu == null and player.holding("torch"), "its number key lights a torch")
+	check(fire.fuel == fuel, "the fire kept its fuel")
+	player.open_or_interact()
+	player.auto_dir = 1.0
+	await frames(3)
+	player.auto_dir = 0.0
+	check(player.menu == null, "walking off closes the list")
+	check(not player.backpack.add(ItemStack.make("torch")), "a burning torch won't go in the pack")
+
+	# --- Camp is safe: a wolf drawn to meat right beside the fire won't come in.
+	await _clear_wild()
+	var meat := world.spawn({"kind": "item", "x": x + 300.0, "stack": ItemStack.make("venison_raw", GameClock.clock.hours).to_dict()})
+	check(Predator.safe_at(get_tree(), meat.global_position.x), "meat by the fire is inside camp")
+	player.stow()
+	var wolf := _wl().spawn_predator(Wildlife.WOLF, x + 2600.0, 3)
+	await frames(60 * 12)
+	check(is_instance_valid(meat) and absf(wolf.position.x - fire.global_position.x) >= Predator.SAFE_R - 5.0, "the wolf never comes into camp (%.0f px from the fire)" % absf(wolf.position.x - fire.global_position.x))
+	meat.queue_free()
+	fire.queue_free()
+	await frames(2)
+
+	# --- Out in the open, it finds a carcass and eats; the hide is ruined.
+	await _clear_wild()
+	var cx := x + 400.0
+	var carcass := world.spawn({"kind": "carcass", "x": cx, "facing": 1, "species": "mule_deer", "hour": GameClock.clock.hours}) as Carcass
+	await teleport(x - 1500.0)
+	wolf = _wl().spawn_predator(Wildlife.WOLF, cx + 2200.0, 4)
+	var n := await _wait_until(func(): return wolf.state == Predator.State.FEED, 60 * 20)
+	check(wolf.state == Predator.State.FEED, "a wolf smells the carcass and comes to feed (%d s)" % (n / 60))
+	await frames(60 * 4)
+	check(carcass.meat < Carcass.MEAT and carcass.torn, "it eats into it; the hide is torn (%.1f cuts left)" % carcass.meat)
+
+	# --- A torch keeps it off, and waving it drives it away.
+	player.hold(ItemStack.make("torch", GameClock.clock.hours))
+	await teleport(cx - 300.0)
+	player.facing = 1
+	await frames(60)
+	check(wolf.state == Predator.State.FLEE, "walking up with a torch sends it off the carcass")
+	await frames(60 * 4)
+	check(absf(wolf.position.x - player.global_position.x) > Predator.TORCH_R, "it keeps out of the torchlight")
+	player.stow()
+	check(not player.holding("torch"), "stowing a torch snuffs it")
+
+	# --- After dark, a wolf stalks someone carrying meat; the spear drives it off.
+	await _clear_wild()
+	carcass.queue_free()
+	for g in get_tree().get_nodes_in_group("food_scent"):
+		g.queue_free()
+	await frames(2)
+	await teleport(x)
+	player.backpack.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+	check(player.smells_of_meat(), "raw meat in the pack: you smell of it")
+	wolf = _wl().spawn_predator(Wildlife.WOLF, x + 1200.0, 5)
+	var pk := [wolf]
+	wolf.pack = pk
+	var hp := player.cond.health
+	n = await _wait_until(func(): return player.cond.health < hp, 60 * 25)
+	check(player.cond.health < hp and player.cond.injuries.has("legs"), "it stalks in and bites (%d s, health %d)" % [n / 60, player.cond.health])
+	player.cond.health = 100.0
+	player.hold(ItemStack.make("spear", GameClock.clock.hours))
+	n = await _wait_until(func(): return wolf.state == Predator.State.STALK and absf(wolf.position.x - player.global_position.x) < 400.0, 60 * 10)
+	player.facing = int(signf(wolf.position.x - player.global_position.x))
+	await frames(60 * 2)
+	check(absf(wolf.position.x - player.global_position.x) >= Predator.BRACED_R - 20.0, "a braced spear holds it off (%.0f px)" % absf(wolf.position.x - player.global_position.x))
+	await teleport(wolf.position.x - player.facing * 180.0)
+	player.use_held()
+	await frames(40)
+	check(not is_instance_valid(wolf) or wolf.state == Predator.State.FLEE, "a spear thrust hurts it and it runs")
+	player.backpack.take("venison_raw", 2)
+	player.cond.injuries.clear()
+
+	# --- An arrow to the chest kills a wolf; skin it for a pelt.
+	await _clear_wild()
+	await teleport(x)
+	wolf = _wl().spawn_predator(Wildlife.WOLF, x + 700.0, 6)
+	wolf.set_physics_process(false)
+	wolf.position.y = world.ground_y(wolf.position.x)
+	wolf.facing = -1
+	player.receive(ItemStack.make("arrows", GameClock.clock.hours, 3))
+	player.hold(ItemStack.make("bow", GameClock.clock.hours))
+	var chest := wolf.position + Vector2(30.0 * wolf.facing, -60.0)
+	check(wolf.zone_at(chest) == 2, "the chest is the vitals")
+	player.facing = 1
+	player.aim_override = _lead(chest)
+	player.bow_draw = 1.0
+	player.loose()
+	await frames(60)
+	player.aim_override = Vector2.INF
+	var dead := _carcasses().filter(func(c): return c.species == "wolf")
+	check(dead.size() == 1, "an arrow in the chest kills it")
+	if dead:
+		await teleport(dead[0].global_position.x)
+		check(dead[0].interact_label(player) == "Skin the wolf", "a dead wolf can be skinned")
+		dead[0].interact(player)
+		await frames(int(4.0 * 60.0))
+		check(player.backpack.count_of("wolf_pelt") == 1, "a raw wolf pelt")
+
+	# --- The bear: a bluff first; press it and the charge is real.
+	await _clear_wild()
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 24.0 + 12.0 # next day, noon
+	var bx := 30000.0
+	await teleport(bx)
+	var bear := _wl().spawn_predator(Wildlife.BEAR, bx + 900.0, 7)
+	player.cond.health = 100.0
+	player.auto_dir = 1.0
+	n = await _wait_until(func(): return bear.state == Predator.State.BLUFF, 60 * 15)
+	player.auto_dir = 0.0
+	check(bear.state == Predator.State.BLUFF, "walking up on the bear: it bluff-charges")
+	await _wait_until(func(): return bear.state != Predator.State.BLUFF, 60 * 6)
+	check(player.cond.health == 100.0, "the bluff stops short: no harm done")
+	player.auto_dir = 1.0 # keep coming
+	n = await _wait_until(func(): return player.cond.health < 100.0, 60 * 20)
+	player.auto_dir = 0.0
+	check(player.cond.health < 80.0, "pushing it: the next charge is real (health %d)" % player.cond.health)
+	await _clear_wild()
+	player.cond.health = 100.0
+	player.cond.injuries.clear()
+
+	# --- Butchering: what fits goes into the pack, the rest waits; or drag it home.
+	await teleport(x)
+	var deer := world.spawn({"kind": "carcass", "x": x + 80.0, "facing": 1, "species": "mule_deer", "hour": GameClock.clock.hours}) as Carcass
+	await frames(2)
+	var filler := []
+	while player.backpack.add(ItemStack.make("snare")):
+		pass
+	for k in 3: # free just enough for the hide and two cuts
+		var sn := player.backpack.find(func(st): return st.def.id == "snare")
+		player.backpack.remove(sn)
+	var snares := player.backpack.count_of("snare")
+	player.stow()
+	deer.interact(player)
+	await frames(int(Carcass.DRESS_SECONDS * 60.0) + 10)
+	var packed := player.backpack.count_of("venison_raw")
+	check(is_instance_valid(deer) and packed >= 1 and deer.meat >= 1.0, "a full pack: %d cuts packed, %d left on the carcass" % [packed, floori(deer.meat) if is_instance_valid(deer) else 0])
+	player.backpack.take("snare", snares)
+	if is_instance_valid(deer):
+		check(Player.first_label(deer.interact_options(player)).begins_with("Take the rest of the meat"), "come back for the rest")
+		deer.interact(player)
+		check(not is_instance_valid(deer) or deer.is_queued_for_deletion(), "took the rest; nothing left")
+	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw"))
+	player.backpack.take("deer_hide", 1)
+	var whole := world.spawn({"kind": "carcass", "x": x + 80.0, "facing": 1, "species": "mule_deer", "hour": GameClock.clock.hours}) as Carcass
+	await frames(2)
+	player.start_haul(whole)
+	var start := player.global_position.x
+	player.auto_dir = 1.0
+	await frames(60 * 2)
+	player.auto_dir = 0.0
+	var went := player.global_position.x - start
+	check(player.hauling == whole and went > 50.0 and went < Player.WALK * 2.0 * 0.6, "dragging a whole deer: slow going (%.0f px in 2 s)" % went)
+	check(absf(whole.global_position.x - (player.global_position.x - Carcass.DRAG_OFFSET)) < 5.0, "it follows behind you")
+	check(player.unsafe_reason() != "", "no saving mid-drag")
+	player.drop_haul()
+	check(whole.hauler == null, "let go")
+
+	# --- Left out overnight, away from camp: scavenged by morning.
+	var left := whole.to_state()
+	whole.queue_free()
+	await frames(1)
+	var back := world.spawn(left, 12.0) as Carcass
+	await frames(3)
+	check(back.meat < Carcass.MEAT - 2.0 and back.torn, "left out 12 hours: scavenged (%.1f cuts left)" % back.meat)
+	back.queue_free()
+
+	# --- Snares and rabbits.
+	var snare := world.spawn({"kind": "snare", "x": x + 200.0}) as Snare
+	snare.caught = true
+	await teleport(x + 200.0)
+	check(Player.choices_of(snare, player).size() == 2, "a caught snare: take the rabbit, or pick up the snare")
+	snare.interact(player)
+	check(player.backpack.count_of("rabbit_raw") == 1 and not snare.caught, "a rabbit from the snare")
+	snare.caught = true
+	await teleport(x + 4000.0)
+	snare._advance(200.0)
+	check(not snare.caught and snare.sprung, "a rabbit left hanging out in the open gets taken")
+	await teleport(x)
+	var rabbit := Rabbit.new()
+	rabbit.world = world
+	rabbit.player = player
+	rabbit.position = Vector2(x + 500.0, world.ground_y(x + 500.0))
+	_wl().add_child(rabbit)
+	rabbit.set_physics_process(false)
+	player.hold(ItemStack.make("bow", GameClock.clock.hours))
+	player.facing = 1
+	player.aim_override = _lead(rabbit.position + Vector2(0, -14))
+	player.bow_draw = 1.0
+	player.loose()
+	await frames(50)
+	player.aim_override = Vector2.INF
+	check(not is_instance_valid(rabbit), "an arrow takes a rabbit")
+
+	# --- Pelts on the frame, fur clothing at the bench, and changing clothes.
+	var frame := world.spawn({"kind": "hide_frame", "x": x + 100.0}) as HideFrame
+	world.spawn({"kind": "workbench", "x": x - 100.0})
+	player.stow()
+	await frames(2)
+	player.backpack.add(ItemStack.make("deer_hide", GameClock.clock.hours))
+	if player.backpack.count_of("wolf_pelt") == 0:
+		player.backpack.add(ItemStack.make("wolf_pelt", GameClock.clock.hours))
+	check(Player.choices_of(frame, player).size() == 2, "the frame offers both the deer hide and the wolf pelt")
+	Player.choices_of(frame, player).filter(func(o): return o[0] == "Stretch the wolf pelt")[0][1].call()
+	await frames(int(HideFrame.STRETCH_SECONDS * 60.0) + 10)
+	frame._on_tick(HideFrame.KINDS.wolf_pelt[1])
+	frame.interact(player)
+	check(player.backpack.count_of("wolf_fur") == 1, "cured wolf fur off the frame")
+	player.backpack.take("deer_hide", 1)
+	var bu := player.backpack.find(func(st): return st.def.id == "wolf_fur")
+	check(bu != null, "fur in the pack")
+	var ui: BackpackUI = get_tree().get_first_node_in_group("backpack_ui")
+	ui.toggle() # crafting happens with the pack open, and closes it
+	ui._craft("wolf_hat")
+	await frames(int(Builds.RECIPES.wolf_hat.seconds * 60.0) + 10)
+	var hat := player.backpack.find(func(st): return st.def.id == "wolf_hat")
+	check(hat != null, "made a wolf fur hat at the bench")
+	var buck := ItemStack.make("hide_coat", GameClock.clock.hours)
+	player.backpack.add(buck)
+	player.backpack.wear(buck)
+	player.backpack.wear(hat)
+	var deer_c := player.backpack.insulation()
+	var bearc := ItemStack.make("bear_coat", GameClock.clock.hours)
+	player.backpack.add(bearc)
+	check(player.backpack.wear(bearc) and player.backpack.worn.body == bearc and player.backpack.count_of("hide_coat") == 1, "putting on the bear coat puts the buckskin back in the pack")
+	check(player.backpack.insulation() > deer_c + 4.0, "fur is much warmer than buckskin (+%d vs +%d °C)" % [player.backpack.insulation(), deer_c])
+
+	# --- Clothes survive death and the save.
+	var d := player.to_dict()
+	var p2 := Backpack.new()
+	p2.from_dict(d.pack)
+	check(p2.worn.body and p2.worn.body.def.id == "bear_coat" and p2.worn.head.def.id == "wolf_hat", "what you wear is saved")
+	var old := d.duplicate(true)
+	old.pack.erase("worn")
+	old.pack.entries.append({"s": ItemStack.make("hide_coat").to_dict(), "x": 5, "y": 6, "r": false})
+	player.cond.health = 0.0
+	await frames(5)
+	await get_tree().create_timer(4.5).timeout
+	check(player.backpack.worn.body == bearc and not player.dead, "you come to still wearing your clothes")
+	player.from_dict(old)
+	check(player.backpack.worn.body != null and player.backpack.worn.body.def.id == "hide_coat", "an old save's coat in the pack gets worn")
 
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)

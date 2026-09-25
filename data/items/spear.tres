@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "spear"
+name = "Spear"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)])
+weight = 1.2
+color = Color(0.604, 0.478, 0.322, 1)
+tags = PackedStringArray("spear", "attachable")
+description = "A straight shaft with a fire-hardened point. Longer reach than the knife: click to thrust. Wolves and bears keep their distance from a braced spear."

@@ -27,6 +27,7 @@ func _ready() -> void:
 	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
 	add_to_group("heat")
+	add_to_group("camp_safe") # nothing wild comes near a fire
 	z_as_relative = false
 	z_index = 2
 	_light = PointLight2D.new()
@@ -135,17 +136,6 @@ func heat_at(p: Vector2) -> float:
 func interact_pos() -> Vector2:
 	return global_position
 
-func _fuel_from(p: Player) -> Array: ## [label, hours, source] of the best fuel on hand
-	if p.carrying and not p.carrying.dragged():
-		return ["Add %s log" % p.carrying.size, 3.0 if p.carrying.size == "short" else 5.0, "log"]
-	if p.held and p.held.def.fuel_hours > 0.0:
-		return ["Add %s" % p.held.def.name.to_lower(), p.held.def.fuel_hours * p.held.count, "held"]
-	if _woodpile() and p.carrying == null and p.held == null: # a log burns far longer than sticks
-		return ["Add a log from the woodpile", 3.0, "pile"]
-	if p.backpack.count_of("sticks") > 0:
-		return ["Add sticks from pack", Items.get_def("sticks").fuel_hours, "pack"]
-	return []
-
 const PILE_REACH := 450.0
 
 ## A stocked woodpile close enough to feed from without fetching.
@@ -155,47 +145,88 @@ func _woodpile() -> Woodpile:
 			return w
 	return null
 
-## The one thing E does right now: [label, action]. Prompt and behaviour can't drift apart.
-func _action(p: Player) -> Array:
+## Everything E can do here, best first: [[label, action]]. An invalid action is a note.
+## The first one is what a single press does, so prompt and behaviour can't drift apart.
+func interact_options(p: Player) -> Array:
+	var out := []
 	var h := p.held
 	if pot and h and h != pot and h.def.capacity > 0.0: # a bottle in hand, the pot hanging
 		if h.water > 0.001 and not h.water_clean and (pot.water <= 0.001 or not pot.water_clean) and pot.water < pot.def.capacity - 0.01:
-			return ["Pour the %s into the pot" % h.def.name.to_lower(), _pour.bind(h, pot, p)]
-		if pot.water > 0.001 and pot.water_clean and h.water < h.def.capacity - 0.01 and (h.water <= 0.001 or h.water_clean):
-			return ["Fill the %s from the pot" % h.def.name.to_lower(), _pour.bind(pot, h, p)]
-		if pot.water > 0.001 and not pot.water_clean:
-			return ["The pot isn't boiled yet (%d%%)" % int(boil * 100.0), Callable()]
+			out.append(["Pour the %s into the pot" % h.def.name.to_lower(), _pour.bind(h, pot, p)])
+		elif pot.water > 0.001 and pot.water_clean and h.water < h.def.capacity - 0.01 and (h.water <= 0.001 or h.water_clean):
+			out.append(["Fill the %s from the pot" % h.def.name.to_lower(), _pour.bind(pot, h, p)])
+		elif pot.water > 0.001 and not pot.water_clean:
+			out.append(["The pot isn't boiled yet (%d%%)" % int(boil * 100.0), Callable()])
 	if pot and p.held == null and p.carrying == null:
-		return ["Take pot", _take_pot.bind(p)]
+		out.append(["Take pot", _take_pot.bind(p)])
 	if pot == null and p.held and p.held.def.has("pot"):
 		if tripod:
-			return ["Hang the pot on the tripod", _set_pot.bind(p)]
-		return ["The pot needs a tripod over the fire (build one: %s)" % Keys.label("build"), Callable()]
+			out.append(["Hang the pot on the tripod", _set_pot.bind(p)])
+		else:
+			out.append(["The pot needs a tripod over the fire (build one: %s)" % Keys.label("build"), Callable()])
 	if lit and p.held and p.held.def.cooks_into != "":
-		return ["Cook %s" % p.held.def.name.to_lower(), _cook.bind(p)]
-	var f := _fuel_from(p)
-	var can_feed := not f.is_empty() and fuel < MAX_FUEL
-	if can_feed and (p.carrying or p.held):
-		return [f[0], _add_fuel.bind(p, f)]
+		out.append(["Cook %s" % p.held.def.name.to_lower(), _cook.bind(p)])
+	var feeds := _fuels(p) if fuel < MAX_FUEL else []
+	var in_hand := feeds.filter(func(f): return f[2] in ["log", "held"])
+	for f in in_hand:
+		out.append([f[0], _add_fuel.bind(p, f)])
 	if not lit and fuel > 0.0:
-		return ["Light fire" if _lighter(p) else "Need a lighter", _light_fire.bind(p)]
-	if can_feed:
-		return [f[0], _add_fuel.bind(p, f)]
-	return ["", Callable()]
+		out.append(["Light fire" if _lighter(p) else "Need a lighter", _light_fire.bind(p)])
+	for f in feeds:
+		if f not in in_hand:
+			out.append([f[0], _add_fuel.bind(p, f)])
+	if lit and p.carrying == null and (p.held == null or p.held.def.id == "sticks") and p.backpack.count_of("sticks") + (p.held.count if p.held else 0) > 0:
+		out.append(["Light a torch from the fire", _torch.bind(p)])
+	if lit:
+		out.append(["Put the fire out", _douse.bind(p)])
+	return out
+
+func interact_title(_p: Player) -> String:
+	return "Campfire (%s)" % _status()
+
+func _status() -> String:
+	var status := ("burning, %.1f h fuel" % fuel) if lit else ("unlit, %.1f h fuel" % fuel)
+	if pot:
+		status += ", pot %s" % ("empty" if pot.water <= 0.001 else ("boiled clean" if pot.water_clean else "heating %d%%" % int(boil * 100.0)))
+	return status
 
 func interact_label(p: Player) -> String:
 	if get_tree().get_nodes_in_group("structure").any(func(s): return s is Blueprint and absf(s.global_position.x - global_position.x) < 10.0):
 		return "" # a tripod blueprint sits over it: let that take the prompt
-	var status := ("burning, %.1f h fuel" % fuel) if lit else ("unlit, %.1f h fuel" % fuel)
-	if pot:
-		status += ", pot %s" % ("empty" if pot.water <= 0.001 else ("boiled clean" if pot.water_clean else "heating %d%%" % int(boil * 100.0)))
-	var a := _action(p)
-	return "%s  (%s)" % [a[0], status] if a[0] != "" else "Campfire (%s)" % status
+	var first := Player.first_label(interact_options(p))
+	return "%s  (%s)" % [first, _status()] if first != "" else interact_title(p)
 
 func interact(p: Player) -> void:
-	var a := _action(p)
-	if a[1].is_valid():
-		a[1].call()
+	Player.run_first(interact_options(p))
+
+## Every fuel on hand, each once: [label, hours, source]. A log burns far longer than sticks.
+func _fuels(p: Player) -> Array:
+	var out := []
+	if p.carrying and not p.carrying.dragged():
+		out.append(["Add %s log" % p.carrying.size, 3.0 if p.carrying.size == "short" else 5.0, "log"])
+	if p.held and p.held.def.fuel_hours > 0.0:
+		out.append(["Add %s" % p.held.def.name.to_lower(), p.held.def.fuel_hours * p.held.count, "held"])
+	if _woodpile() and p.carrying == null and p.held == null:
+		out.append(["Add a log from the woodpile", 3.0, "pile"])
+	if p.backpack.count_of("sticks") > 0:
+		out.append(["Add sticks from pack", Items.get_def("sticks").fuel_hours, "pack"])
+	return out
+
+## A burning stick to carry: light in the dark, and nothing wild comes near a flame.
+func _torch(p: Player) -> void:
+	if p.held and p.held.def.id == "sticks":
+		p.held.count -= 1
+		if p.held.count <= 0:
+			p.held = null
+	elif not p.backpack.take("sticks", 1):
+		return
+	p.stow()
+	p.held = ItemStack.make("torch", GameClock.clock.hours)
+	p.message.emit("You light a torch from the fire.")
+
+func _douse(p: Player) -> void:
+	lit = false
+	p.message.emit("You kick dirt over the fire. The fuel that's left will light again.")
 
 func _lighter(p: Player) -> ItemStack:
 	if p.held and p.held.def.has("lighter") and p.held.uses_left > 0:

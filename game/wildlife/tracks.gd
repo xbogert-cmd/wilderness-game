@@ -6,7 +6,8 @@ class_name Tracks extends Node2D
 const STAGES := [[2.0, "fresh"], [12.0, "a few hours old"], [36.0, "old"]]
 const LIFETIME := 48.0
 const MAX_PRINTS := 700
-const NAMES := {"boot": "Your own boot prints", "deer": "Mule deer tracks", "blood": "Blood drops"}
+const NAMES := {"boot": "Your own boot prints", "deer": "Mule deer tracks", "blood": "Blood drops",
+	"wolf": "Wolf tracks", "bear": "Bear tracks"}
 
 var world: World
 var prints: Array = [] ## {x, s: species, d: dir, age: hours}
@@ -62,6 +63,14 @@ func _draw() -> void:
 		elif p.s == "deer": # split heart-shaped hoof, toes pointing the way it walked
 			draw_colored_polygon(PackedVector2Array([Vector2(p.x - d * 5, y), Vector2(p.x + d * 5, y - 1.5), Vector2(p.x + d * 5, y - 0.2)]), c)
 			draw_colored_polygon(PackedVector2Array([Vector2(p.x - d * 5, y + 1.2), Vector2(p.x + d * 5, y + 0.6), Vector2(p.x + d * 5, y + 2.2)]), c)
+		elif p.s == "wolf": # four toes and a pad
+			draw_circle(Vector2(p.x, y), 3.4, c)
+			for t in 4:
+				draw_circle(Vector2(p.x + d * 5.0 + (t - 1.5) * 2.4, y - 1.0 - absf(t - 1.5) * 0.4), 1.4, c)
+		elif p.s == "bear": # a broad pad and five toes
+			draw_rect(Rect2(p.x - 8.0, y - 1.5, 16.0, 4.0), c)
+			for t in 5:
+				draw_circle(Vector2(p.x + d * 10.0 + (t - 2) * 3.4, y - 1.5), 1.7, c)
 		else: # boot: sole and heel
 			draw_rect(Rect2(p.x - 7.0, y - 1.0, 9.0, 3.0), c)
 			draw_rect(Rect2(p.x + d * 5.0 - 2.0, y - 0.5, 4.0, 2.5), c)

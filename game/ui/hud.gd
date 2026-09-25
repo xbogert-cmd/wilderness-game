@@ -111,7 +111,10 @@ func _draw() -> void:
 			if at.distance_to(q) < 30.0:
 				at.y = q.y - 34.0
 		placed.append(at)
-		_popup(at, pr[1], pr[2])
+		if pr[1] == "menu":
+			_menu(at, pr[2])
+		else:
+			_popup(at, Keys.label(pr[1]) if pr[1] != "" else "", pr[2])
 
 	if player.sleeping: # letterbox + clock while time runs fast
 		var bar := size.y * 0.09
@@ -150,9 +153,35 @@ func _prompts() -> Array:
 	var out := []
 	if player.chop_target is FelledTrunk:
 		out.append([_anchor(player.chop_target), "use", player.chop_target.chop_label(player)])
-	if player.focus and player.focus.is_in_group("camp"):
-		out.append([_anchor(player.focus), "interact", player.focus.interact_label(player)])
+	var f := player.focus
+	if f and f.is_in_group("camp"):
+		if player.menu == f:
+			out.append([_anchor(f), "menu", f])
+		else:
+			var n := Player.choices_of(f, player).size()
+			var text: String = f.interact_title(player) if n > 1 and f.has_method("interact_title") else f.interact_label(player)
+			if n > 1:
+				text += "  ·  %d choices" % n
+			out.append([_anchor(f), "interact", text])
 	return out
+
+## The open list of choices: the thing's name on top, then one numbered line per choice
+## (notes about what can't be done yet are dimmed and have no key).
+func _menu(at: Vector2, f: Node) -> void:
+	var opts := Player.options_of(f, player)
+	var title: String = f.interact_title(player) if f.has_method("interact_title") else "Choose"
+	var lines := opts.size() + 1
+	var y := at.y - 100.0 - 34.0 * lines # the whole list floats clear above the player's head
+	_popup(Vector2(at.x, y), "", title)
+	var k := 0
+	for o in opts:
+		y += 34.0
+		if o[1].is_valid():
+			k += 1
+			_popup(Vector2(at.x, y), str(k), o[0])
+		else:
+			_popup(Vector2(at.x, y), "", o[0], 0.55)
+	_popup(Vector2(at.x, y + 34.0), Keys.label("interact"), "close", 0.55)
 
 func _anchor(n: Node) -> Vector2:
 	if n.has_method("prompt_point"):
@@ -172,10 +201,9 @@ static func _box(bg: Color, border: Color, radius: int) -> StyleBoxFlat:
 	b.set_corner_radius_all(radius)
 	return b
 
-func _popup(at: Vector2, action: String, text: String) -> void:
+func _popup(at: Vector2, key: String, text: String, alpha := 1.0) -> void:
 	var fs := 15
 	var tw := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var key := Keys.label(action) if action != "" else ""
 	var kw := maxf(26.0, _font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 12.0) if key != "" else 0.0
 	var w := kw + (8.0 if key != "" else 0.0) + tw + 20.0
 	var r := Rect2(at - Vector2(w * 0.5, 16.0), Vector2(w, 32.0))
@@ -187,7 +215,7 @@ func _popup(at: Vector2, action: String, text: String) -> void:
 		draw_style_box(_cap, cap)
 		draw_string(_font, cap.position + Vector2(0, 17), key, HORIZONTAL_ALIGNMENT_CENTER, kw, 13, Color(0.1, 0.1, 0.1))
 		x += kw + 8.0
-	draw_string(_font, Vector2(x, r.position.y + 21.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, TEXT)
+	draw_string(_font, Vector2(x, r.position.y + 21.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(TEXT, alpha))
 
 ## The thing you'd act on glows softly, so you know what the popup refers to.
 var _lit: Array = []

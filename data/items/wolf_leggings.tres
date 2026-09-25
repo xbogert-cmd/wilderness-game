@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "wolf_leggings"
+name = "Wolf Fur Leggings"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)])
+weight = 1.4
+color = Color(0.561, 0.533, 0.494, 1)
+tags = PackedStringArray("clothing")
+slot = "legs"
+warmth_c = 7.0
+description = "Fur leggings over your trousers. Real winter gear."

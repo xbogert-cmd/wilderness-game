@@ -63,28 +63,50 @@ func prompt_point(_p: Player) -> Vector2:
 func _raw(p: Player) -> ItemStack:
 	return p.held if p.held and p.held.def.id in DRYABLE else null
 
-func interact_label(p: Player) -> String:
+## Raw meat or fish in the pack: carried back from the field, it goes straight up.
+func _packed(p: Player) -> ItemStack:
+	return p.backpack.find(func(s): return s.def.id in DRYABLE)
+
+func interact_options(p: Player) -> Array:
+	var out := []
 	var raw := _raw(p)
-	if raw and pieces.size() < SLOTS:
-		return "Hang %s to dry  (%d/%d)" % [raw.def.name.to_lower(), pieces.size(), SLOTS]
+	var room := SLOTS - pieces.size()
+	if raw and room > 0:
+		out.append(["Hang %s to dry  (%d/%d)" % [raw.def.name.to_lower(), pieces.size(), SLOTS], _hang.bind(p, raw)])
 	if dried() > 0:
-		return "Take jerky  (%d)" % dried()
+		out.append(["Take jerky  (%d)" % dried(), _take.bind(p)])
+	var packed := _packed(p)
+	if packed and room > 0:
+		out.append(["Hang %d %s from your pack" % [mini(packed.count, room), packed.def.name.to_lower()], _hang.bind(p, packed)])
+	if out.is_empty():
+		out.append([interact_title(p) + "  (bring raw meat or fish)" if pieces.is_empty() else interact_title(p), Callable()])
+	return out
+
+func interact_title(_p: Player) -> String:
 	if pieces.is_empty():
-		return "Drying rack  (hold raw meat or fish to hang it)"
+		return "Drying rack"
 	var left: float = DRY_HOURS - pieces.max()
-	return "Drying rack  (%d strips, about %d h to go)" % [pieces.size(), ceili(left / maxf(_rate(), 0.2))]
+	return "Drying rack  (%d strips, about %d h to go)" % [pieces.size(), ceili(left / maxf(_rate(), 0.2))] if left > 0.0 else "Drying rack  (%d strips, dry)" % pieces.size()
+
+func interact_label(p: Player) -> String:
+	return Player.first_label(interact_options(p))
 
 func interact(p: Player) -> void:
-	var raw := _raw(p)
-	if raw and pieces.size() < SLOTS:
-		var n := mini(raw.count, SLOTS - pieces.size())
-		for i in n:
-			pieces.append(0.0)
-		raw.count -= n
-		if raw.count <= 0:
+	Player.run_first(interact_options(p))
+
+func _hang(p: Player, raw: ItemStack) -> void:
+	var n := mini(raw.count, SLOTS - pieces.size())
+	for i in n:
+		pieces.append(0.0)
+	raw.count -= n
+	if raw.count <= 0:
+		if p.held == raw:
 			p.held = null
-		queue_redraw()
-		return
+		else:
+			p.backpack.remove(raw)
+	queue_redraw()
+
+func _take(p: Player) -> void:
 	var k := dried()
 	if k > 0 and p.receive(ItemStack.make("jerky", GameClock.clock.hours, k)):
 		pieces = pieces.filter(func(h): return h < DRY_HOURS)
