@@ -21,7 +21,7 @@ godot
 | E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire, field dress a carcass |
 | F | Lift or set down a log. Short and medium logs ride on the shoulder; long logs drag |
 | Q | Put away what's in hand |
-| B | Build menu (campfire, lean-to, woodpile), then click to place a blueprint and right-click to cancel |
+| B | Build menu (campfire, lean-to, woodpile, pot tripod, hide frame, drying rack, log cabin), then click to place a blueprint and right-click to cancel |
 | F3 | Debug overlay |
 | Z | Sleep under a shelter; time runs about 60× faster, and any key wakes you |
 | Esc | Pause menu: save to slots 1–3 (only when safe), load any slot or the autosave |
@@ -35,6 +35,12 @@ godot
 **Seasons and snow:** the journey starts in early autumn and the year turns: autumn, winter, spring, summer (6 days each, see `data/tuning.tres`). Temperature and day length follow the year smoothly: the aspens go gold, then bare; nights get cold; below freezing the weather brings snow instead of rain. Snow lies and deepens, slows you (knee-deep costs about 40% of your pace), and takes everyone's tracks, anywhere. A long hard cold freezes the creek: the ice bears your weight, E chops a hole to reach the water (it skins over in about 8 hours), and an empty pot held on snow packs full of it to melt and boil on the fire. Your breath shows in the cold, working keeps you warmer, and winter thins the deer. The pause menu shows the day and season; the backpack shows the air temperature.
 
 **Woodpile:** build one (B, 4 sticks) and stack short logs in it with E. It holds 15, drawn end-on as a pyramid that matches the count. E with empty hands takes one back out, and a fire within a few metres feeds straight from the pile.
+
+**Camp builds:** everything is placed with B and built by bringing materials and pressing E.
+- *Pot tripod* (3 sticks) goes over a campfire; the pot hangs from it, and only then boils water.
+- *Hide frame* (2 medium logs, 2 sticks): field dressing now also gives a raw deer hide, which rots in two days unless you stretch it on the frame. It cures in 18 hours into tanned hide. Two tanned hides and paracord make a *hide coat* (backpack recipe), worn whenever it's in your pack: much warmer, and your jacket turns buckskin.
+- *Drying rack* (2 medium logs, 4 sticks): hold raw venison or fish and press E to hang it (8 strips). It dries into jerky in about 12 hours, faster beside a fire, stalled by rain. Hanging meat doesn't spoil.
+- *Log cabin* (6 long logs, 6 medium, 4 sticks, 8 hours to build): shelter whose walls hold warmth like a fire. Building or sleeping in it makes it camp, and it's the best sleep in the valley.
 
 **Hunting:** creep up behind a grazing deer that hasn't noticed you and click with the knife; if it's alert it bolts. From range, craft a bow (3 sticks + the paracord in your kit) and arrows (2 sticks make 4) in the backpack. Hold click to draw; at a good draw a dotted arc shows the drop. The arrow strikes what you aimed at: a chest or head hit drops the deer within a few seconds, anything else wounds it and it runs longer, leaving blood drops you can follow and examine (E). Missed arrows usually survive in the dirt. Field dress the carcass with E (knife in the pack or hand) for 4 venison, which spoils from the moment of the kill; cook it at a fire.
 

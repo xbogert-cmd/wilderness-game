@@ -165,6 +165,13 @@ func _ready() -> void:
 		world.spawn({"kind": "log", "size": "medium", "x": x - 160.0, "y": world.terrain.height_at(x - 160.0) - 30.0})
 		world.spawn({"kind": "log", "size": "short", "x": x + 620.0, "y": world.terrain.height_at(x + 620.0) - 30.0})
 		player.draw_slot(0)
+	if args.has("builds"): # preview: a built-up camp
+		world.spawn({"kind": "cabin", "x": x - 520.0})
+		world.spawn({"kind": "campfire", "x": x + 150.0, "fuel": 6.0, "lit": true, "tripod": true,
+			"pot": ItemStack.make("cook_pot", GameClock.clock.hours).to_dict()})
+		world.spawn({"kind": "woodpile", "x": x + 360.0, "logs": 9})
+		world.spawn({"kind": "hide_frame", "x": x + 560.0, "curing": true, "cured": 7.0})
+		world.spawn({"kind": "drying_rack", "x": x + 780.0, "pieces": [0.0, 2.0, 5.0, 7.0, 9.0, 12.0]})
 	if args.has("piles"): # preview: woodpiles with 1, 3, 6, 7, 10 and 15 logs
 		for k in 6:
 			world.spawn({"kind": "woodpile", "x": x - 700.0 + k * 250.0, "logs": [1, 3, 6, 7, 10, 15][k]})

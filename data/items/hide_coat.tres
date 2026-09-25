@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "hide_coat"
+name = "Hide Coat"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)])
+weight = 2.0
+color = Color(0.655, 0.525, 0.365, 1)
+tags = PackedStringArray("clothing")
+description = "Buckskin over your jacket. Worn whenever it is in your pack: much warmer in the cold."

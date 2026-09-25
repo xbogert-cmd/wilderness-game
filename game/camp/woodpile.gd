@@ -9,6 +9,13 @@ const R := 14.0 ## log end radius
 var world: World
 var logs := 0
 
+var _snowy := false
+
+func _process(_delta: float) -> void:
+	if (GameClock.weather.snow_cm > 2.0) != _snowy:
+		_snowy = not _snowy
+		queue_redraw()
+
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("interactable")
@@ -101,7 +108,10 @@ func _draw() -> void:
 		for i in count:
 			rng.seed = k * 7919 + 13
 			var x := (i - (count - 1) * 0.5) * R * 2.02
-			_log_end(Vector2(x, y), R * rng.randf_range(0.88, 1.06), rng)
+			var r := R * rng.randf_range(0.88, 1.06)
+			_log_end(Vector2(x, y), r, rng)
+			if GameClock.weather.snow_cm > 2.0 and (row == rows.size() - 1 or i == 0 or i == count - 1):
+				draw_arc(Vector2(x, y), r, PI * 1.12, PI * 1.88, 8, Color(0.94, 0.96, 0.99), 4.0) # snow on the exposed tops
 			k += 1
 
 ## One log seen end-on: bark ring, pale face, growth rings, a check crack.

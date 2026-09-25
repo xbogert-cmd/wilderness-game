@@ -39,7 +39,7 @@ func label(now: float) -> String:
 	var s := def.name
 	if count > 1:
 		s += " x%d" % count
-	if def.has("food") and def.spoil_hours > 0.0:
+	if def.spoil_hours > 0.0:
 		s += " (%s)" % FRESH_NAMES[freshness(now)]
 	if def.capacity > 0.0:
 		s += " — empty" if water <= 0.001 else " — %.2f L %s" % [water, "clean" if water_clean else "DIRTY"]

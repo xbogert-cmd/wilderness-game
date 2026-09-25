@@ -100,7 +100,7 @@ func _draw() -> void:
 	var arm_up := 0.5 if body.wade_depth > 30.0 else 0.0
 
 	var back := 0.72
-	var back_sleeve := Palette.JACKET.darkened(1.0 - back)
+	var back_sleeve := _jacket().darkened(1.0 - back)
 	var back_skin := Palette.SKIN.darkened(1.0 - back)
 	var targets := _hand_targets(hip, shoulder) # [near, far] or []
 	if targets:
@@ -117,11 +117,11 @@ func _draw() -> void:
 	_breath(head)
 	var hand: Array # [hand, forearm direction]
 	if body.swing >= 0.0:
-		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, Palette.JACKET, Palette.SKIN)
+		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, _jacket(), Palette.SKIN)
 	elif targets:
-		hand = _arm_to(shoulder, targets[0], Palette.JACKET, Palette.SKIN)
+		hand = _arm_to(shoulder, targets[0], _jacket(), Palette.SKIN)
 	else:
-		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, Palette.JACKET, Palette.SKIN)
+		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, _jacket(), Palette.SKIN)
 	if body.held:
 		_held_item(body.held, hand[0], hand[1])
 	if body.bow_draw >= 0.5:
@@ -175,6 +175,10 @@ func _breath(head: Vector2) -> void:
 	var mouth := head + Vector2(12, 4)
 	for i in 3:
 		draw_circle(mouth + Vector2(8.0 + k * 40.0 + i * 5.0, -k * 10.0 - i * 2.0), 3.0 + k * 10.0 - i, Color(0.92, 0.94, 0.97, a * (1.0 - i * 0.25)))
+
+## Buckskin once the hide coat is in the pack.
+func _jacket() -> Color:
+	return Color("a78a5d") if body.backpack.count_of("hide_coat") > 0 else Palette.JACKET
 
 func _to_local_space(world_point: Vector2) -> Vector2:
 	var d := world_point - body.global_position
@@ -260,8 +264,8 @@ func _torso(hip: Vector2, shoulder: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([
 		hip - f * 10.0 - u * 6.0, hip + f * 10.0 - u * 6.0,
 		hip + u * 38.0 + f * 12.5, shoulder + f * 9.0 - u * 3.0,
-		shoulder - f * 11.0 - u * 3.0, hip + u * 34.0 - f * 12.0]), Palette.JACKET)
-	draw_circle(shoulder - u * 4.0, 10.5, Palette.JACKET)
+		shoulder - f * 11.0 - u * 3.0, hip + u * 34.0 - f * 12.0]), _jacket())
+	draw_circle(shoulder - u * 4.0, 10.5, _jacket())
 	var belt := hip + u * 4.0
 	draw_line(belt - f * 10.5, belt + f * 10.5, Palette.BOOTS, 3.0)
 	draw_line(shoulder + u * 4.0 + f * 1.0, shoulder + u * 8.0 + f * 3.0, Palette.SKIN.darkened(0.1), 7.0) # neck
@@ -300,9 +304,9 @@ func _draw_lying() -> void:
 	_limb(hip, knee, 15.0, 12.0, Palette.PANTS)
 	_limb(knee, ankle, 12.0, 9.0, Palette.PANTS)
 	draw_colored_polygon(PackedVector2Array([ankle + Vector2(-4, 6), ankle + Vector2(6, 6), ankle + Vector2(6, -14), ankle + Vector2(0, -14)]), Palette.BOOTS)
-	_limb(hip, shoulder, 22.0, 26.0, Palette.JACKET)
+	_limb(hip, shoulder, 22.0, 26.0, _jacket())
 	draw_circle(head, 10.5, Palette.SKIN)
-	_limb(shoulder + Vector2(6, -6), hip + Vector2(-18, -14), 10.0, 9.0, Palette.JACKET) # arm across the chest
+	_limb(shoulder + Vector2(6, -6), hip + Vector2(-18, -14), 10.0, 9.0, _jacket()) # arm across the chest
 	draw_circle(hip + Vector2(-16, -14), 5.0, Palette.SKIN)
 	if body.sleeping and body.backpack.count_of("sleeping_bag") > 0:
 		var bag := Items.get_def("sleeping_bag").color

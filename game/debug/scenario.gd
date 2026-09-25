@@ -5,7 +5,8 @@ class_name Scenario extends Node
 ## Run: godot --headless --fixed-fps 60 -- --scenario     (exit code = failed checks)
 ## Mode "life": sleep, autosave, save to slot 3, die, respawn, recover the pack.
 ## Mode "verify": run with --load=3 after "life"; checks the save came back exactly.
-## Mode "winter": woodpile, seasons, snow, tracks in snow, frozen creek, snow in the pot.
+## Mode "winter": woodpile, seasons, snow, tracks in snow, frozen creek, snow in the pot,
+## then the camp builds: hide frame and coat, drying rack, log cabin.
 
 var player: Player
 var world: World
@@ -197,8 +198,21 @@ func _run() -> void:
 	fire.interact(player)
 	check(player.backpack.count_of("sticks") < sticks_before or sticks_before == 0, "fed sticks from the pack")
 
-	# --- Water: creek → pot → boil → bottle → drink -----------------------------
+	# --- Pot tripod over the fire (the pot needs it to boil) -----------------------
 	var pot: ItemStack = player.backpack.find(func(s): return s.def.id == "cook_pot")
+	player.hold(pot)
+	check(fire.interact_label(player).begins_with("The pot needs a tripod"), "no tripod yet: the fire says the pot needs one")
+	player.stow()
+	player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 3))
+	var tbp := world.spawn({"kind": "blueprint", "build": "tripod", "x": fire.global_position.x}) as Blueprint
+	check(fire.interact_label(player) == "", "the fire yields the prompt to the tripod blueprint over it")
+	tbp.interact(player)
+	check(tbp.complete(), "tripod sticks delivered")
+	tbp.interact(player)
+	await frames(int(Builds.STRUCTURES.tripod.seconds * 60.0) + 10)
+	check(fire.tripod and not is_instance_valid(tbp), "pot tripod built over the fire")
+
+	# --- Water: creek → pot → boil → bottle → drink -----------------------------
 	player.hold(pot)
 	await teleport(Terrain.CREEK_X)
 	var creek := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is Creek)[0] as Creek
@@ -216,7 +230,7 @@ func _run() -> void:
 	check(pot.water > 1.0 and not pot.water_clean, "pot filled with dirty creek water (%.2f L)" % pot.water)
 	await teleport(fire_x)
 	fire = find_fire() # the camp chunk unloaded while we were at the creek; this is its respawned fire
-	check(fire != null and fire.lit, "fire still burning after the camp chunk reloaded")
+	check(fire != null and fire.lit and fire.tripod, "fire (and its tripod) still there after the camp chunk reloaded")
 	fire.interact(player)
 	check(fire.pot == pot and player.held == null, "pot set on the fire")
 	var bottle: ItemStack = player.backpack.find(func(s): return s.def.id == "water_bottle")
@@ -413,6 +427,7 @@ func _hunt() -> void:
 	carcass.interact(player)
 	await frames(int(Carcass.DRESS_SECONDS * 60.0) + 10)
 	check(player.backpack.count_of("venison_raw") == Carcass.MEAT and _carcasses().is_empty(), "field dressed: %d venison" % player.backpack.count_of("venison_raw"))
+	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
 
 	# Bow: craft it and some arrows from sticks and the paracord in the starting kit.
 	check(player.backpack.count_of("cordage") == 1, "paracord in the starting kit")
@@ -565,6 +580,7 @@ func _winter() -> void:
 	check(pot.water > 0.5 and not pot.water_clean, "packed the pot with snow")
 	await teleport(x + 300.0)
 	fire = find_fire() # the camp chunk unloaded while we were at the creek
+	fire.tripod = true
 	fire.fuel = 4.0
 	fire.lit = true
 	fire.interact(player)
@@ -573,9 +589,70 @@ func _winter() -> void:
 	check(pot.water_clean, "snow melted and boiled clean")
 	w.ice = 0.0
 	w.snow_cm = 0.0
+	await _builds()
 
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)
+
+func _builds() -> void:
+	var x := 5200.0
+	await teleport(x)
+	var h := GameClock.clock.hours
+
+	# Hide frame: a raw hide cures in about a day; two tanned hides and cord make a coat.
+	var frame := world.spawn({"kind": "hide_frame", "x": x + 80.0}) as HideFrame
+	player.backpack.add(ItemStack.make("deer_hide", h))
+	check(frame.interact_label(player) == "Stretch the deer hide", "hide frame offers to stretch the hide")
+	frame.interact(player)
+	await frames(int(HideFrame.STRETCH_SECONDS * 60.0) + 10)
+	check(frame.curing and player.backpack.count_of("deer_hide") == 0, "hide laced onto the frame")
+	frame._on_tick(HideFrame.CURE_HOURS)
+	check(frame.done() and frame.interact_label(player) == "Take the tanned hide", "cured after %d hours" % HideFrame.CURE_HOURS)
+	frame.interact(player)
+	check(player.backpack.count_of("hide") == 1 and not frame.curing, "took the tanned hide")
+	var rotten := ItemStack.make("deer_hide", h - 60.0)
+	player.backpack.add(rotten)
+	frame.interact(player)
+	check(not frame.curing and player.backpack.count_of("deer_hide") == 1, "a rotted hide is refused")
+	player.backpack.take("deer_hide", 1)
+	player.backpack.add(ItemStack.make("hide", h))
+	if player.backpack.count_of("cordage") == 0:
+		player.backpack.add(ItemStack.make("cordage", h))
+	var r: Dictionary = Builds.RECIPES.hide_coat
+	for k in r.needs:
+		check(player.backpack.take(k, r.needs[k]), "have %s for the coat" % k)
+	player.receive(ItemStack.make("hide_coat", h))
+	check(player.backpack.count_of("hide_coat") == 1, "sewed a hide coat")
+	var cold := {"air_c": -10.0}
+	var bare_c := Condition.new(GameClock.tuning)
+	bare_c.tick(3.0, cold)
+	var coat_c := Condition.new(GameClock.tuning)
+	coat_c.tick(3.0, cold.merged({"insulation_c": GameClock.tuning.hide_coat_c}))
+	check(coat_c.warmth > bare_c.warmth + 10.0, "the coat keeps you warmer at -10 °C (%d vs %d)" % [coat_c.warmth, bare_c.warmth])
+
+	# Drying rack: raw meat hangs, dries (faster by a fire), and comes down as jerky.
+	var rack := world.spawn({"kind": "drying_rack", "x": x + 320.0}) as DryingRack
+	await teleport(x + 320.0)
+	player.hold(ItemStack.make("venison_raw", h, 4))
+	check(rack.interact_label(player).begins_with("Hang venison"), "rack offers to hang the venison")
+	rack.interact(player)
+	check(rack.pieces.size() == 4 and player.held == null, "four strips hanging")
+	rack._on_tick(DryingRack.DRY_HOURS * 0.5)
+	check(rack.dried() == 0, "half a day in, still drying")
+	rack._on_tick(DryingRack.DRY_HOURS)
+	var jerky := player.backpack.count_of("jerky")
+	check(rack.interact_label(player) == "Take jerky  (4)", "dried: jerky ready")
+	rack.interact(player)
+	check(player.backpack.count_of("jerky") == jerky + 4 and rack.pieces.is_empty(), "took down 4 jerky")
+
+	# Log cabin: shelter that holds warmth; sleeping there makes it camp.
+	var cx := x + 900.0
+	var cabin := world.spawn({"kind": "cabin", "x": cx, "fresh": true}) as Cabin
+	await teleport(cx)
+	check(player.camp_x == cx, "finishing the cabin makes it camp")
+	check(world.sheltered_at(cx) and world.heat_at(player.global_position + Vector2(0, -60)) >= Cabin.WARMTH, "inside is sheltered and holds warmth")
+	check(world.heat_at(Vector2(cx + 600.0, player.global_position.y - 60.0)) < Cabin.WARMTH, "outside it doesn't")
+	check(cabin.interact_label(player).begins_with("Sleep in the cabin"), "the cabin offers sleep")
 
 func _wild() -> void:
 	await frames(10)

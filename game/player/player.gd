@@ -212,7 +212,8 @@ func _on_tick(dh: float) -> void:
 	cond.tick(dh, {
 		"sleeping": sleeping,
 		"sleep_quality": sleep_quality() if sleeping else 1.0,
-		"insulation_c": GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0,
+		"insulation_c": (GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0) \
+			+ (GameClock.tuning.hide_coat_c if backpack.count_of("hide_coat") > 0 else 0.0),
 		"air_c": w.air_temp_c(GameClock.clock),
 		"precip": w.rain() + w.snowfall() * 0.25, # snow wets you far less than rain
 		"sheltered": world.sheltered_at(global_position.x),

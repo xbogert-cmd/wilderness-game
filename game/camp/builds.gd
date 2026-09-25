@@ -7,6 +7,10 @@ const STRUCTURES := {
 	"campfire": {"name": "Campfire", "width": 90.0, "h": 30.0, "needs": {"sticks": 3}, "hours": 0.2, "seconds": 2.0},
 	"lean_to": {"name": "Lean-to", "width": 260.0, "h": 170.0, "needs": {"long": 2, "medium": 4}, "hours": 1.0, "seconds": 4.0},
 	"woodpile": {"name": "Woodpile", "width": 170.0, "h": 110.0, "needs": {"sticks": 4}, "hours": 0.3, "seconds": 2.0},
+	"tripod": {"name": "Pot tripod", "width": 90.0, "h": 130.0, "needs": {"sticks": 3}, "hours": 0.2, "seconds": 2.0, "on": "campfire"},
+	"hide_frame": {"name": "Hide frame", "width": 140.0, "h": 185.0, "needs": {"medium": 2, "sticks": 2}, "hours": 0.5, "seconds": 3.0},
+	"drying_rack": {"name": "Drying rack", "width": 180.0, "h": 155.0, "needs": {"medium": 2, "sticks": 4}, "hours": 0.5, "seconds": 3.0},
+	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 }
 
 const RECIPES := {
@@ -14,6 +18,7 @@ const RECIPES := {
 	"fishing_pole": {"needs": {"sticks": 2, "fishing_kit": 1}, "hours": 0.3, "seconds": 2.5},
 	"bow": {"needs": {"sticks": 3, "cordage": 1}, "hours": 1.0, "seconds": 3.0},
 	"arrows": {"needs": {"sticks": 2}, "hours": 0.5, "seconds": 2.5, "count": 4},
+	"hide_coat": {"needs": {"hide": 2, "cordage": 1}, "hours": 2.0, "seconds": 4.0},
 }
 
 static func is_log(key: String) -> bool:

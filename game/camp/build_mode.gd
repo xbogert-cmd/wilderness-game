@@ -35,7 +35,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				player.message.emit("Blueprint placed. Bring the materials and press E.")
 				_cancel()
 			else:
-				player.message.emit("Can't build there: needs level, dry ground with space.")
+				player.message.emit("A pot tripod goes over a campfire that doesn't have one." if Builds.STRUCTURES[build_id].has("on") \
+					else "Can't build there: needs level, dry ground with space.")
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("aim") or event.is_action_pressed("menu"):
 			_cancel()
@@ -55,9 +56,19 @@ func _process(_delta: float) -> void:
 	if build_id == "":
 		return
 	var x := clampf(player.aim_point().x, player.global_position.x - RANGE, player.global_position.x + RANGE)
+	var d: Dictionary = Builds.STRUCTURES[build_id]
+	if d.has("on"): # snaps onto the nearest host, e.g. a tripod over a campfire
+		var host := Blueprint.host_at(get_tree(), d.on, x, RANGE)
+		if host:
+			x = host.global_position.x
+		_ok = host != null and not host.get(build_id) and not _blueprint_at(x)
+	else:
+		_ok = fits(x, d.width)
 	global_position = Vector2(x, world.terrain.height_at(x))
-	_ok = fits(x, Builds.STRUCTURES[build_id].width)
 	queue_redraw()
+
+func _blueprint_at(x: float) -> bool:
+	return get_tree().get_nodes_in_group("structure").any(func(s): return s is Blueprint and absf(s.global_position.x - x) < 10.0)
 
 func fits(x: float, w: float) -> bool:
 	var t := world.terrain

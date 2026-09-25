@@ -122,6 +122,25 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 			if d.id == "venison_cooked":
 				for i in 3:
 					ci.draw_line(Vector2(w * (0.3 + i * 0.18), h * 0.28), Vector2(w * (0.22 + i * 0.18), h * 0.72), a.call(Color(0.2, 0.12, 0.06, 0.7)), 2.5)
+		"deer_hide", "hide":
+			var pts := PackedVector2Array([Vector2(0.2, 0.12), Vector2(0.42, 0.2), Vector2(0.62, 0.1), Vector2(0.84, 0.2),
+				Vector2(0.78, 0.5), Vector2(0.88, 0.84), Vector2(0.6, 0.8), Vector2(0.38, 0.9), Vector2(0.12, 0.82), Vector2(0.22, 0.5)])
+			for i in pts.size():
+				pts[i] *= Vector2(w, h)
+			ci.draw_colored_polygon(pts, a.call(c))
+			if d.id == "deer_hide":
+				ci.draw_colored_polygon(PackedVector2Array([pts[0].lerp(pts[5], 0.25), pts[2].lerp(pts[7], 0.3), pts[4].lerp(pts[8], 0.35)]), a.call(Color("b06a5c")))
+			else:
+				ci.draw_polyline(pts + PackedVector2Array([pts[0]]), a.call(c.darkened(0.25)), 1.5)
+		"hide_coat":
+			var body := PackedVector2Array([Vector2(0.3, 0.08), Vector2(0.7, 0.08), Vector2(0.95, 0.22), Vector2(0.95, 0.6), Vector2(0.8, 0.6),
+				Vector2(0.78, 0.95), Vector2(0.22, 0.95), Vector2(0.2, 0.6), Vector2(0.05, 0.6), Vector2(0.05, 0.22)])
+			for i in body.size():
+				body[i] *= Vector2(w, h)
+			ci.draw_colored_polygon(body, a.call(c))
+			ci.draw_line(Vector2(w * 0.5, h * 0.12), Vector2(w * 0.5, h * 0.95), a.call(c.darkened(0.3)), 1.5)
+			for y in [0.62, 0.8, 0.93]: # fringe
+				ci.draw_line(Vector2(w * 0.22, h * y), Vector2(w * 0.78, h * y), a.call(c.darkened(0.15)), 1.0)
 		"trout_raw", "trout_cooked", "whitefish_raw", "whitefish_cooked":
 			_fish(ci, a, w, h, c, d.id.begins_with("trout"), d.id.ends_with("cooked"))
 		_:

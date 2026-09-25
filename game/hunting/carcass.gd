@@ -53,6 +53,9 @@ func interact(p: Player) -> void:
 		var meat := ItemStack.make("venison_raw", hour, MEAT) # ages from the kill
 		if not p.receive(meat):
 			world.spawn({"kind": "item", "x": global_position.x + 40.0, "stack": meat.to_dict()})
+		var hide := ItemStack.make("deer_hide", hour) # rots unless it gets onto a hide frame
+		if not p.receive(hide):
+			world.spawn({"kind": "item", "x": global_position.x - 40.0, "stack": hide.to_dict()})
 		if arrows > 0:
 			p.receive(ItemStack.make("arrows", GameClock.clock.hours, arrows))
 		queue_free())

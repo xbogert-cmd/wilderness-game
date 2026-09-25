@@ -90,8 +90,23 @@ func interact(p: Player) -> void:
 	p.message.emit("You don't have what this needs: " + Builds.needs_text(def().needs, delivered))
 
 func _finish() -> void:
-	world.spawn({"kind": build_id, "x": global_position.x, "fresh": true})
+	if def().has("on"): # an add-on to something already built (the tripod over a fire)
+		var host := Blueprint.host_at(get_tree(), def().on, global_position.x)
+		if host:
+			host.set(build_id, true)
+			host.queue_redraw()
+	else:
+		world.spawn({"kind": build_id, "x": global_position.x, "fresh": true})
 	queue_free()
+
+## The built structure an add-on attaches to: a campfire for "campfire".
+static func host_at(tree: SceneTree, kind: String, x: float, reach := 40.0) -> Node2D:
+	var best: Node2D = null
+	for s in tree.get_nodes_in_group("structure"):
+		if kind == "campfire" and s is Campfire and absf(s.global_position.x - x) < reach:
+			if best == null or absf(s.global_position.x - x) < absf(best.global_position.x - x):
+				best = s
+	return best
 
 func _draw() -> void:
 	var w := width()

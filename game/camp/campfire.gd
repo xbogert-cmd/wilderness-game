@@ -1,5 +1,6 @@
 class_name Campfire extends Node2D
-## Burns fuel for heat, light and cooking. A pot of water set on a lit fire boils clean.
+## Burns fuel for heat, light and cooking. With a pot tripod over it, a pot of water hung
+## on a lit fire boils clean.
 ## Runs on game time, including catch-up for hours spent away.
 
 const MAX_FUEL := 12.0
@@ -11,6 +12,7 @@ var world: World
 var fuel := START_FUEL
 var lit := false
 var pot: ItemStack
+var tripod := false ## built over it from the build menu; the pot hangs from it
 var boil := 0.0
 var _light: PointLight2D
 var _embers: GPUParticles2D
@@ -83,11 +85,12 @@ func load_state(d: Dictionary, elapsed: float) -> void:
 	lit = bool(d.get("lit", false))
 	boil = float(d.get("boil", 0.0))
 	pot = ItemStack.from_dict(d.pot) if d.get("pot") else null
+	tripod = bool(d.get("tripod", pot != null)) # older saves had pots sitting on the fire
 	_on_tick(elapsed) # catch up on the hours nobody was watching
 
 func to_state() -> Dictionary:
 	return {"kind": "campfire", "x": global_position.x, "fuel": fuel, "lit": lit, "boil": boil,
-		"pot": pot.to_dict() if pot else null}
+		"pot": pot.to_dict() if pot else null, "tripod": tripod}
 
 func can_unload() -> bool:
 	return true
@@ -154,7 +157,9 @@ func _action(p: Player) -> Array:
 	if pot and p.held == null and p.carrying == null:
 		return ["Take pot", _take_pot.bind(p)]
 	if pot == null and p.held and p.held.def.has("pot"):
-		return ["Set pot on the fire", _set_pot.bind(p)]
+		if tripod:
+			return ["Hang the pot on the tripod", _set_pot.bind(p)]
+		return ["The pot needs a tripod over the fire (build one: %s)" % Keys.label("build"), Callable()]
 	if lit and p.held and p.held.def.cooks_into != "":
 		return ["Cook %s" % p.held.def.name.to_lower(), _cook.bind(p)]
 	var f := _fuel_from(p)
@@ -168,6 +173,8 @@ func _action(p: Player) -> Array:
 	return ["", Callable()]
 
 func interact_label(p: Player) -> String:
+	if get_tree().get_nodes_in_group("structure").any(func(s): return s is Blueprint and absf(s.global_position.x - global_position.x) < 10.0):
+		return "" # a tripod blueprint sits over it: let that take the prompt
 	var status := ("burning, %.1f h fuel" % fuel) if lit else ("unlit, %.1f h fuel" % fuel)
 	if pot:
 		status += ", pot %s" % ("empty" if pot.water <= 0.001 else ("boiled clean" if pot.water_clean else "heating %d%%" % int(boil * 100.0)))
@@ -245,8 +252,16 @@ func _draw() -> void:
 			var w := (22.0 - k * 6.0) * s
 			var col: Color = [Color(0.95, 0.42, 0.12), Color(1.0, 0.7, 0.25), Color(1.0, 0.92, 0.6)][k]
 			draw_colored_polygon(PackedVector2Array([Vector2(-w, -4), Vector2(w, -4), Vector2(sin(_t * 7.0 + k) * 5.0, -4 - h)]), col)
+	if tripod: # three poles lashed above the fire, a chain down the middle
+		var top := Vector2(0, -130)
+		for foot in [Vector2(-46, 2), Vector2(44, 2), Vector2(10, 0)]:
+			draw_line(foot, top + Vector2(foot.x * 0.08, 0), Palette.BARK_DARK, 5.0)
+		draw_line(top + Vector2(-8, 4), top + Vector2(8, -4), Color(0.3, 0.25, 0.2), 4.0)
+		draw_line(top, Vector2(0, -64 if pot else -80), Color(0.35, 0.35, 0.33), 2.0)
 	if pot:
-		draw_line(Vector2(-30, -46), Vector2(30, -46), Palette.BARK_DARK, 3.0)
+		if not tripod:
+			draw_line(Vector2(-30, -46), Vector2(30, -46), Palette.BARK_DARK, 3.0)
+		draw_arc(Vector2(0, -62), 16.0, PI, TAU, 10, Color(0.35, 0.35, 0.33), 2.0) # bail
 		draw_rect(Rect2(-16, -62, 32, 22), Color("5f5f5a"))
 		if pot.water > 0.001 and lit and (boil > 0.3 or pot.water_clean):
 			for i in 3:

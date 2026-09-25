@@ -18,6 +18,9 @@ const KINDS := {
 	"pack": preload("res://game/world/dropped_pack.gd"),
 	"carcass": preload("res://game/hunting/carcass.gd"),
 	"woodpile": preload("res://game/camp/woodpile.gd"),
+	"hide_frame": preload("res://game/camp/hide_frame.gd"),
+	"drying_rack": preload("res://game/camp/drying_rack.gd"),
+	"cabin": preload("res://game/camp/cabin.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)
