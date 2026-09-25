@@ -9,8 +9,10 @@ var delivered := {}
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("interactable")
+	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
-	z_index = -1
+	z_as_relative = false
+	z_index = 2
 
 func def() -> Dictionary:
 	return Builds.STRUCTURES[build_id]

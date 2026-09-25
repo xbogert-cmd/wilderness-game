@@ -239,7 +239,7 @@ func _update_focus() -> void:
 	if held and held.def.has("axe") and carrying == null:
 		best = CHOP_REACH
 		for n in get_tree().get_nodes_in_group("choppable"):
-			var d: float = n.chop_distance(self)
+			var d: float = n.chop_distance(self) - (60.0 if n is FelledTrunk else 0.0) # finish processing a felled tree first
 			var ahead: bool = signf(n.global_position.x - global_position.x) == facing or d < 30.0
 			if d < best and ahead:
 				best = d

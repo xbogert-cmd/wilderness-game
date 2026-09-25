@@ -22,6 +22,8 @@ func _ready() -> void:
 	add_to_group("log")
 	collision_layer = 4
 	collision_mask = 1 | 4
+	z_as_relative = false
+	z_index = 3
 	var m := PhysicsMaterial.new()
 	m.friction = 1.0
 	m.bounce = 0.05
@@ -73,7 +75,7 @@ func put_down() -> void:
 	holder = null
 	collision_layer = 4
 	collision_mask = 1 | 4
-	z_index = 0
+	z_index = 3
 	freeze = false
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0

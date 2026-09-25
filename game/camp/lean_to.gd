@@ -9,9 +9,11 @@ var world: World
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("interactable")
+	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
 	add_to_group("shelter")
-	z_index = -3
+	z_as_relative = false
+	z_index = 2
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)))

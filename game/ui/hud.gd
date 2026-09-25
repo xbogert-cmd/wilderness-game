@@ -107,23 +107,19 @@ func _draw_fade() -> void:
 	if fade > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, fade))
 
-## [world anchor, action (or ""), text] for everything the player could do right now.
+## [world anchor, action (or ""), text]. Key popups are kept for camp things and cutting a
+## felled trunk; everyday actions (chopping, picking up, lifting) only glow, so the world
+## isn't covered in labels.
 func _prompts() -> Array:
 	if player.working > 0.0:
 		return [[player.global_position + Vector2(0, -210), "", player.work_label + "…"]]
 	if player.sleeping or player.dead:
 		return []
 	var out := []
-	if player.chop_target:
+	if player.chop_target is FelledTrunk:
 		out.append([_anchor(player.chop_target), "use", player.chop_target.chop_label(player)])
-	if player.focus:
+	if player.focus and player.focus.is_in_group("camp"):
 		out.append([_anchor(player.focus), "interact", player.focus.interact_label(player)])
-	if player.carrying:
-		out.append([player.global_position + Vector2(0, -210), "lift", "Set down the %s log" % player.carrying.size])
-	else:
-		var lg := player.nearest_log()
-		if lg:
-			out.append([lg.global_position + Vector2(0, -50), "lift", ("Drag" if lg.dragged() else "Lift") + " %s log" % lg.size])
 	return out
 
 func _anchor(n: Node) -> Vector2:
@@ -167,7 +163,7 @@ func _highlight() -> void:
 	var want := []
 	if not (player.sleeping or player.dead or player.working > 0.0):
 		for n in [player.focus, player.chop_target, player.nearest_log() if player.carrying == null else null]:
-			if n != null and n is CanvasItem and n not in want:
+			if n != null and n is CanvasItem and not (n is ChoppableTree or n is Tracks) and n not in want:
 				want.append(n)
 	for n in _lit:
 		if is_instance_valid(n) and n not in want:

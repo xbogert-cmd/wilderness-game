@@ -153,6 +153,9 @@ func _ready() -> void:
 	if args.has("flee"): # preview: a deer bounding away
 		var d := wildlife.spawn(Wildlife.SPECIES[0], x + 700.0, 3)
 		d.bolt()
+	if args.has("trunk"): # preview: a freshly felled tree beside the player, hatchet out
+		world.spawn({"kind": "trunk", "x": x + 60.0, "dir": 1.0, "length": 1100.0, "girth": 38.0, "branches": 4, "conifer": true})
+		player.draw_slot(0)
 	if args.has("sleep"): # preview: asleep under a lean-to
 		world.spawn({"kind": "lean_to", "x": x})
 		player.sleep.call_deferred()

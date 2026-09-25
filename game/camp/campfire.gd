@@ -21,9 +21,11 @@ var _t := 0.0
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("interactable")
+	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
 	add_to_group("heat")
-	z_index = -1
+	z_as_relative = false
+	z_index = 2
 	_light = PointLight2D.new()
 	var g := Gradient.new()
 	g.set_color(0, Color(1, 1, 1, 1))

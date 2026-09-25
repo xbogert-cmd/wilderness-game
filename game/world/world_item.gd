@@ -7,6 +7,8 @@ var stack: ItemStack
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("interactable")
+	z_as_relative = false
+	z_index = 4
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	stack = ItemStack.from_dict(d.stack)

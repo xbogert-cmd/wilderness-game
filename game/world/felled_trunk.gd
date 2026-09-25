@@ -21,7 +21,8 @@ var _aim_size := "long"
 func _ready() -> void:
 	add_to_group("persist")
 	add_to_group("choppable")
-	z_index = -2
+	z_as_relative = false
+	z_index = 3 # above the ground (1) and grass (2), below the player (5)
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	base_x = float(d.x) + float(d.dir) * 25.0 if not d.has("base") else float(d.base)
@@ -42,6 +43,13 @@ func can_unload() -> bool:
 func _place() -> void:
 	var a := _end(-1.0)
 	var b := _end(1.0)
+	var lift := 0.0 # rest on the high points, bridging dips, never sinking into a rise
+	for i in 11:
+		var t := i / 10.0
+		var x := lerpf(a.x, b.x, t)
+		lift = maxf(lift, lerpf(a.y, b.y, t) - (world.terrain.height_at(x) - girth * 0.5 + 4.0))
+	a.y -= lift
+	b.y -= lift
 	global_position = (a + b) * 0.5
 	rotation = (b - a).angle() if dir > 0.0 else (a - b).angle()
 	queue_redraw()
