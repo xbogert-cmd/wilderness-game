@@ -93,9 +93,14 @@ func _run() -> void:
 			check(player.swing >= 0.0, "a real left click swings the hatchet (no UI swallows it)")
 			await frames(int(Player.SWING_TIME * 60.0) + 2)
 		var guard := 0
+		var depths := []
 		while not tree.felled and guard < 60:
 			await swing()
 			guard += 1
+			if felled == 0 and guard <= 3 and tree._notch:
+				depths.append(absf(tree._notch.polygon[1].x - tree._notch.polygon[0].x))
+		if felled == 0:
+			check(depths.size() == 3 and depths[2] > depths[0], "each blow bites the notch deeper %s" % str(depths))
 		check(tree.felled, "tree felled in %d swings" % guard)
 		felled += 1
 		await frames(int(ChoppableTree.FALL_TIME * 60.0) + 10)
@@ -145,6 +150,9 @@ func _run() -> void:
 		await frames(20)
 		if lg.dragged():
 			check(absf(lg.global_position.y - world.terrain.height_at(lg.global_position.x)) < 140.0, "dragged log follows the ground")
+		elif size == "medium":
+			var above: float = player.global_position.y - lg.global_position.y
+			check(above > 150.0 and above < 200.0 and lg.rotation * player.facing < 0.0, "medium log rides the shoulder, front end up (%.0f px up)" % above)
 		bp.interact(player)
 	check(bp.complete(), "lean-to materials delivered: " + str(bp.delivered))
 	bp.interact(player)
@@ -242,6 +250,15 @@ func _run() -> void:
 		guard += 1
 	GameClock.time_scale = 1.0
 	check(pot.water_clean, "water boiled clean")
+	var bottle_had := bottle.water
+	bottle.water = 0.0
+	player.hold(bottle)
+	check(fire.interact_label(player).begins_with("Fill the water bottle from the pot"), "fill the bottle straight from the hanging pot")
+	fire.interact(player)
+	check(bottle.water > 0.9 and bottle.water_clean and fire.pot == pot, "bottle filled clean, pot still hanging (%.2f L)" % bottle.water)
+	pot.add_water(bottle.water, true) # put it back for the rest of the loop
+	bottle.water = bottle_had
+	player.stow()
 	fire.interact(player)
 	check(player.held == pot, "took the pot back")
 	check(pot.pour_into(bottle) == "", "poured clean water into the bottle")
@@ -428,6 +445,38 @@ func _hunt() -> void:
 	await frames(int(Carcass.DRESS_SECONDS * 60.0) + 10)
 	check(player.backpack.count_of("venison_raw") == Carcass.MEAT and _carcasses().is_empty(), "field dressed: %d venison" % player.backpack.count_of("venison_raw"))
 	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
+
+	# Hunting blind: a deer walking toward you, looking your way, spots a crouched player in
+	# the open, but walks on unaware of one crouched in the blind.
+	player.stow()
+	for with_blind in [false, true]:
+		await teleport(9000.0)
+		if with_blind:
+			world.spawn({"kind": "blind", "x": 9000.0})
+		player.auto_crouch = true
+		await frames(10)
+		deer = await _deer(9230.0, 30 if with_blind else 31)
+		deer.state = Animal.State.WALK
+		deer.facing = -1
+		deer._timer = 60.0 # keep walking for the test
+		await frames(60 * 3)
+		if with_blind:
+			check(HuntingBlind.hiding(player) and deer.awareness < deer.def.alert_at * 0.5 and deer.state != Animal.State.FLEE, "in the blind it walks on, unaware (%.2f)" % deer.awareness)
+		else:
+			check(deer.awareness >= deer.def.alert_at, "in the open it spots you crouching (%.2f)" % deer.awareness)
+	player.auto_crouch = false
+
+	# Vines: gathered and twisted into cord, which strings a bow as well as paracord.
+	var vines := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is VineTangle and n.ripe())
+	check(vines.size() > 0, "vine tangles grow in the valley (%d nearby)" % vines.size())
+	await teleport(vines[0].global_position.x)
+	vines[0].interact(player)
+	check(player.backpack.count_of("vine") == VineTangle.YIELD and not vines[0].ripe(), "gathered %d vines" % VineTangle.YIELD)
+	player.backpack.add(ItemStack.make("vine", GameClock.clock.hours, 1))
+	for k in Builds.RECIPES.vine_cord.needs:
+		player.backpack.take(k, Builds.RECIPES.vine_cord.needs[k])
+	player.receive(ItemStack.make("vine_cord", GameClock.clock.hours))
+	check(player.backpack.count_of("#cord") == 2, "vine cord and paracord both count as cord")
 
 	# Bow: craft it and some arrows from sticks and the paracord in the starting kit.
 	check(player.backpack.count_of("cordage") == 1, "paracord in the starting kit")

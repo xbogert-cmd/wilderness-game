@@ -68,7 +68,7 @@ func pick_up(p: Player) -> void:
 	freeze = true
 	collision_layer = 0
 	collision_mask = 0
-	z_index = 6
+	z_index = 6 if dragged() else 4 # carried logs sit just behind the body, under the near arm
 	_drag_side = -p.facing
 
 func put_down() -> void:
@@ -85,13 +85,38 @@ func _physics_process(delta: float) -> void:
 		if dragged():
 			_follow_drag(delta)
 		else:
-			global_position = holder.global_position + Vector2(holder.facing * 6.0, -158.0 if size == "medium" else -112.0)
-			rotation = 0.0
+			_follow_carry()
 		return
 	var far := absf(global_position.x - world.get_viewport().get_camera_2d().global_position.x) > SLEEP_DISTANCE
 	if far != freeze:
 		freeze_mode = RigidBody2D.FREEZE_MODE_STATIC
 		freeze = far
+
+const SHOULDER_TILT := 0.3 ## a shouldered log rides front-end up
+
+## Where the carrying shoulder is: rig proportions (hip 95 + torso 62), lower when crouched.
+func _shoulder() -> Vector2:
+	return holder.global_position + Vector2(holder.facing * 4.0, -157.0 + (30.0 if holder.crouching else 0.0))
+
+## Short logs are hugged in both arms in front of the chest; medium logs ride the shoulder.
+func _follow_carry() -> void:
+	var f := float(holder.facing)
+	if size == "short":
+		global_position = _shoulder() + Vector2(f * 30.0, 30.0)
+		rotation = 0.0
+	else:
+		rotation = -SHOULDER_TILT * f
+		var along := Vector2(f, 0).rotated(rotation)
+		global_position = _shoulder() + Vector2(0, -thickness * 0.5 - 6.0) - along * 20.0
+
+## Where the two hands hold a carried log: [near hand, far hand], world space.
+func grips() -> Array:
+	var f := float(holder.facing) if holder else 1.0
+	var under := Vector2(0, thickness * 0.5).rotated(rotation)
+	if size == "short":
+		return [global_position + Vector2(f * 26.0, 0) + under, global_position + Vector2(-f * 14.0, 0) + under]
+	var along := Vector2(f, 0).rotated(rotation)
+	return [global_position + along * 75.0 + under, global_position + along * 42.0 + under]
 
 ## One end in the hands, the other resting on the ground behind the player.
 func _follow_drag(delta: float) -> void:

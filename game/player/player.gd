@@ -41,7 +41,7 @@ var swing := -1.0 ## 0..1 through a tool swing, -1 idle
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
-const RECIPES: PackedStringArray = ["splint", "fishing_pole", "bow", "arrows"]
+const RECIPES: PackedStringArray = ["splint", "vine_cord", "fishing_pole", "bow", "arrows", "hide_coat"]
 var known_recipes := RECIPES
 var bow_draw := -1.0 ## 0..1, -1 not drawing
 var fishing: Fishing ## set by Main
@@ -185,13 +185,15 @@ func noise() -> float:
 		n = maxf(n, 0.1)
 	if wade_depth > 0.0 and moving:
 		n += 0.3
+	if HuntingBlind.hiding(self):
+		n *= HuntingBlind.QUIET
 	return n
 
 ## How easy the player is to spot: crouching and holding still help most.
 func visibility() -> float:
 	var moving := absf(velocity.x) > 5.0
 	if crouching:
-		return 0.45 if moving else 0.25
+		return (0.45 if moving else 0.25) * (HuntingBlind.VISIBILITY if HuntingBlind.hiding(self) else 1.0)
 	if running:
 		return 1.2
 	return 1.0 if moving else 0.6

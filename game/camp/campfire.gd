@@ -154,6 +154,14 @@ func _woodpile() -> Woodpile:
 
 ## The one thing E does right now: [label, action]. Prompt and behaviour can't drift apart.
 func _action(p: Player) -> Array:
+	var h := p.held
+	if pot and h and h != pot and h.def.capacity > 0.0: # a bottle in hand, the pot hanging
+		if h.water > 0.001 and not h.water_clean and (pot.water <= 0.001 or not pot.water_clean) and pot.water < pot.def.capacity - 0.01:
+			return ["Pour the %s into the pot" % h.def.name.to_lower(), _pour.bind(h, pot, p)]
+		if pot.water > 0.001 and pot.water_clean and h.water < h.def.capacity - 0.01 and (h.water <= 0.001 or h.water_clean):
+			return ["Fill the %s from the pot" % h.def.name.to_lower(), _pour.bind(pot, h, p)]
+		if pot.water > 0.001 and not pot.water_clean:
+			return ["The pot isn't boiled yet (%d%%)" % int(boil * 100.0), Callable()]
 	if pot and p.held == null and p.carrying == null:
 		return ["Take pot", _take_pot.bind(p)]
 	if pot == null and p.held and p.held.def.has("pot"):
@@ -190,6 +198,16 @@ func _lighter(p: Player) -> ItemStack:
 	if p.held and p.held.def.has("lighter") and p.held.uses_left > 0:
 		return p.held
 	return p.backpack.find(func(s): return s.def.has("lighter") and s.uses_left > 0)
+
+func _pour(from: ItemStack, to: ItemStack, p: Player) -> void:
+	var before := to.water
+	var err := from.pour_into(to)
+	if err != "":
+		p.message.emit(err)
+		return
+	if to == pot and to.water > 0.0: # cold water poured in sets the boil back
+		boil *= before / to.water
+	p.message.emit("Poured %.2f L." % (to.water - before))
 
 func _take_pot(p: Player) -> void:
 	p.held = pot

@@ -3,7 +3,8 @@ class_name Cabin extends Node2D
 ## hold warmth, so it's the best place to sleep. Building or sleeping in it makes it camp.
 
 const COVER := 170.0
-const WARMTH := 0.45 ## felt like standing near a fire (heat_at scale)
+const WARMTH := 0.45 ## at most, felt like standing near a fire (heat_at scale)
+const HOLDS_C := 12.0 ## the walls keep it about this warm inside; no extra heat on mild days
 
 var world: World
 var _snow_drawn := -1.0
@@ -56,7 +57,10 @@ func covers(x: float) -> bool:
 	return absf(x - global_position.x) < COVER
 
 func heat_at(p: Vector2) -> float:
-	return WARMTH if covers(p.x) and absf(p.y - global_position.y) < 300.0 else 0.0
+	if not covers(p.x) or absf(p.y - global_position.y) > 300.0:
+		return 0.0
+	var outside := GameClock.weather.air_temp_c(GameClock.clock)
+	return clampf((HOLDS_C - outside) / GameClock.tuning.fire_heat_c, 0.0, WARMTH)
 
 func interact_pos() -> Vector2:
 	return global_position
@@ -106,16 +110,26 @@ func _draw() -> void:
 		for sx in [-half - 6.0, half + 6.0]: # log ends at the corners
 			draw_circle(Vector2(sx, y), log_h * 0.52, bark.darkened(0.2))
 			draw_circle(Vector2(sx, y), log_h * 0.36, Color("cfae7e"))
-	var gable := PackedVector2Array([Vector2(-half, -wall), Vector2(half, -wall), Vector2(0, -wall - 120.0)])
-	draw_colored_polygon(gable, bark.darkened(0.12))
-	var eave := Vector2(half + 34.0, -wall + 14.0)
-	var peak := Vector2(0, -wall - 138.0)
-	var roof := PackedVector2Array([Vector2(-eave.x, eave.y), peak, eave, eave + Vector2(0, -16), peak + Vector2(0, -16), Vector2(-eave.x, eave.y - 16.0)])
-	draw_colored_polygon(roof, Palette.BARK_DARK)
+	# Gable, then the roof laid right on its sloped edges and overhanging the walls.
+	var rise := 120.0
+	var peak := Vector2(0, -wall - rise)
+	draw_colored_polygon(PackedVector2Array([Vector2(-half, -wall), Vector2(half, -wall), peak]), bark.darkened(0.12))
+	var over := 34.0 # eave overhang
+	var slope := rise / half
+	var eave_l := Vector2(-half - over, -wall + over * slope)
+	var eave_r := Vector2(half + over, -wall + over * slope)
+	var t := 18.0 # roof thickness
+	draw_colored_polygon(PackedVector2Array([eave_l, peak, eave_r, eave_r + Vector2(0, -t), peak + Vector2(0, -t * 1.15), eave_l + Vector2(0, -t)]), Palette.BARK_DARK)
+	for k in 4: # purlin ends under the eaves
+		var f := (k + 1) / 5.0
+		for side in [-1.0, 1.0]:
+			draw_circle(Vector2(side * half * (1.0 - f), -wall - rise * f + 4.0), 5.0, bark.darkened(0.3))
 	var snow := clampf(GameClock.weather.snow_cm, 0.0, 30.0)
 	if snow > 0.5:
-		draw_colored_polygon(PackedVector2Array([Vector2(-eave.x, eave.y - 16.0), peak + Vector2(0, -16), eave + Vector2(0, -16),
-			eave + Vector2(0, -16 - snow), peak + Vector2(0, -16 - snow * 1.1), Vector2(-eave.x, eave.y - 16.0 - snow)]), Color(0.94, 0.96, 0.99))
+		var top_l := eave_l + Vector2(0, -t)
+		var top_r := eave_r + Vector2(0, -t)
+		var top_p := peak + Vector2(0, -t * 1.15)
+		draw_colored_polygon(PackedVector2Array([top_l, top_p, top_r, top_r + Vector2(0, -snow), top_p + Vector2(0, -snow * 1.1), top_l + Vector2(0, -snow)]), Color(0.94, 0.96, 0.99))
 	draw_rect(Rect2(-40, -120, 80, 120), Color(0.14, 0.1, 0.08)) # door
 	draw_rect(Rect2(-40, -120, 80, 120), Palette.BARK_DARK, false, 4.0)
 	var night := 1.0 - GameClock.clock.daylight()

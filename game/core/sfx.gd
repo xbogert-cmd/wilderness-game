@@ -36,6 +36,9 @@ static func splash() -> AudioStream:
 static func snort() -> AudioStream:
 	return pool("snort", ["res://assets/audio/sfx/snort_1.wav", "res://assets/audio/sfx/snort_2.wav"], 1.08)
 
+static func chop() -> AudioStream:
+	return pool("chop", ["res://assets/audio/sfx/chop_1.wav", "res://assets/audio/sfx/chop_2.wav", "res://assets/audio/sfx/chop_3.wav", "res://assets/audio/sfx/chop_4.wav"], 1.08, 2.5)
+
 ## Hooves: grass footsteps pitched up and lighter.
 static func hoof() -> AudioStream:
 	var paths: PackedStringArray = []

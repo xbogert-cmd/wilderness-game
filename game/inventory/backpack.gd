@@ -96,10 +96,14 @@ func find(pred: Callable) -> ItemStack:
 			return s
 	return null
 
+## An item id, or "#tag" for anything carrying that tag (e.g. "#cord": paracord or vine cord).
+static func matches(s: ItemStack, id: String) -> bool:
+	return s.def.has(id.substr(1)) if id.begins_with("#") else s.def.id == id
+
 func count_of(id: String) -> int:
 	var n := 0
 	for s in all_stacks():
-		if s.def.id == id:
+		if matches(s, id):
 			n += s.count
 	return n
 
@@ -110,7 +114,7 @@ func take(id: String, n: int) -> bool:
 	for s in all_stacks():
 		if n == 0:
 			break
-		if s.def.id == id:
+		if matches(s, id):
 			var k := mini(n, s.count)
 			s.count -= k
 			n -= k

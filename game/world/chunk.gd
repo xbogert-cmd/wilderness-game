@@ -49,8 +49,23 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	_grass(terrain, rng, low_mat, x0, x1)
 	if _contains(Terrain.CREEK_X):
 		_creek(terrain)
+	_vines(terrain, world_seed, st)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
+
+## Vine tangles on their own seed, so adding them never moved the trees of existing saves.
+func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([world_seed, index, "vines"])
+	for k in 5:
+		var x := index * Terrain.CHUNK_W + rng.randf_range(300.0, Terrain.CHUNK_W - 300.0)
+		if _near_creek(x, 150.0) or x < 400.0 or x > Terrain.WORLD_W - 400.0:
+			continue
+		var v := VineTangle.new()
+		var id := 1000 + k # clear of the tree/bush ids in the same "picked" table
+		v.setup(self, id, st.picked.get(str(id), -INF))
+		v.position = Vector2(x, terrain.height_at(x) + 2.0)
+		add_child(v)
 
 func _snow_poly(z: int) -> Polygon2D:
 	var p := Polygon2D.new()

@@ -122,6 +122,20 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 			if d.id == "venison_cooked":
 				for i in 3:
 					ci.draw_line(Vector2(w * (0.3 + i * 0.18), h * 0.28), Vector2(w * (0.22 + i * 0.18), h * 0.72), a.call(Color(0.2, 0.12, 0.06, 0.7)), 2.5)
+		"vine":
+			for k in mini(s.count, 3):
+				var pts := PackedVector2Array()
+				for i in 9:
+					var t := i / 8.0
+					pts.append(Vector2(w * (0.12 + 0.76 * t), h * (0.3 + k * 0.2) + sin(t * 9.0 + k) * h * 0.08))
+				ci.draw_polyline(pts, a.call(c.lightened(0.1 * k)), 2.0)
+				ci.draw_circle(pts[3], u * 0.06, a.call(Color("6f8a3e")))
+		"vine_cord":
+			ci.draw_arc(Vector2(w * 0.5, h * 0.5), u * 0.3, 0.0, TAU, 16, a.call(c), u * 0.1)
+			ci.draw_arc(Vector2(w * 0.5, h * 0.5), u * 0.18, 0.0, TAU, 12, a.call(c.darkened(0.2)), u * 0.08)
+			for i in 6: # the twist
+				var ang := i * TAU / 6.0
+				ci.draw_line(Vector2(w * 0.5, h * 0.5) + Vector2.from_angle(ang) * u * 0.24, Vector2(w * 0.5, h * 0.5) + Vector2.from_angle(ang + 0.5) * u * 0.34, a.call(c.darkened(0.35)), 1.0)
 		"deer_hide", "hide":
 			var pts := PackedVector2Array([Vector2(0.2, 0.12), Vector2(0.42, 0.2), Vector2(0.62, 0.1), Vector2(0.84, 0.2),
 				Vector2(0.78, 0.5), Vector2(0.88, 0.84), Vector2(0.6, 0.8), Vector2(0.38, 0.9), Vector2(0.12, 0.82), Vector2(0.22, 0.5)])

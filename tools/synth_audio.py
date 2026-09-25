@@ -8,6 +8,10 @@
   valley holding its breath, not a score.
 - sfx/snort_1.wav, snort_2.wav: a mule deer's alarm snort (nasal noise burst through two
   resonances, with a second smaller puff).
+- sfx/chop_1..4.wav: an axe biting wood: a sharp impact, a few damped wood resonances and
+  a short splintery crunch, in a little forest space.
+- sfx/tree_fall.wav: the trunk giving (stick-slip creak), branches rushing through the air,
+  then the crash at 1.7 s, when the falling tree meets the ground (ChoppableTree.FALL_TIME).
 Pure stdlib so it runs anywhere.
 """
 import math
@@ -141,7 +145,66 @@ def snort(seed: int) -> list[float]:
     return out
 
 
+def chop(seed: int) -> list[float]:
+    rng = random.Random(100 + seed)
+    length = 0.45
+    modes = [(f * rng.uniform(0.92, 1.08), d, a) for f, d, a in ((190.0, 0.07, 1.0), (520.0, 0.045, 0.7), (960.0, 0.03, 0.45), (1700.0, 0.018, 0.3))]
+    crunch = Biquad(900.0 + seed * 60.0, 1.1)
+    snap = Biquad(3200.0, 1.5)
+    out = []
+    for i in range(int(length * SR)):
+        t = i / SR
+        s = 0.0
+        for f, d, a in modes:
+            s += a * math.sin(2 * math.pi * f * t) * math.exp(-t / d)
+        n = rng.uniform(-1.0, 1.0)
+        s += crunch(n) * 2.2 * math.exp(-t / 0.05) * min(1.0, t / 0.002)
+        s += snap(n) * 1.5 * math.exp(-t / 0.004)
+        out.append(s * min(1.0, t / 0.0008))
+    return reverb(out, 0.18)
+
+
+def tree_fall() -> list[float]:
+    rng = random.Random(55)
+    length = 3.6
+    creak_bp = Biquad(420.0, 4.0)
+    creak_bp2 = Biquad(950.0, 5.0)
+    rush = Biquad(1400.0, 0.8)
+    thump = Biquad(70.0, 0.9)
+    body = Biquad(260.0, 1.0)
+    crackle = Biquad(2200.0, 1.2)
+    hp = OnePole(35.0)
+    out = []
+    phase = 0.0
+    impact = 1.7
+    for i in range(int(length * SR)):
+        t = i / SR
+        s = 0.0
+        # Creak: irregular stick-slip pulses, slowing and swelling as the hinge tears.
+        rate = 38.0 - 14.0 * min(1.0, t / 1.4) + 6.0 * math.sin(t * 7.3)
+        phase += rate / SR
+        pulse = 1.0 if phase % 1.0 < 0.08 else 0.0
+        ce = env(t, 0.0, 0.25, 1.1, 0.5)
+        s += (creak_bp(pulse) * 3.0 + creak_bp2(pulse) * 1.5) * ce
+        # Branches rushing through the air in the last half second of the fall.
+        n = rng.uniform(-1.0, 1.0)
+        s += rush(n) * 0.9 * env(t, 1.05, 0.5, impact, 0.08)
+        # The crash: a heavy thump, the trunk's body, and branches snapping.
+        if t >= impact:
+            k = t - impact
+            s += thump(n) * 9.0 * math.exp(-k / 0.28) * min(1.0, k / 0.004)
+            s += body(n) * 3.0 * math.exp(-k / 0.18)
+            if rng.random() < 0.004 * math.exp(-k / 0.5):
+                s += rng.uniform(-6.0, 6.0)
+            s += crackle(n) * 1.2 * math.exp(-k / 0.35)
+        out.append(s - hp(s))
+    return reverb(out, 0.32)
+
+
 if __name__ == "__main__":
     write(OUT / "music" / "storm_cue.wav", storm_cue())
     write(OUT / "sfx" / "snort_1.wav", snort(1))
     write(OUT / "sfx" / "snort_2.wav", snort(2))
+    for k in range(1, 5):
+        write(OUT / "sfx" / f"chop_{k}.wav", chop(k))
+    write(OUT / "sfx" / "tree_fall.wav", tree_fall())

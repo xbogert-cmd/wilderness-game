@@ -21,6 +21,7 @@ const KINDS := {
 	"hide_frame": preload("res://game/camp/hide_frame.gd"),
 	"drying_rack": preload("res://game/camp/drying_rack.gd"),
 	"cabin": preload("res://game/camp/cabin.gd"),
+	"blind": preload("res://game/camp/hunting_blind.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)

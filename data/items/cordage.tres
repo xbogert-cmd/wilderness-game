@@ -9,5 +9,5 @@ name = "Paracord"
 shape = Array[Vector2i]([Vector2i(0, 0)])
 weight = 0.1
 color = Color(0.478, 0.541, 0.357, 1)
-tags = PackedStringArray("gear")
+tags = PackedStringArray("gear", "cord")
 description = "A hank of strong cord. Enough to string a bow."

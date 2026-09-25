@@ -172,6 +172,20 @@ func _ready() -> void:
 		world.spawn({"kind": "woodpile", "x": x + 360.0, "logs": 9})
 		world.spawn({"kind": "hide_frame", "x": x + 560.0, "curing": true, "cured": 7.0})
 		world.spawn({"kind": "drying_rack", "x": x + 780.0, "pieces": [0.0, 2.0, 5.0, 7.0, 9.0, 12.0]})
+	if args.has("carry"): # preview: carrying a short or medium log
+		var lg := world.spawn({"kind": "log", "size": args.carry, "x": x, "y": world.terrain.height_at(x) - 30.0}) as WorldLog
+		player.carrying = lg
+		lg.pick_up(player)
+	if args.has("notch"): # preview: a tree half chopped through, hatchet in hand
+		player.draw_slot(0)
+		_preview_notch.call_deferred()
+	if args.has("blind"): # preview: crouched in a hunting blind, bow ready, a deer passing
+		world.spawn({"kind": "blind", "x": x})
+		player.auto_crouch = true
+		player.hold(ItemStack.make("bow", GameClock.clock.hours))
+		var d := wildlife.spawn(Wildlife.SPECIES[0], x + 420.0, 4)
+		d.state = Animal.State.WALK
+		d.facing = -1
 	if args.has("piles"): # preview: woodpiles with 1, 3, 6, 7, 10 and 15 logs
 		for k in 6:
 			world.spawn({"kind": "woodpile", "x": x - 700.0 + k * 250.0, "logs": [1, 3, 6, 7, 10, 15][k]})
@@ -227,6 +241,16 @@ func _ready() -> void:
 		_tour()
 	elif args.has("shot"):
 		_shot(args.shot)
+
+func _preview_notch() -> void:
+	var best: ChoppableTree = null
+	for t in get_tree().get_nodes_in_group("choppable"):
+		if t is ChoppableTree and (best == null or absf(t.global_position.x - player.global_position.x) < absf(best.global_position.x - player.global_position.x)):
+			best = t
+	player.global_position.x = best.global_position.x - 70.0
+	player.facing = 1
+	for i in 6:
+		best.hit(player, 0.9, Vector2.ZERO)
 
 func _process(delta: float) -> void:
 	var season := GameClock.clock.season()

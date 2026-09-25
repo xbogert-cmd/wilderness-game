@@ -133,9 +133,8 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 		if body.carrying.dragged():
 			var g := _to_local_space(body.carrying.grip())
 			return [g, g + Vector2(-4, 3)]
-		if body.carrying.size == "short":
-			return [shoulder + Vector2(18, 26), shoulder + Vector2(10, 30)]
-		return [shoulder + Vector2(8, -16), shoulder + Vector2(-6, -16)]
+		var g: Array = body.carrying.grips()
+		return [_to_local_space(g[0]), _to_local_space(g[1])]
 	if body.bow_draw >= 0.0: # bow arm out toward the aim, string hand pulled back to the chin
 		var aim := _aim_dir(shoulder)
 		return [shoulder + aim * 50.0, shoulder + aim * (46.0 - 40.0 * body.bow_draw)]
