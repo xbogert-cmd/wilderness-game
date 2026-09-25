@@ -234,6 +234,8 @@ func _life() -> void:
 
 	# Set up a distinctive state, save it, and record what to expect after loading.
 	world.spawn({"kind": "campfire", "x": lean_x + 300.0, "fuel": 5.0, "lit": true})
+	world.spawn({"kind": "log", "size": "long", "x": lean_x - 250.0, "y": world.terrain.height_at(lean_x - 250.0) - 30.0})
+	player.backpack.add(ItemStack.make("berries", GameClock.clock.hours - 30.0, 3)) # already stale
 	var jerky: ItemStack = player.backpack.find(func(s): return s.def.id == "jerky")
 	player.drop_stack(jerky)
 	var bottle: ItemStack = player.backpack.find(func(s): return s.def.id == "water_bottle")
@@ -246,7 +248,8 @@ func _life() -> void:
 	ids.sort()
 	var expect := {"x": player.global_position.x, "hours": GameClock.clock.hours, "weather": GameClock.weather.kind,
 		"health": player.cond.health, "fatigue": player.cond.fatigue, "camp_x": player.camp_x, "pack": ids,
-		"bottle": bottle.water, "bottle_clean": bottle.water_clean}
+		"bottle": bottle.water, "bottle_clean": bottle.water_clean,
+		"berries_made": player.backpack.find(func(s): return s.def.id == "berries").made_hour}
 	var f := FileAccess.open(EXPECT, FileAccess.WRITE)
 	f.store_string(JSON.stringify(expect))
 	f.close()
@@ -301,6 +304,10 @@ func _verify() -> void:
 	check(fire != null and fire.lit, "campfire restored, still lit")
 	var jerky := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is WorldItem and n.stack.def.id == "jerky")
 	check(jerky.size() == 1, "dropped jerky still on the ground")
+	var logs := get_tree().get_nodes_in_group("log").filter(func(l): return l.size == "long")
+	check(logs.size() == 1, "cut log still lying by camp")
+	var berries: ItemStack = player.backpack.find(func(s): return s.def.id == "berries")
+	check(berries and absf(berries.made_hour - float(e.berries_made)) < 0.01 and berries.freshness(GameClock.clock.hours) == ItemStack.Fresh.STALE, "food keeps its age: stale berries are still stale")
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)
 
