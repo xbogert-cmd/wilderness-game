@@ -22,8 +22,11 @@ var terrain := Terrain.new(WORLD_SEED)
 var chunks := {} ## index -> Chunk
 var state := {} ## "index" -> {felled: {}, picked: {}, objects: [], left: hour}
 var dynamic := Node2D.new() ## persistent objects not owned by a chunk (they can move)
+var tracks := Tracks.new()
 
 func _ready() -> void:
+	tracks.world = self
+	add_child(tracks)
 	dynamic.name = "Dynamic"
 	dynamic.z_index = 3
 	add_child(dynamic)

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fishing_pole"
+name = "Fishing Pole"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)])
+weight = 0.4
+color = Color(0.659, 0.565, 0.361, 1)
+tags = PackedStringArray("tool", "rod", "attachable")
+description = "A springy pole with line. Cast toward open water."

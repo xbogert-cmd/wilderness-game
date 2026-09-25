@@ -20,6 +20,7 @@ func _ready() -> void:
 func step() -> void:
 	var wet := body.wade_depth > 0.0 or absf(body.global_position.x - Terrain.CREEK_X) < Terrain.CREEK_HALF + 60.0
 	stream = _mud if wet else _grass
+	body.world.tracks.add(body.global_position.x + body.facing * randf_range(-12.0, 12.0), "boot", body.facing)
 	volume_db = -14.0 if body.crouching else (-2.0 if body.running else -7.0)
 	play()
 

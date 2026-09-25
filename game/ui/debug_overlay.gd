@@ -14,6 +14,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("debug"):
 		visible = not visible
 
+func _animals() -> String:
+	var parts: PackedStringArray = []
+	for a in get_tree().get_nodes_in_group("animals"):
+		var d: float = a.position.x - player.global_position.x
+		if absf(d) < 3000.0:
+			parts.append("%s %s %+.0f aware %.2f" % [a.def.name, Animal.STATE_NAMES[a.state], d, a.awareness])
+	return "Animals: " + ("  |  ".join(parts) if parts else "none near")
+
 func _process(_delta: float) -> void:
 	if not visible:
 		return
@@ -28,4 +36,6 @@ func _process(_delta: float) -> void:
 		"HP %.0f  STA %.0f  FOOD %.0f  WATER %.0f  WARM %.0f  WET %.2f" % [k.health, k.stamina, k.hunger, k.thirst, k.warmth, k.wetness],
 		"Injuries %s" % str(k.injuries),
 		"Pos %.0f, %.0f  wade %.0f  chunks %s" % [player.global_position.x, player.global_position.y, player.wade_depth, str(world.chunks.keys())],
+		"Noise %.2f  visibility %.2f  tracks %d" % [player.noise(), player.visibility(), world.tracks.prints.size()],
+		_animals(),
 	])

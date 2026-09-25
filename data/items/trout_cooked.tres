@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "trout_cooked"
+name = "Cooked Trout"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)])
+weight = 0.4
+color = Color(0.690, 0.541, 0.345, 1)
+tags = PackedStringArray("food")
+food = 34.0
+spoil_hours = 60.0
+description = "Flaky and filling."

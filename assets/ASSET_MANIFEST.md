@@ -24,6 +24,13 @@ All visuals are currently **procedural placeholders** drawn in code with the loc
 | Campfire (stones, wood, flames) | `Campfire._draw` + particles + light | Temporary art, keep the light and particles | Animated flame sprite sheet |
 | Lean-to | `LeanTo._draw` | Temporary | Painted structure in build stages (frame → roof → bedding) |
 | Blueprint ghosts | `Blueprint`, `BuildMode` | Keep, restyle | Chalk-line style outlines |
+| Mule deer | `DeerRig` (drawn, jointed) | Temporary | Cutout sprite parts on the same joints; poses: graze, walk, alert, bedded, stot, bound |
+| Birds | `BirdFlock._draw` | Temporary | Small sprite sheet (peck, hop, flap) |
+| Tracks (boot, hoof) | `Tracks._draw` | Temporary | Decal sprites per species and age stage |
+| Fishing pole, line, bobber | `PlayerRig._held_item`, `Fishing._draw` | Keep line and bobber, replace pole | Pole sprite |
+| Reel meter | `FishingUI` | Keep, restyle | Hand-drawn gauge |
+
+Wildlife audio is still missing: deer snort and bound, bird flush, and fish splash. These are the next CC0 picks.
 
 ## Audio
 

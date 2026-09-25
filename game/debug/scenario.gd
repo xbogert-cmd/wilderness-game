@@ -18,6 +18,7 @@ func _ready() -> void:
 	match mode:
 		"life": _life.call_deferred()
 		"verify": _verify.call_deferred()
+		"wild": _wild.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -300,5 +301,128 @@ func _verify() -> void:
 	check(fire != null and fire.lit, "campfire restored, still lit")
 	var jerky := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is WorldItem and n.stack.def.id == "jerky")
 	check(jerky.size() == 1, "dropped jerky still on the ground")
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+# --- Mode "wild": wildlife, tracks, fishing ---------------------------------------
+
+func _deer(x: float, seed_value: int) -> Animal:
+	for a in get_tree().get_nodes_in_group("animals"):
+		a.queue_free() # a clean slate, so only this deer reacts
+	await frames(2)
+	var wl: Wildlife = get_parent().find_children("*", "Wildlife", false, false)[0]
+	var a := wl.spawn(Wildlife.SPECIES[0], x, seed_value)
+	a.state = Animal.State.GRAZE
+	a.facing = 1 # grazing, facing away
+	return a
+
+func _wild() -> void:
+	await frames(10)
+	GameClock.clock.hours = 7.0 # morning: deer are up and feeding
+	GameClock.force_weather(Weather.Kind.CLEAR)
+
+	# Running at a deer spooks it; it bolts away, then calms once far enough off.
+	await teleport(9000.0)
+	var deer: Animal = await _deer(9900.0, 11)
+	player.auto_dir = 1.0
+	player.auto_run = true
+	var guard := 0
+	while deer.state != Animal.State.FLEE and guard < 600:
+		await frames(1)
+		guard += 1
+	player.auto_dir = 0.0
+	player.auto_run = false
+	var gap := deer.position.x - player.global_position.x
+	check(deer.state == Animal.State.FLEE and gap > 600.0, "running toward a deer spooks it from far off (bolted at %.0f px)" % gap)
+	check(deer.facing == 1, "it flees away from you")
+	guard = 0
+	while deer.state == Animal.State.FLEE and guard < 900:
+		await frames(1)
+		guard += 1
+	var far := deer.position.x - player.global_position.x
+	check(deer.state != Animal.State.FLEE and far > deer.def.flee_distance * 0.8, "it calms down once well away (%.0f px), no map-wide chase" % far)
+
+	# A slow crouched approach gets much closer than running did.
+	await teleport(9000.0)
+	player.cond.stamina = 100.0
+	deer = await _deer(9700.0, 12)
+	player.auto_dir = 1.0
+	player.auto_crouch = true
+	guard = 0
+	while deer.state != Animal.State.FLEE and deer.position.x - player.global_position.x > 330.0 and guard < 900:
+		await frames(1)
+		guard += 1
+	var closest := deer.position.x - player.global_position.x
+	player.auto_dir = 0.0
+	player.auto_crouch = false
+	check(deer.state != Animal.State.FLEE and closest < 400.0, "stalking crouched gets within %.0f px unnoticed (running spooked it at %.0f)" % [closest, gap])
+
+	# Tracks: boots print in mud, age through stages, and fade away.
+	var tr := world.tracks
+	tr.prints.clear()
+	await teleport(Terrain.CREEK_X - Terrain.CREEK_HALF - 600.0)
+	player.auto_dir = 1.0
+	await frames(90)
+	player.auto_dir = 0.0
+	var boots := tr.prints.filter(func(p): return p.s == "boot").size()
+	check(boots >= 2, "boot prints left in the bank mud (%d)" % boots)
+	check(tr.interact_label(player) == "", "your own prints don't nag for attention")
+	tr.add(player.global_position.x + 30.0, "deer", 1)
+	check(tr.interact_label(player) == "Examine tracks", "deer tracks can be examined")
+	tr.interact(player)
+	var stages := []
+	for h in [1.0, 5.0, 20.0]: # age only the tracks, not the whole world
+		tr._on_tick(h)
+		stages.append(Tracks.stage(tr.prints[0].age) if tr.prints else -1)
+	tr._on_tick(30.0)
+	check(stages == [0, 1, 2] and tr.prints.is_empty(), "prints read fresh → hours old → old, then fade away %s" % str(stages))
+
+	# Fishing: craft a pole, cast, hook, reel, cook.
+	player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 2))
+	var r: Dictionary = Builds.RECIPES.fishing_pole
+	for k in r.needs:
+		player.backpack.take(k, r.needs[k])
+	player.receive(ItemStack.make("fishing_pole", GameClock.clock.hours))
+	player.hold(player.backpack.find(func(s): return s.def.has("rod")))
+	check(player.held and player.held.def.has("rod"), "crafted and holding a fishing pole")
+	player.facing = 1
+	await teleport(Terrain.CREEK_X - Terrain.CREEK_HALF - 30.0)
+	player.aim_override = Vector2(Terrain.CREEK_X, 0)
+	var fishing := player.fishing
+	player.use_held()
+	check(fishing.state == Fishing.State.CAST, "cast toward the creek")
+	await frames(int(Fishing.CAST_TIME * 60.0) + 5)
+	check(fishing.state == Fishing.State.WAIT, "bobber on the water, waiting")
+	fishing.force_bite("trout")
+	await frames(2)
+	check(fishing.state == Fishing.State.BITE, "bite!")
+	player.use_held()
+	check(fishing.state == Fishing.State.REEL, "hooked")
+	guard = 0
+	while fishing.state == Fishing.State.REEL and guard < 3000:
+		await frames(1)
+		guard += 1
+		if fishing.fight and fishing.fight.in_zone() and absf(fishing.fight.needle - fishing.fight.zone) < fishing.fight.zone_half() * 0.5:
+			player.use_held()
+	check(player.backpack.count_of("trout_raw") == 1, "landed a trout")
+	player.aim_override = Vector2.INF
+	world.spawn({"kind": "campfire", "x": player.global_position.x - 150.0, "fuel": 4.0, "lit": true})
+	await teleport(player.global_position.x - 150.0)
+	player.hold(player.backpack.find(func(s): return s.def.id == "trout_raw"))
+	find_fire().interact(player)
+	await frames(60 * 4)
+	check(player.backpack.count_of("trout_cooked") == 1 or (player.held and player.held.def.id == "trout_cooked"), "cooked the trout over the fire")
+
+	# Birds burst up when you come close.
+	var flock := BirdFlock.new()
+	flock.world = world
+	flock.player = player
+	flock.position = Vector2(player.global_position.x + 600.0, world.terrain.height_at(player.global_position.x + 600.0))
+	world.get_parent().add_child(flock)
+	player.auto_dir = 1.0
+	await frames(120)
+	player.auto_dir = 0.0
+	check(flock.flushed, "birds flush as you approach")
+
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)

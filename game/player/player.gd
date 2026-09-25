@@ -34,13 +34,15 @@ var swing := -1.0 ## 0..1 through a tool swing, -1 idle
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
-var known_recipes: PackedStringArray = ["splint"]
+var known_recipes: PackedStringArray = ["splint", "fishing_pole"]
+var fishing: Fishing ## set by Main
 var facing := 1
 var running := false
 var crouching := false
 var wade_depth := 0.0
 var auto_dir := 0.0 ## set by smoke tests to walk without input
 var auto_run := false
+var auto_crouch := false
 var _can_run := true
 var _fall_vy := 0.0
 var _work_done: Callable
@@ -81,7 +83,7 @@ func _starting_kit() -> void:
 	var bottle := ItemStack.make("water_bottle", h)
 	bottle.add_water(0.8, true)
 	for s in [bottle, ItemStack.make("cook_pot", h), ItemStack.make("lighter", h), ItemStack.make("sleeping_bag", h),
-			ItemStack.make("bandage", h, 2), ItemStack.make("jerky", h, 3)]:
+			ItemStack.make("bandage", h, 2), ItemStack.make("jerky", h, 3), ItemStack.make("fishing_kit", h)]:
 		backpack.add(s)
 
 # --- Movement ----------------------------------------------------------------
@@ -98,7 +100,7 @@ func _physics_process(delta: float) -> void:
 	if working <= 0.0 and swing < 0.0:
 		dir = auto_dir if auto_dir != 0.0 else Input.get_axis("move_left", "move_right")
 	var was_on_floor := is_on_floor()
-	crouching = Input.is_action_pressed("crouch") and was_on_floor and working <= 0.0
+	crouching = (Input.is_action_pressed("crouch") or auto_crouch) and was_on_floor and working <= 0.0
 	if cond.stamina < 1.0:
 		_can_run = false
 	elif cond.stamina > 20.0:
@@ -142,6 +144,31 @@ func _on_landed(vy: float) -> void:
 		cond.injure("legs", "sprain", 0.3 + 0.6 * k)
 		cond.health -= 10.0 + 30.0 * k
 		message.emit("You land badly. Your ankle is sprained.")
+
+## How far the player's activity carries: 0 silent, ~1 loud. Animals listen for this.
+func noise() -> float:
+	if sleeping or dead:
+		return 0.05
+	var moving := absf(velocity.x) > 5.0
+	var n := 0.06
+	if running:
+		n = 1.0
+	elif moving:
+		n = 0.13 if crouching else 0.42
+	if swing >= 0.0 or (carrying and moving):
+		n = maxf(n, 0.9)
+	if wade_depth > 0.0 and moving:
+		n += 0.3
+	return n
+
+## How easy the player is to spot: crouching and holding still help most.
+func visibility() -> float:
+	var moving := absf(velocity.x) > 5.0
+	if crouching:
+		return 0.45 if moving else 0.25
+	if running:
+		return 1.2
+	return 1.0 if moving else 0.6
 
 func exertion() -> float:
 	if running or (carrying and absf(velocity.x) > 1.0): return 1.0
@@ -224,7 +251,9 @@ func use_held() -> void:
 	if held == null or swing >= 0.0:
 		return
 	var d := held.def
-	if d.has("axe"):
+	if d.has("rod"):
+		fishing.press()
+	elif d.has("axe"):
 		if chop_target == null:
 			message.emit("Nothing to chop within reach.")
 		elif cond.spend_stamina(SWING_STAMINA):
@@ -234,7 +263,10 @@ func use_held() -> void:
 	elif d.has("food"):
 		var fresh := held.freshness(GameClock.clock.hours)
 		cond.eat(d.food * ItemStack.FOOD_MULT[fresh])
-		if fresh == ItemStack.Fresh.SPOILED:
+		if d.has("raw"):
+			cond.health -= 6.0
+			message.emit("Raw fish. It sits badly; cooking it would be better.")
+		elif fresh == ItemStack.Fresh.SPOILED:
 			cond.health -= 8.0
 			message.emit("That was spoiled. Your stomach turns.")
 		_consume_one()

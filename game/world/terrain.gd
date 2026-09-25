@@ -13,6 +13,7 @@ const EDGE := 900.0 ## world-edge ridges
 
 var noise := FastNoiseLite.new()
 var detail := FastNoiseLite.new()
+var damp := FastNoiseLite.new()
 var bank_y := 0.0
 
 func _init(seed_value := 1) -> void:
@@ -23,6 +24,8 @@ func _init(seed_value := 1) -> void:
 	detail.seed = seed_value + 1
 	detail.frequency = 1.0 / 380.0
 	detail.fractal_octaves = 1
+	damp.seed = seed_value + 2
+	damp.frequency = 1.0 / 700.0
 	bank_y = noise.get_noise_1d(CREEK_X) * 260.0
 
 func height_at(x: float) -> float:
@@ -46,6 +49,12 @@ func water_surface_at(x: float) -> float:
 func water_depth_at(x: float, feet_y: float) -> float:
 	var s := water_surface_at(x)
 	return 0.0 if s == INF else maxf(minf(feet_y, height_at(x)) - s, 0.0)
+
+## Soft ground that records tracks: the creek banks and scattered damp hollows.
+func soft_at(x: float) -> bool:
+	if water_surface_at(x) != INF:
+		return false
+	return absf(x - CREEK_X) < CREEK_HALF + 650.0 or damp.get_noise_1d(x) > 0.42
 
 func chunk_of(x: float) -> int:
 	return clampi(int(floor(x / CHUNK_W)), 0, CHUNKS - 1)

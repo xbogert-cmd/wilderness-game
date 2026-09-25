@@ -14,6 +14,7 @@ class_name ItemDef extends Resource
 @export var fuel_hours := 0.0 ## burn time added to a fire
 @export var uses := 0 ## e.g. lighter strikes
 @export var treats := "" ## injury region a medical item treats
+@export var cooks_into := "" ## item id this becomes over a fire
 @export var description := ""
 
 func has(tag: String) -> bool:

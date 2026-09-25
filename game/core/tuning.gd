@@ -32,6 +32,11 @@ class_name Tuning extends Resource
 @export var wade_wet_per_hour := 6.0
 @export var dry_per_hour := 0.25
 
+@export_group("Fishing")
+@export var fishing_ease := 1.0 ## <1 slows the reeling needle (accessibility)
+@export var bite_mean_sec := 16.0 ## average wait at a normal hour, real seconds
+@export var hook_window_sec := 1.0 ## time to react when the bobber plunges
+
 @export_group("Injury")
 @export var injury_heal_per_hour := 0.02
 @export var treated_heal_mult := 3.0

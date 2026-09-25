@@ -10,6 +10,7 @@ const STRUCTURES := {
 
 const RECIPES := {
 	"splint": {"needs": {"sticks": 2, "bandage": 1}, "hours": 0.25, "seconds": 2.0},
+	"fishing_pole": {"needs": {"sticks": 2, "fishing_kit": 1}, "hours": 0.3, "seconds": 2.5},
 }
 
 static func is_log(key: String) -> bool:

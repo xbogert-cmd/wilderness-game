@@ -133,6 +133,8 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 		if body.carrying.size == "short":
 			return [shoulder + Vector2(18, 26), shoulder + Vector2(10, 30)]
 		return [shoulder + Vector2(8, -16), shoulder + Vector2(-6, -16)]
+	if body.held and body.held.def.has("rod") and body.fishing and body.fishing.state != Fishing.State.IDLE:
+		return [shoulder + Vector2(20, 14), shoulder + Vector2(12, 18)] # pole held out over the water
 	if body.working > 0.0:
 		var w := Vector2(sin(_time * 7.0) * 6.0, cos(_time * 7.0) * 4.0)
 		return [hip + Vector2(30, -8) + w, hip + Vector2(24, -4) - w]
@@ -192,6 +194,10 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			draw_colored_polygon(PackedVector2Array([hand + dir * 8.0 + n * 2.5, hand + dir * 24.0, hand + dir * 8.0 - n * 2.5]), Color("c8ccd0"))
 		"cook_pot":
 			draw_rect(Rect2(hand + Vector2(-2, 2), Vector2(24, 18)), c)
+		"fishing_pole":
+			var up := Vector2.from_angle(-0.75)
+			draw_line(hand - up * 10.0, hand + up * 120.0, c, 3.0)
+			draw_line(hand + up * 60.0, hand + up * 120.0, c.lightened(0.2), 2.0)
 		"sticks":
 			for i in 3:
 				draw_line(hand + Vector2(-14, -2 + i * 4), hand + Vector2(20, -6 + i * 5), c, 3.0)

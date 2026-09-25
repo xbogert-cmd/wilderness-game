@@ -76,6 +76,20 @@ func _ready() -> void:
 	atmo.rain = rain
 	add_child(atmo)
 
+	var fishing := Fishing.new()
+	fishing.player = player
+	fishing.world = world
+	add_child(fishing)
+	player.fishing = fishing
+
+	var wildlife := Wildlife.new()
+	wildlife.world = world
+	wildlife.player = player
+	wildlife.tracks = world.tracks
+	add_child(wildlife)
+	if save and save.has("tracks"):
+		world.tracks.from_array(save.tracks)
+
 	var ambience := Ambience.new()
 	ambience.player = player
 	ambience.terrain = world.terrain
@@ -87,6 +101,9 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.player = player
 	ui.add_child(hud)
+	var fish_ui := FishingUI.new()
+	fish_ui.fishing = fishing
+	ui.add_child(fish_ui)
 	var pause := PauseMenu.new()
 	pause.player = player
 	pause.main = self
@@ -123,6 +140,19 @@ func _ready() -> void:
 		world.spawn({"kind": "log", "size": "medium", "x": x - 160.0, "y": world.terrain.height_at(x - 160.0) - 30.0})
 		world.spawn({"kind": "log", "size": "short", "x": x + 620.0, "y": world.terrain.height_at(x + 620.0) - 30.0})
 		player.draw_slot(0)
+	if args.has("deer"): # preview: a small group ahead of the player
+		for k in 3:
+			var a := wildlife.spawn(Wildlife.SPECIES[0], x + 420.0 + k * 170.0, k)
+			a.state = [Animal.State.GRAZE, Animal.State.ALERT, Animal.State.WALK][k]
+			a.facing = -1 if k == 1 else 1
+			a.def = a.def.duplicate()
+			a.def.hearing = 0.0 # hold the pose for the screenshot
+			a.def.sight = 0.0
+	if args.has("fish"): # preview: mid-fight with a trout at the creek bank
+		_preview_fish.call_deferred(fishing)
+	if args.has("flee"): # preview: a deer bounding away
+		var d := wildlife.spawn(Wildlife.SPECIES[0], x + 700.0, 3)
+		d.bolt()
 	if args.has("sleep"): # preview: asleep under a lean-to
 		world.spawn({"kind": "lean_to", "x": x})
 		player.sleep.call_deferred()
@@ -160,7 +190,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func snapshot() -> Dictionary:
 	return {"clock": GameClock.clock.to_dict(), "weather": GameClock.weather.to_dict(),
-		"player": player.to_dict(), "world": world.snapshot()}
+		"player": player.to_dict(), "world": world.snapshot(), "tracks": world.tracks.to_array()}
 
 func save_to(slot: String) -> Error:
 	var err := SaveGame.write(slot, snapshot())
@@ -183,6 +213,20 @@ func _on_player_died() -> void:
 	player.respawn()
 	camera.reset_smoothing()
 	hud.fade_to(0.0, 2.2)
+
+func _preview_fish(fishing: Fishing) -> void:
+	player.receive(ItemStack.make("fishing_pole"))
+	player.hold(player.backpack.find(func(s): return s.def.has("rod")))
+	player.facing = 1
+	player.global_position = Vector2(Terrain.CREEK_X - Terrain.CREEK_HALF - 30.0, world.terrain.height_at(Terrain.CREEK_X - Terrain.CREEK_HALF - 30.0) - 4.0)
+	world.update_focus(player.global_position.x)
+	player.aim_override = Vector2(Terrain.CREEK_X, 0)
+	fishing.press()
+	await get_tree().create_timer(0.8).timeout
+	fishing.force_bite("trout")
+	await get_tree().create_timer(0.1).timeout
+	fishing.press()
+	fishing.fight.progress = 0.5
 
 func _args() -> Dictionary:
 	var out := {}

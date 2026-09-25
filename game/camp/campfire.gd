@@ -142,6 +142,8 @@ func _action(p: Player) -> Array:
 		return ["Take pot", _take_pot.bind(p)]
 	if pot == null and p.held and p.held.def.has("pot"):
 		return ["Set pot on the fire", _set_pot.bind(p)]
+	if lit and p.held and p.held.def.cooks_into != "":
+		return ["Cook %s" % p.held.def.name.to_lower(), _cook.bind(p)]
 	var f := _fuel_from(p)
 	var can_feed := not f.is_empty() and fuel < MAX_FUEL
 	if can_feed and (p.carrying or p.held):
@@ -180,6 +182,12 @@ func _set_pot(p: Player) -> void:
 	boil = 0.0
 	if pot.water <= 0.001:
 		p.message.emit("The pot is empty. Fill it at the creek first.")
+
+func _cook(p: Player) -> void:
+	var raw := p.held
+	p.held = null # it's on the fire now
+	p.work(3.0, 0.3, "Cooking " + raw.def.name.to_lower(), func():
+		p.receive(ItemStack.make(raw.def.cooks_into, GameClock.clock.hours, raw.count)))
 
 func _light_fire(p: Player) -> void:
 	var l := _lighter(p)

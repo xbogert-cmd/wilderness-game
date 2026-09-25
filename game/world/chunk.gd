@@ -4,6 +4,7 @@ class_name Chunk extends Node2D
 const STEP := 40.0
 const DEPTH := 2400.0
 const WATER_SHADER := preload("res://game/world/water.gdshader")
+const MUD := Color("3f3226")
 
 var index := 0
 var world: World
@@ -33,7 +34,7 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	fill.color = Palette.SOIL_DEEP
 	fill.z_index = 1
 	add_child(fill)
-	add_child(_soil_bands(surface))
+	add_child(_soil_bands(surface, terrain))
 
 	var tree_mat := SceneryArt.material(0.0, 14.0)
 	var low_mat := SceneryArt.material(0.0, 6.0)
@@ -43,7 +44,7 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 		_creek(terrain)
 
 ## Topsoil strip that fades into deep earth, so the ground cross-section reads as depth, not a slab.
-func _soil_bands(surface: PackedVector2Array) -> Polygon2D:
+func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
 	var rows := [[0.0, Palette.GRASS.darkened(0.25)], [14.0, Palette.SOIL_TOP], [90.0, Palette.SOIL_TOP.lerp(Palette.SOIL_DEEP, 0.55)], [320.0, Palette.SOIL_DEEP]]
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
@@ -52,7 +53,8 @@ func _soil_bands(surface: PackedVector2Array) -> Polygon2D:
 	for r in rows:
 		for p in surface:
 			pts.append(p + Vector2(0, r[0]))
-			cols.append(r[1])
+			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x)
+			cols.append(MUD if mud else r[1])
 	for row in rows.size() - 1:
 		for i in n - 1:
 			var a := row * n + i
@@ -110,7 +112,9 @@ func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: flo
 	var x := x0
 	while x < x1:
 		if terrain.water_surface_at(x) == INF:
-			if rng.randf() < 0.7:
+			if terrain.soft_at(x) and rng.randf() < 0.85:
+				pass # bare mud
+			elif rng.randf() < 0.7:
 				back_x.append(x); back_y.append(terrain.height_at(x))
 			elif rng.randf() < 0.5:
 				front_x.append(x); front_y.append(terrain.height_at(x) + 3)
