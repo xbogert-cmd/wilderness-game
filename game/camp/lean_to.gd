@@ -36,6 +36,9 @@ func covers(x: float) -> bool:
 func interact_pos() -> Vector2:
 	return global_position
 
+func prompt_point(_p: Player) -> Vector2:
+	return global_position + Vector2(0, -215)
+
 func interact_label(p: Player) -> String:
 	var q := p.sleep_quality()
 	return "Sleep  (%s rest%s)" % ["good" if q > 0.75 else ("fair" if q > 0.5 else "poor"), "" if p.backpack.count_of("sleeping_bag") > 0 else ", no sleeping bag"]

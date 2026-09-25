@@ -33,6 +33,9 @@ func girth() -> float:
 func chop_distance(p: Player) -> float:
 	return absf(p.global_position.x - global_position.x)
 
+func prompt_point(p: Player) -> Vector2:
+	return Vector2(global_position.x, p.global_position.y - 235.0)
+
 func chop_label(_p: Player) -> String:
 	return "Chop tree"
 

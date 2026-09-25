@@ -32,6 +32,7 @@ func _process(delta: float) -> void:
 	for m in _msgs:
 		m[1] -= delta
 	_msgs = _msgs.filter(func(m): return m[1] > 0.0).slice(-4)
+	_highlight()
 	queue_redraw()
 
 func _text(pos: Vector2, s: String, size := 16, col := TEXT, center := false) -> void:
@@ -79,20 +80,15 @@ func _draw() -> void:
 			hand += "  · edge %d%%" % int(player.held.sharpness * 100.0)
 	_text(Vector2(GAP * 4 + 30, size.y - 40), hand, 15, Color(TEXT, 0.85))
 
-	# Context prompt above the player's head.
-	var lines: PackedStringArray = []
-	if player.working > 0.0:
-		lines.append(player.work_label + "…")
-	elif not (player.sleeping or player.dead):
-		if player.chop_target:
-			lines.append("[Click] " + player.chop_target.chop_label(player))
-		if player.focus:
-			lines.append("[E] " + player.focus.interact_label(player))
-		if player.carrying == null and _log_nearby():
-			lines.append("[F] Lift log")
-	var head := player.get_global_transform_with_canvas().origin + Vector2(0, -215.0 * player.get_viewport().get_camera_2d().zoom.y)
-	for k in lines.size():
-		_text(head + Vector2(0, (k - lines.size() + 1) * 20.0), lines[k], 15, TEXT, true)
+	# Interaction popups: a key-cap plus action, floating over the thing you'd act on.
+	var placed: Array[Vector2] = []
+	for pr in _prompts():
+		var at: Vector2 = get_viewport().get_canvas_transform() * pr[0]
+		for q in placed: # keep stacked prompts from overlapping
+			if at.distance_to(q) < 30.0:
+				at.y = q.y - 34.0
+		placed.append(at)
+		_popup(at, pr[1], pr[2])
 
 	if player.sleeping: # letterbox + clock while time runs fast
 		var bar := size.y * 0.09
@@ -111,11 +107,75 @@ func _draw_fade() -> void:
 	if fade > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, fade))
 
-func _log_nearby() -> bool:
-	for l in get_tree().get_nodes_in_group("log"):
-		if l.holder == null and absf(l.global_position.x - player.global_position.x) < l.length() * 0.5 + 60.0:
-			return true
-	return false
+## [world anchor, action (or ""), text] for everything the player could do right now.
+func _prompts() -> Array:
+	if player.working > 0.0:
+		return [[player.global_position + Vector2(0, -210), "", player.work_label + "…"]]
+	if player.sleeping or player.dead:
+		return []
+	var out := []
+	if player.chop_target:
+		out.append([_anchor(player.chop_target), "use", player.chop_target.chop_label(player)])
+	if player.focus:
+		out.append([_anchor(player.focus), "interact", player.focus.interact_label(player)])
+	if player.carrying:
+		out.append([player.global_position + Vector2(0, -210), "lift", "Set down the %s log" % player.carrying.size])
+	else:
+		var lg := player.nearest_log()
+		if lg:
+			out.append([lg.global_position + Vector2(0, -50), "lift", ("Drag" if lg.dragged() else "Lift") + " %s log" % lg.size])
+	return out
+
+func _anchor(n: Node) -> Vector2:
+	if n.has_method("prompt_point"):
+		return n.prompt_point(player)
+	if n.has_method("interact_pos"):
+		return n.interact_pos() + Vector2(0, -80)
+	return n.global_position + Vector2(0, -80)
+
+var _cap := _box(Color(0.93, 0.9, 0.82), Color(0.1, 0.1, 0.1, 0.9), 5)
+var _panel := _box(Color(0.06, 0.07, 0.06, 0.72), Color(1, 1, 1, 0.12), 6)
+
+static func _box(bg: Color, border: Color, radius: int) -> StyleBoxFlat:
+	var b := StyleBoxFlat.new()
+	b.bg_color = bg
+	b.border_color = border
+	b.set_border_width_all(1)
+	b.set_corner_radius_all(radius)
+	return b
+
+func _popup(at: Vector2, action: String, text: String) -> void:
+	var fs := 15
+	var tw := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var key := Keys.label(action) if action != "" else ""
+	var kw := maxf(26.0, _font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 12.0) if key != "" else 0.0
+	var w := kw + (8.0 if key != "" else 0.0) + tw + 20.0
+	var r := Rect2(at - Vector2(w * 0.5, 16.0), Vector2(w, 32.0))
+	draw_style_box(_panel, r)
+	var x := r.position.x + 8.0
+	if key != "":
+		var bob := sin(Time.get_ticks_msec() * 0.006) * 1.2
+		var cap := Rect2(Vector2(x, r.position.y + 4.0 + bob), Vector2(kw, 24.0))
+		draw_style_box(_cap, cap)
+		draw_string(_font, cap.position + Vector2(0, 17), key, HORIZONTAL_ALIGNMENT_CENTER, kw, 13, Color(0.1, 0.1, 0.1))
+		x += kw + 8.0
+	draw_string(_font, Vector2(x, r.position.y + 21.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, TEXT)
+
+## The thing you'd act on glows softly, so you know what the popup refers to.
+var _lit: Array = []
+func _highlight() -> void:
+	var want := []
+	if not (player.sleeping or player.dead or player.working > 0.0):
+		for n in [player.focus, player.chop_target, player.nearest_log() if player.carrying == null else null]:
+			if n != null and n is CanvasItem and n not in want:
+				want.append(n)
+	for n in _lit:
+		if is_instance_valid(n) and n not in want:
+			n.modulate = Color.WHITE
+	var k := 1.18 + 0.12 * sin(Time.get_ticks_msec() * 0.005)
+	for n in want:
+		n.modulate = Color(k, k, k * 0.92)
+	_lit = want
 
 func _icon(key: String, c: Vector2, col: Color) -> void:
 	match key:

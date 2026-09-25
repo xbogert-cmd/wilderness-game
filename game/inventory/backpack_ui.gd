@@ -174,7 +174,7 @@ func _refresh() -> void:
 			_button("Use on %s" % d.treats, func(): _use_now())
 		_button("Drop", func(): player.drop_stack(selected); selected = null)
 	else:
-		_info.text = "Drag to rearrange · R rotates while dragging\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrag off the panel to drop · click to select"
+		_info.text = "Drag to rearrange · %s rotates while dragging" % Keys.label("rotate_item") + "\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrag off the panel to drop · click to select"
 	_actions.add_child(HSeparator.new())
 	var head := Label.new()
 	head.text = "Recipes"
@@ -247,7 +247,7 @@ func _draw() -> void:
 		var r := _slot_rect(i)
 		draw_rect(r, Color(1, 1, 1, 0.06))
 		draw_rect(r, Color(1, 1, 1, 0.2), false, 1.5)
-		_text(r.position + Vector2(4, -6), "Strap %d (key %d)" % [i + 1, i + 1], 13)
+		_text(r.position + Vector2(4, -6), "Strap %d (%s)" % [i + 1, Keys.label("slot_%d" % (i + 1))], 13)
 		var s: ItemStack = player.backpack.attachments[i]
 		if s and not (_drag and _drag.moved and _drag.stack == s):
 			_item(s, r.position + Vector2((r.size.x - CELL) * 0.5, 6), false)

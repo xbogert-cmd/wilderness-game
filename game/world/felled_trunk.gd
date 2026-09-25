@@ -57,6 +57,10 @@ func chop_distance(p: Player) -> float:
 	var hi := maxf(base_x, base_x + dir * length)
 	return 0.0 if x >= lo and x <= hi else minf(absf(x - lo), absf(x - hi))
 
+func prompt_point(p: Player) -> Vector2:
+	var x := _mark_x() if branches == 0 else clampf(p.global_position.x + p.facing * 60.0, minf(base_x, base_x + dir * length), maxf(base_x, base_x + dir * length))
+	return Vector2(x, world.terrain.height_at(x) - girth - 60.0)
+
 func chop_label(p: Player) -> String:
 	if branches > 0:
 		return "Strip branches (%d left)" % branches

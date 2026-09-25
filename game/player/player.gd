@@ -328,17 +328,26 @@ func drop_stack(s: ItemStack) -> void:
 
 # --- Oversized objects -------------------------------------------------------
 
+func nearest_log() -> WorldLog:
+	var best: WorldLog = null
+	var best_d := INF
+	for l in get_tree().get_nodes_in_group("log"):
+		var d := absf(l.global_position.x - global_position.x)
+		if l.holder == null and not l.is_queued_for_deletion() and d < l.length() * 0.5 + 60.0 \
+				and absf(l.global_position.y - global_position.y) < 120.0 and d < best_d:
+			best = l
+			best_d = d
+	return best
+
 func toggle_carry() -> void:
 	if carrying:
 		drop_carried()
 		return
-	for l in get_tree().get_nodes_in_group("log"):
-		if l.holder == null and absf(l.global_position.x - global_position.x) < l.length() * 0.5 + 60.0 \
-				and absf(l.global_position.y - global_position.y) < 120.0:
-			stow() # both hands on the log
-			carrying = l
-			l.pick_up(self)
-			return
+	var l := nearest_log()
+	if l:
+		stow() # both hands on the log
+		carrying = l
+		l.pick_up(self)
 
 func drop_carried() -> void:
 	if carrying == null:
