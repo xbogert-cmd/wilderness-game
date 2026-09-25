@@ -163,6 +163,9 @@ func _refresh() -> void:
 			_button("Hold in hands", func(): player.hold(selected))
 		if d.has("food"):
 			_button("Eat", func(): _use_now())
+		var creek := Creek.reachable(player)
+		if d.capacity > 0.0 and creek:
+			_button("Fill at the creek", func(): creek.fill(player, selected); _refresh())
 		if d.capacity > 0.0 and selected.water > 0.001:
 			_button("Drink", func(): _use_now())
 			_button("Empty it out", func(): selected.water = 0.0)

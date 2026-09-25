@@ -276,7 +276,11 @@ func use_held() -> void:
 		_consume_one()
 	elif d.capacity > 0.0:
 		if held.water <= 0.001:
-			message.emit("The %s is empty." % d.name.to_lower())
+			var creek := Creek.reachable(self)
+			if creek:
+				creek.fill(self, held)
+			else:
+				message.emit("The %s is empty. Fill it at the creek." % d.name.to_lower())
 			return
 		var sip := minf(ItemStack.SIP, held.water)
 		held.water -= sip

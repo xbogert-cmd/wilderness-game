@@ -200,6 +200,16 @@ func _run() -> void:
 	player.hold(pot)
 	await teleport(Terrain.CREEK_X)
 	var creek := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is Creek)[0] as Creek
+	check(Creek.reachable(player) == creek, "pack sees the creek in reach (Fill button)")
+	var spare: ItemStack = player.backpack.find(func(s): return s.def.id == "water_bottle")
+	var spare_was := [spare.water, spare.water_clean]
+	spare.water = 0.0
+	player.hold(spare)
+	player.use_held()
+	check(spare.water > 0.5 and not spare.water_clean, "click with an empty bottle at the creek fills it")
+	spare.water = spare_was[0]
+	spare.water_clean = spare_was[1]
+	player.hold(pot)
 	creek.interact(player)
 	check(pot.water > 1.0 and not pot.water_clean, "pot filled with dirty creek water (%.2f L)" % pot.water)
 	await teleport(fire_x)
