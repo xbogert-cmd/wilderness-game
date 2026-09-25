@@ -18,6 +18,12 @@ All visuals are currently **procedural placeholders** drawn in code with the loc
 | Sky, clouds, stars | `game/world/sky.gdshader` | Keep (shader), tune | Painted cloud sheets blended into the shader |
 | Player | `PlayerRig` (drawn shapes) | Temporary | Cutout sprite parts on the same joints. See `docs/art/player_reference.md` |
 | HUD meters | `Hud` (drawn) | Keep, restyle | Hand-drawn icons |
+| Backpack item tiles | `BackpackUI._item` (colour blocks + name) | Temporary | Painted top-down item icons, one per cell footprint |
+| Items in hand | `PlayerRig._held_item` | Temporary | Sprites attached to the hand joint |
+| Logs, felled trunks, stumps | `WorldLog`, `FelledTrunk`, `ChoppableTree._stump` | Temporary | Bark-textured sprites with cut-end rings |
+| Campfire (stones, wood, flames) | `Campfire._draw` + particles + light | Temporary art, keep the light and particles | Animated flame sprite sheet |
+| Lean-to | `LeanTo._draw` | Temporary | Painted structure in build stages (frame → roof → bedding) |
+| Blueprint ghosts | `Blueprint`, `BuildMode` | Keep, restyle | Chalk-line style outlines |
 
 ## Audio
 

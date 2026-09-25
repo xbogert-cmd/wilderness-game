@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cook_pot"
+name = "Cook Pot"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)])
+weight = 0.7
+color = Color(0.435, 0.435, 0.416, 1)
+tags = PackedStringArray("container", "pot")
+capacity = 1.5
+description = "Holds 1.5 L. Set it on a fire to boil water clean."

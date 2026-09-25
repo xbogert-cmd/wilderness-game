@@ -9,6 +9,11 @@ const ZOOM_RUN := 0.86
 var target: Player
 var zoom_override := 0.0 ## debug close-ups
 var _look := 0.0
+var _shake := 0.0
+
+## Reserved for big physical moments (a tree coming down), never routine actions.
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
 
 func _ready() -> void:
 	position_smoothing_enabled = true
@@ -25,3 +30,5 @@ func _process(delta: float) -> void:
 	global_position = target.global_position + Vector2(_look, -HEIGHT)
 	var z := ZOOM_RUN if target.running else ZOOM_WALK
 	zoom = zoom.lerp(Vector2(z, z), 1.0 - exp(-delta * 0.7))
+	offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
+	_shake = move_toward(_shake, 0.0, delta * 20.0)

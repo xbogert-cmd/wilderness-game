@@ -15,8 +15,17 @@ godot
 | Shift | Run (uses stamina) |
 | Ctrl | Crouch |
 | Space | Hop |
+| Tab | Backpack (pauses the game): drag to pack, R rotates while dragging |
+| 1 / 2 | Draw the tool strapped outside the pack (hatchet, knife), or put it back |
+| Left click | Use what's in hand: chop, eat, drink, treat. With a felled trunk, aim at a length mark |
+| E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire |
+| F | Lift or set down a log. Short and medium logs ride on the shoulder; long logs drag |
+| Q | Put away what's in hand |
+| B | Build menu (campfire, lean-to), then click to place a blueprint and right-click to cancel |
 | F3 | Debug overlay |
-| W/S, E, F, Q, 1/2, R, Tab, Z, Esc, F5, mouse | Bound; the features behind them arrive in later milestones |
+| W/S, Z, Esc, F5 | Bound; the features behind them arrive in later milestones |
+
+**First camp:** gather fallen sticks (E), press B to place a campfire blueprint and deliver 3 sticks, build it, then light it with E. For a lean-to, fell a tree with the hatchet, strip its branches, cut 2 long and 4 medium logs at the marks, and haul them to a lean-to blueprint. To make water safe, fill the cook pot at the creek, set it on a lit fire until it boils, take it back, and pour it into your bottle from the backpack.
 
 ## Checks
 ```bash
@@ -24,6 +33,7 @@ godot --headless --import                 # parse and import check
 godot --headless -s tests/run.gd          # unit tests (exit code = failure count)
 godot --headless --quit-after 600         # smoke run
 godot --headless -- --tour                # walk every chunk and back, verify streaming
+godot --headless --fixed-fps 60 -- --scenario   # full camp loop end to end (~3 min)
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
 Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`.

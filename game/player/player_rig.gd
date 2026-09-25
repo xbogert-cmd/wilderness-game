@@ -36,7 +36,7 @@ func _process(delta: float) -> void:
 		for o in [0.0, 0.5]: # a foot plants when its cycle wraps back to the start of stance
 			if fposmod(prev + o, 1.0) > fposmod(phase + o, 1.0):
 				body.footsteps.step()
-	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching else 0.0)
+	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching or body.working > 0.0 else 0.0) + (0.12 if body.carrying else 0.0)
 	_lean = lerpf(_lean, want_lean, 1.0 - exp(-delta * 8.0))
 	queue_redraw()
 
@@ -76,7 +76,8 @@ func _draw() -> void:
 	var feet := [_foot(0.0, moving, airborne), _foot(0.5, moving, airborne)]
 
 	# Hip height: authored bob and crouch, then drop just enough for the lower foot to reach.
-	var want: float = -HIP_H - (cos(phase * TAU * 2.0) * _gait.bob if moving else 0.0) + (30.0 if body.crouching else 0.0)
+	var kneel := 38.0 if body.working > 0.0 else (30.0 if body.crouching else 0.0)
+	var want: float = -HIP_H - (cos(phase * TAU * 2.0) * _gait.bob if moving else 0.0) + kneel
 	var reach := (THIGH + SHIN) * 0.985
 	for f in feet:
 		var dx: float = f.x
@@ -96,7 +97,13 @@ func _draw() -> void:
 	var arm_up := 0.5 if body.wade_depth > 30.0 else 0.0
 
 	var back := 0.72
-	_arm(shoulder, phase, swing, elbow, arm_up, Palette.JACKET.darkened(1.0 - back), Palette.SKIN.darkened(1.0 - back))
+	var back_sleeve := Palette.JACKET.darkened(1.0 - back)
+	var back_skin := Palette.SKIN.darkened(1.0 - back)
+	var targets := _hand_targets(hip, shoulder) # [near, far] or []
+	if targets:
+		_arm_to(shoulder, targets[1], back_sleeve, back_skin)
+	else:
+		_arm(shoulder, phase, swing, elbow, arm_up, back_sleeve, back_skin)
 	_leg(hip, feet[1], Palette.PANTS.darkened(1.0 - back), Palette.BOOTS.darkened(0.3), airborne)
 	_pack(hip, shoulder)
 	draw_circle(hip, 10.0, Palette.PANTS)
@@ -104,7 +111,41 @@ func _draw() -> void:
 	_torso(hip, shoulder)
 	draw_circle(head, 10.5, Palette.SKIN)
 	_hat(head)
-	_arm(shoulder, phase + 0.5, swing, elbow, arm_up, Palette.JACKET, Palette.SKIN)
+	var hand: Array # [hand, forearm direction]
+	if body.swing >= 0.0:
+		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, Palette.JACKET, Palette.SKIN)
+	elif targets:
+		hand = _arm_to(shoulder, targets[0], Palette.JACKET, Palette.SKIN)
+	else:
+		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, Palette.JACKET, Palette.SKIN)
+	if body.held:
+		_held_item(body.held, hand[0], hand[1])
+
+## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
+func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
+	if body.carrying:
+		if body.carrying.dragged():
+			var g := _to_local_space(body.carrying.grip())
+			return [g, g + Vector2(-4, 3)]
+		if body.carrying.size == "short":
+			return [shoulder + Vector2(18, 26), shoulder + Vector2(10, 30)]
+		return [shoulder + Vector2(8, -16), shoulder + Vector2(-6, -16)]
+	if body.working > 0.0:
+		var w := Vector2(sin(_time * 7.0) * 6.0, cos(_time * 7.0) * 4.0)
+		return [hip + Vector2(30, -8) + w, hip + Vector2(24, -4) - w]
+	return []
+
+func _to_local_space(world_point: Vector2) -> Vector2:
+	var d := world_point - body.global_position
+	return Vector2(d.x * body.facing, d.y)
+
+## Chop: wind up overhead, strike down-forward, recover. Angle 0 = forward, PI/2 = down.
+func _swing_angle(t: float) -> float:
+	if t < 0.45:
+		return lerpf(1.2, -2.3, smoothstep(0.0, 1.0, t / 0.45))
+	if t < 0.62:
+		return lerpf(-2.3, 0.75, (t - 0.45) / 0.17)
+	return lerpf(0.75, 1.2, (t - 0.62) / 0.38)
 
 func _leg(hip: Vector2, ankle: Vector2, pants: Color, boot: Color, airborne: bool) -> void:
 	var knee := ik(hip, ankle, THIGH, SHIN, 1.0)
@@ -115,13 +156,45 @@ func _leg(hip: Vector2, ankle: Vector2, pants: Color, boot: Color, airborne: boo
 	var t := Transform2D(slope, end)
 	draw_colored_polygon(t * PackedVector2Array([Vector2(-7, -3), Vector2(5, -3), Vector2(17, 5), Vector2(17, 8), Vector2(-8, 8)]), boot)
 
-func _arm(shoulder: Vector2, p: float, swing: float, bend: float, up: float, sleeve: Color, skin: Color) -> void:
-	var a := PI / 2.0 - cos(p * TAU) * swing - up - _lean * 0.5
+func _arm(shoulder: Vector2, p: float, swing: float, bend: float, up: float, sleeve: Color, skin: Color) -> Array:
+	return _arm_angle(shoulder, PI / 2.0 - cos(p * TAU) * swing - up - _lean * 0.5, bend, sleeve, skin)
+
+func _arm_angle(shoulder: Vector2, a: float, bend: float, sleeve: Color, skin: Color) -> Array:
 	var elbow := shoulder + Vector2.from_angle(a) * UPPER_ARM
 	var hand := elbow + Vector2.from_angle(a - bend) * FOREARM
+	return _draw_arm(shoulder, elbow, hand, sleeve, skin)
+
+func _arm_to(shoulder: Vector2, target: Vector2, sleeve: Color, skin: Color) -> Array:
+	var elbow := ik(shoulder, target, UPPER_ARM, FOREARM, -1.0)
+	var hand := elbow + (target - elbow).limit_length(FOREARM)
+	return _draw_arm(shoulder, elbow, hand, sleeve, skin)
+
+func _draw_arm(shoulder: Vector2, elbow: Vector2, hand: Vector2, sleeve: Color, skin: Color) -> Array:
 	_limb(shoulder, elbow, 11.0, 9.5, sleeve)
 	_limb(elbow, hand, 9.5, 8.0, sleeve)
 	draw_circle(hand, 5.0, skin)
+	return [hand, (hand - elbow).normalized()]
+
+## The held object, drawn in the near hand along the forearm.
+func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
+	var n := Vector2(-dir.y, dir.x) # leading side during a downward strike
+	var c := s.def.color
+	match s.def.id:
+		"axe":
+			var tip := hand + dir * 40.0
+			draw_line(hand - dir * 6.0, tip, Color("8a6a4a"), 4.0)
+			draw_colored_polygon(PackedVector2Array([tip - dir * 2.0, tip - dir * 14.0, tip - dir * 16.0 + n * 16.0, tip + n * 17.0]), Color("9aa0a6"))
+		"knife":
+			draw_line(hand, hand + dir * 8.0, Color("3a2a20"), 4.0)
+			draw_colored_polygon(PackedVector2Array([hand + dir * 8.0 + n * 2.5, hand + dir * 24.0, hand + dir * 8.0 - n * 2.5]), Color("c8ccd0"))
+		"cook_pot":
+			draw_rect(Rect2(hand + Vector2(-2, 2), Vector2(24, 18)), c)
+		"sticks":
+			for i in 3:
+				draw_line(hand + Vector2(-14, -2 + i * 4), hand + Vector2(20, -6 + i * 5), c, 3.0)
+		_:
+			var sz := Vector2(s.def.size()) * Vector2(6, 9)
+			draw_rect(Rect2(hand + Vector2(-sz.x * 0.5, -sz.y * 0.3), sz), c)
 
 ## Jacket tapers from shoulders to a belted waist, ending at the hip so the legs keep their length.
 func _torso(hip: Vector2, shoulder: Vector2) -> void:

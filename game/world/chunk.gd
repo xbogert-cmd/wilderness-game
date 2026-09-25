@@ -6,8 +6,9 @@ const DEPTH := 2400.0
 const WATER_SHADER := preload("res://game/world/water.gdshader")
 
 var index := 0
+var world: World
 
-func build(terrain: Terrain, world_seed: int) -> void:
+func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([world_seed, index])
 	var x0 := index * Terrain.CHUNK_W - STEP # overlap one step so seams never snag
@@ -36,7 +37,7 @@ func build(terrain: Terrain, world_seed: int) -> void:
 
 	var tree_mat := SceneryArt.material(0.0, 14.0)
 	var low_mat := SceneryArt.material(0.0, 6.0)
-	_scatter_trees(terrain, rng, tree_mat, low_mat)
+	_scatter_trees(terrain, rng, tree_mat, low_mat, st)
 	_grass(terrain, rng, low_mat, x0, x1)
 	if _contains(Terrain.CREEK_X):
 		_creek(terrain)
@@ -69,24 +70,36 @@ func _contains(x: float) -> bool:
 func _near_creek(x: float, margin: float) -> bool:
 	return absf(x - Terrain.CREEK_X) < Terrain.CREEK_HALF + margin
 
-func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, low_mat: Material) -> void:
+func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, low_mat: Material, st: Dictionary) -> void:
 	var x := index * Terrain.CHUNK_W + rng.randf_range(0, 300)
 	var end := (index + 1) * Terrain.CHUNK_W
+	var n := 0
 	while x < end:
 		if not _near_creek(x, 120.0) and x > 400.0 and x < Terrain.WORLD_W - 400.0:
+			n += 1
 			var roll := rng.randf()
-			var node: Node2D
-			if roll < 0.45:
-				node = SceneryArt.conifer(rng, rng.randf_range(900, 1500), Palette.FIR_DARK, Palette.FIR_LIGHT, Palette.BARK, mat)
-			elif roll < 0.75:
-				node = SceneryArt.broadleaf(rng, rng.randf_range(650, 1000), Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT, Palette.ASPEN_BARK, mat)
+			var pos := Vector2(x, terrain.height_at(x) + 6)
+			# Art is always generated so the rng sequence (and the rest of the chunk) stays stable.
+			if roll < 0.75:
+				var conifer := roll < 0.45
+				var h := rng.randf_range(900, 1500) if conifer else rng.randf_range(650, 1000)
+				var art := SceneryArt.conifer(rng, h, Palette.FIR_DARK, Palette.FIR_LIGHT, Palette.BARK, mat) if conifer \
+					else SceneryArt.broadleaf(rng, h, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT, Palette.ASPEN_BARK, mat)
+				var tree := ChoppableTree.new()
+				tree.setup(self, n, h, conifer, art, st.felled.has(str(n)))
+				tree.position = pos
+				tree.z_index = -10
+				add_child(tree)
 			elif roll < 0.9:
-				node = SceneryArt.bush(rng, rng.randf_range(90, 170), Palette.BUSH, low_mat)
+				var w := rng.randf_range(90, 170)
+				var bush := BerryBush.new()
+				bush.setup(self, n, SceneryArt.bush(rng, w, Palette.BUSH, low_mat), w, rng.randf() < 0.4, st.picked.get(str(n), -INF))
+				bush.position = pos
+				add_child(bush)
 			else:
-				node = SceneryArt.rock(rng, rng.randf_range(60, 150), low_mat)
-			node.position = Vector2(x, terrain.height_at(x) + 6)
-			node.z_index = -10 if roll < 0.75 else 0
-			add_child(node)
+				var rock := SceneryArt.rock(rng, rng.randf_range(60, 150), low_mat)
+				rock.position = pos
+				add_child(rock)
 		x += rng.randf_range(180, 520)
 
 func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: float, x1: float) -> void:
@@ -129,3 +142,6 @@ func _creek(terrain: Terrain) -> void:
 	water.material = m
 	water.z_index = 7 # over the player's submerged legs
 	add_child(water)
+	var creek := Creek.new()
+	creek.terrain = terrain
+	add_child(creek)

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "water_bottle"
+name = "Water Bottle"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1)])
+weight = 0.2
+color = Color(0.310, 0.561, 0.659, 1)
+tags = PackedStringArray("container")
+capacity = 1.0
+description = "Holds 1 L. Clean and dirty water never mix."

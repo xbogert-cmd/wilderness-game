@@ -63,8 +63,19 @@ func _ready() -> void:
 	ui.layer = 10
 	add_child(ui)
 	var hud := Hud.new()
-	hud.cond = player.cond
+	hud.player = player
 	ui.add_child(hud)
+	var build_menu := VBoxContainer.new()
+	build_menu.position = Vector2(60, 120)
+	ui.add_child(build_menu)
+	var build := BuildMode.new()
+	build.player = player
+	build.world = world
+	build.menu = build_menu
+	add_child(build)
+	var pack_ui := BackpackUI.new()
+	pack_ui.player = player
+	ui.add_child(pack_ui)
 	var dbg := DebugOverlay.new()
 	dbg.player = player
 	dbg.world = world
@@ -80,9 +91,17 @@ func _ready() -> void:
 		player.auto_run = true
 	if args.has("zoom"):
 		camera.zoom_override = float(args.zoom)
+	if args.has("pack"):
+		pack_ui.toggle.call_deferred()
 	if args.has("debug"):
 		dbg.visible = true
-	if args.has("tour"):
+	if args.has("scenario"):
+		var sc := Scenario.new()
+		sc.player = player
+		sc.world = world
+		sc.shot = args.get("shot", "")
+		add_child(sc)
+	elif args.has("tour"):
 		_tour()
 	elif args.has("shot"):
 		_shot(args.shot)
