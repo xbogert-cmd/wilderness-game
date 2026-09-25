@@ -128,7 +128,7 @@ func _physics_process(delta: float) -> void:
 	var speed := CROUCH if crouching else (RUN if running else WALK)
 	if bow_draw >= 0.0:
 		speed *= 0.4
-	speed *= cond.move_speed_mult() * (1.0 - clampf(wade_depth / 130.0, 0.0, 0.65)) * backpack.encumbrance_mult()
+	speed *= cond.move_speed_mult() * (1.0 - clampf(wade_depth / 130.0, 0.0, 0.65)) * backpack.encumbrance_mult() * snow_mult()
 	if carrying:
 		speed *= carrying.speed_mult()
 	velocity.x = move_toward(velocity.x, dir * speed, ACCEL * delta)
@@ -163,6 +163,11 @@ func _on_landed(vy: float) -> void:
 		cond.injure("legs", "sprain", 0.3 + 0.6 * k)
 		cond.health -= 10.0 + 30.0 * k
 		message.emit("You land badly. Your ankle is sprained.")
+
+## Deep snow drags at every step: knee-deep (50 cm) costs about 40% of your pace.
+func snow_mult() -> float:
+	var cm := GameClock.weather.snow_cm if wade_depth <= 0.0 else 0.0
+	return 1.0 - clampf(cm / 125.0, 0.0, 0.45)
 
 ## How far the player's activity carries: 0 silent, ~1 loud. Animals listen for this.
 func noise() -> float:
@@ -209,7 +214,7 @@ func _on_tick(dh: float) -> void:
 		"sleep_quality": sleep_quality() if sleeping else 1.0,
 		"insulation_c": GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0,
 		"air_c": w.air_temp_c(GameClock.clock),
-		"precip": w.precip,
+		"precip": w.rain() + w.snowfall() * 0.25, # snow wets you far less than rain
 		"sheltered": world.sheltered_at(global_position.x),
 		"heat": world.heat_at(global_position + Vector2(0, -60)),
 		"exertion": exertion(),
@@ -303,8 +308,11 @@ func use_held() -> void:
 	elif d.capacity > 0.0:
 		if held.water <= 0.001:
 			var creek := Creek.reachable(self)
-			if creek:
+			if creek and not (Creek.frozen() and not creek.hole_open()):
 				creek.fill(self, held)
+			elif d.has("pot") and GameClock.weather.snow_cm > 5.0 and wade_depth <= 0.0:
+				held.add_water(d.capacity, false)
+				message.emit("You pack the pot with snow. Melt it on the fire.")
 			else:
 				message.emit("The %s is empty. Fill it at the creek." % d.name.to_lower())
 			return

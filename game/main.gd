@@ -1,6 +1,6 @@
 extends Node2D
 ## Composes the slice. Command-line hooks (after `--`) for automated checks:
-##   --hour=H  --weather=clear|overcast|drizzle|rain  --x=WORLD_X
+##   --hour=H  --day=D  --weather=clear|overcast|drizzle|rain  --snow=CM  --ice=0..1  --x=WORLD_X
 ##   --shot=path.png   capture after settling, then quit
 ##   --tour            teleport across every chunk, verify streaming, then quit
 ##   --load=SLOT       start from a save slot (1, 2, 3, auto)
@@ -12,6 +12,13 @@ const AUTOSAVE_SECONDS := 300.0
 var hud: Hud
 var tips: Tips
 var _autosave_t := 0.0
+var _season := -1
+const SEASON_NOTES := [
+	"Spring. Meltwater in the creek, and the aspens are budding.",
+	"Summer. Long days in the valley.",
+	"Autumn. The aspens are turning, and the nights are getting cold.",
+	"Winter has come to the valley. Keep the fire fed and your water from freezing.",
+]
 
 var world: World
 var player: Player
@@ -138,8 +145,14 @@ func _ready() -> void:
 
 	if args.has("hour") and not save:
 		GameClock.clock.hours = float(args.hour)
+	if args.has("day") and not save:
+		GameClock.clock.hours += 24.0 * float(args.day)
 	if args.has("weather"):
 		GameClock.force_weather(Weather.NAMES.find(args.weather))
+	if args.has("snow"):
+		GameClock.weather.snow_cm = float(args.snow)
+	if args.has("ice"):
+		GameClock.weather.ice = float(args.ice)
 	if args.has("walk"):
 		player.auto_dir = float(args.walk)
 	if args.has("run"):
@@ -152,6 +165,9 @@ func _ready() -> void:
 		world.spawn({"kind": "log", "size": "medium", "x": x - 160.0, "y": world.terrain.height_at(x - 160.0) - 30.0})
 		world.spawn({"kind": "log", "size": "short", "x": x + 620.0, "y": world.terrain.height_at(x + 620.0) - 30.0})
 		player.draw_slot(0)
+	if args.has("piles"): # preview: woodpiles with 1, 3, 6, 7, 10 and 15 logs
+		for k in 6:
+			world.spawn({"kind": "woodpile", "x": x - 700.0 + k * 250.0, "logs": [1, 3, 6, 7, 10, 15][k]})
 	if args.has("deer"): # preview: a small group ahead of the player
 		for k in 3:
 			var a := wildlife.spawn(Wildlife.SPECIES[0], x + 420.0 + k * 170.0, k)
@@ -206,6 +222,11 @@ func _ready() -> void:
 		_shot(args.shot)
 
 func _process(delta: float) -> void:
+	var season := GameClock.clock.season()
+	if season != _season:
+		if _season != -1:
+			player.message.emit(SEASON_NOTES[season])
+		_season = season
 	_autosave_t += delta
 	if _autosave_t >= AUTOSAVE_SECONDS and player.unsafe_reason() == "":
 		_autosave_t = 0.0

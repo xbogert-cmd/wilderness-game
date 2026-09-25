@@ -8,6 +8,11 @@ const MUD := Color("3f3226")
 
 var index := 0
 var world: World
+var _terrain: Terrain
+var _surface: PackedVector2Array
+var _snow: Polygon2D ## lying snow over the ground, behind the player
+var _lip: Polygon2D ## the front edge of it, over the boots, so you wade in it
+var _grass_nodes: Array[Node2D] = []
 
 func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -19,6 +24,8 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	while x <= x1:
 		surface.append(Vector2(x, terrain.height_at(x)))
 		x += STEP
+	_terrain = terrain
+	_surface = surface
 
 	var ground := surface.duplicate()
 	ground.append(Vector2(x1, DEPTH))
@@ -42,6 +49,42 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	_grass(terrain, rng, low_mat, x0, x1)
 	if _contains(Terrain.CREEK_X):
 		_creek(terrain)
+	_snow = _snow_poly(2)
+	_lip = _snow_poly(8)
+
+func _snow_poly(z: int) -> Polygon2D:
+	var p := Polygon2D.new()
+	p.z_index = z
+	p.visible = false
+	add_child(p)
+	return p
+
+## Shows `cm` of lying snow (1 cm = 1 px at 100 px/m). Grass disappears under a real cover.
+func set_snow(cm: float) -> void:
+	_snow.visible = cm > 0.3
+	_lip.visible = cm > 4.0
+	for g in _grass_nodes:
+		g.visible = cm < 10.0
+	if _snow.visible:
+		_band(_snow, maxf(cm, 3.0), 6.0)
+	if _lip.visible:
+		_band(_lip, minf(cm * 0.45, 18.0), 2.0)
+
+func _band(p: Polygon2D, depth: float, below: float) -> void:
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var bottom := PackedVector2Array()
+	for s in _surface:
+		var d := 0.0 if _terrain.water_surface_at(s.x) != INF else depth * (1.0 + 0.15 * sin(s.x * 0.013) + 0.08 * sin(s.x * 0.041))
+		pts.append(s - Vector2(0, d))
+		cols.append(Color(0.94, 0.96, 0.99))
+		bottom.append(s + Vector2(0, below))
+	bottom.reverse()
+	for b in bottom:
+		pts.append(b)
+		cols.append(Color(0.74, 0.8, 0.88))
+	p.polygon = pts
+	p.vertex_colors = cols
 
 ## Topsoil strip that fades into deep earth, so the ground cross-section reads as depth, not a slab.
 func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
@@ -125,6 +168,7 @@ func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: flo
 	var front := SceneryArt.grass(rng, front_x, front_y, 20.0, Palette.GRASS_DRY, mat)
 	front.z_index = 8 # in front of the player's boots
 	add_child(front)
+	_grass_nodes = [back, front]
 
 func _creek(terrain: Terrain) -> void:
 	var s := terrain.water_surface_at(Terrain.CREEK_X)

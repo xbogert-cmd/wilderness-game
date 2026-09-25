@@ -51,4 +51,4 @@ static func describe(slot: String) -> String:
 	var c := Clock.new()
 	c.from_dict(d.clock)
 	var when := Time.get_datetime_string_from_unix_time(int(d.saved_unix), true)
-	return "Day %d, %02d:%02d %s  (saved %s)" % [c.day() + 1, int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60.0), Clock.SEASONS[c.season()], when]
+	return "Day %d, %02d:%02d %s  (saved %s)" % [c.day() + 1, int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60.0), c.season_name(), when]

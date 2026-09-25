@@ -34,7 +34,7 @@ func _build(note := "") -> void:
 	for c in _box.get_children():
 		c.queue_free()
 	var title := Label.new()
-	title.text = "Paused"
+	title.text = "Paused  ·  Day %d, %s" % [GameClock.clock.day() + 1, GameClock.clock.season_name()]
 	title.add_theme_font_size_override("font_size", 24)
 	_box.add_child(title)
 	_button("Resume", toggle)

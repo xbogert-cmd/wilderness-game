@@ -2,6 +2,8 @@ shader_type canvas_item;
 // Creek cross-section. Flow runs toward the camera, so surface detail drifts downward.
 
 global uniform vec4 haze_color;
+global uniform float ice; // 0 open .. 1 frozen hard
+global uniform float snow;
 uniform vec4 deep : source_color = vec4(0.16, 0.3, 0.34, 0.85);
 uniform vec4 shallow : source_color = vec4(0.36, 0.55, 0.6, 0.55);
 uniform float surface_y; // world y of the surface
@@ -25,5 +27,12 @@ void fragment() {
 	float line = smoothstep(4.0, 0.0, d) * (0.6 + 0.4 * vnoise(vec2(world.x * 0.05 + TIME, TIME)));
 	c.rgb = mix(c.rgb, haze_color.rgb, line * 0.7);
 	c.a = max(c.a, line * 0.8);
+	// Ice: a pale slab on top that thickens as it freezes, with snow on it once it bears weight.
+	float slab = ice * 16.0;
+	if (d < slab) {
+		float crack = smoothstep(0.93, 0.97, vnoise(vec2(world.x * 0.03, d * 0.2)));
+		c = vec4(mix(vec3(0.72, 0.84, 0.9), vec3(0.55, 0.68, 0.76), crack), 0.92);
+		if (d < 4.0 * snow * step(0.6, ice)) c = vec4(0.93, 0.95, 0.99, 1.0);
+	}
 	COLOR = c;
 }

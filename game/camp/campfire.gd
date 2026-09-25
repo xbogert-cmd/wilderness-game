@@ -134,9 +134,20 @@ func _fuel_from(p: Player) -> Array: ## [label, hours, source] of the best fuel 
 		return ["Add %s log" % p.carrying.size, 3.0 if p.carrying.size == "short" else 5.0, "log"]
 	if p.held and p.held.def.fuel_hours > 0.0:
 		return ["Add %s" % p.held.def.name.to_lower(), p.held.def.fuel_hours * p.held.count, "held"]
+	if _woodpile() and p.carrying == null and p.held == null: # a log burns far longer than sticks
+		return ["Add a log from the woodpile", 3.0, "pile"]
 	if p.backpack.count_of("sticks") > 0:
 		return ["Add sticks from pack", Items.get_def("sticks").fuel_hours, "pack"]
 	return []
+
+const PILE_REACH := 450.0
+
+## A stocked woodpile close enough to feed from without fetching.
+func _woodpile() -> Woodpile:
+	for w: Woodpile in get_tree().get_nodes_in_group("woodpile"):
+		if w.logs > 0 and absf(w.global_position.x - global_position.x) < PILE_REACH:
+			return w
+	return null
 
 ## The one thing E does right now: [label, action]. Prompt and behaviour can't drift apart.
 func _action(p: Player) -> Array:
@@ -210,6 +221,8 @@ func _add_fuel(p: Player, f: Array) -> void:
 			p.held = null
 		"pack":
 			p.backpack.take("sticks", 1)
+		"pile":
+			_woodpile().take_one()
 	fuel = minf(fuel + f[1], MAX_FUEL)
 
 func _draw() -> void:

@@ -8,15 +8,22 @@ func test_clock_rollover() -> void:
 	var dh := c.advance(c.day_length_sec) # one real day
 	t.near(dh, 24.0, "one day length = 24h")
 	t.ok(c.day() == 1, "day 1")
-	c.hours = 24.0 * 4
-	t.ok(c.season() == 1, "day 4 is summer")
-	c.hours = 24.0 * 16
-	t.ok(c.season() == 0, "seasons wrap")
+	c.hours = 0.0
+	t.ok(c.season() == 2 and c.season_name() == "early autumn", "the journey starts in early autumn")
+	c.hours = 24.0 * c.days_per_season
+	t.ok(c.season() == 3, "then winter")
+	c.hours = 24.0 * c.days_per_season * 4
+	t.ok(c.season() == 2, "seasons wrap")
+	c.hours = 24.0 * c.days_per_season * 1.5 + 13.0 # midwinter noon
+	var winter_day := c.sunset() - c.sunrise()
+	t.near(c.solar_hour(), Clock.NOON, "noon stays noon for the sky", 0.01)
+	c.hours = 24.0 * c.days_per_season * 3.5 # midsummer
+	t.ok(c.sunset() - c.sunrise() > winter_day + 5.0, "summer days are much longer than winter's")
 
 func test_daylight() -> void:
 	var c := Clock.new()
 	c.hours = 13.0
-	t.near(c.daylight(), 1.0, "noon bright")
+	t.near(c.daylight(), 1.0, "noon bright", 0.01)
 	c.hours = 2.0
 	t.near(c.daylight(), 0.0, "2am dark")
 	t.ok(c.is_night())
@@ -128,3 +135,17 @@ func test_sleeping_bag_insulates() -> void:
 		bag.tick(0.3, {"air_c": 2.0, "sleeping": true, "insulation_c": 8.0})
 		none.tick(0.3, {"air_c": 2.0, "sleeping": true})
 	t.ok(bag.warmth > none.warmth + 10.0, "bag keeps you warmer (%.0f vs %.0f)" % [bag.warmth, none.warmth])
+
+func test_snow_lies_and_melts() -> void:
+	var w := Weather.new(3)
+	w.precip = 1.0
+	w._ground(2.0, -6.0) # two hours of heavy snow in the cold
+	t.ok(w.snowfall() > 0.9 and w.rain() < 0.1, "falls as snow below freezing")
+	t.near(w.snow_cm, 2.0 * Weather.SNOW_CM_PER_HOUR, "lies at the snowfall rate", 0.5)
+	w.precip = 0.0
+	w._ground(10.0, 5.0)
+	t.ok(w.snow_cm == 0.0 and w.rain() == 0.0, "melts away in a thaw")
+	w._ground(8.0, -10.0)
+	t.ok(w.ice > 0.5, "a long hard cold freezes the creek (%.2f)" % w.ice)
+	w._ground(20.0, 6.0)
+	t.ok(w.ice == 0.0, "and it thaws")

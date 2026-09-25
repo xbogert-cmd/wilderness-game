@@ -71,7 +71,7 @@ func _physics_process(delta: float) -> void:
 	if nx != position.x + step and state == State.FLEE:
 		facing = -facing # cornered against the ridge: break past rather than freeze
 	position.x = nx
-	position.y = world.terrain.height_at(position.x)
+	position.y = world.ground_y(position.x)
 	_since_print += absf(step)
 	_since_blood += absf(step)
 	if wound >= 0.0 and _since_blood > 45.0:

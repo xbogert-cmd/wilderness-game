@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var dh := clock.advance(delta, time_scale)
-	weather.step(dh)
+	weather.step(dh, clock)
 	RenderingServer.global_shader_parameter_set("wind", weather.wind)
 	ticked.emit(dh)
 

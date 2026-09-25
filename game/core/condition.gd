@@ -34,7 +34,8 @@ func tick(dh: float, env: Dictionary) -> void:
 	var dry := t.dry_per_hour * (1.0 + heat * 4.0)
 	wetness = clampf(wetness + (wet_in - dry) * dh, 0.0, 1.0)
 
-	var felt: float = env.get("air_c", 15.0) + heat * t.fire_heat_c - wetness * 10.0 + t.clothing_c + env.get("insulation_c", 0.0)
+	var felt: float = env.get("air_c", 15.0) + heat * t.fire_heat_c - wetness * 10.0 + t.clothing_c + env.get("insulation_c", 0.0) \
+		+ exertion * 6.0 # working hard keeps you warm (and hungry)
 	var target := clampf(50.0 + (felt - 20.0) * 2.5, 0.0, 100.0)
 	warmth = move_toward(warmth, target, t.warmth_rate_per_hour * dh)
 

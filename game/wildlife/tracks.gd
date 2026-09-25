@@ -14,11 +14,11 @@ var _dirty := true
 
 func _ready() -> void:
 	add_to_group("interactable")
-	z_index = 2
+	z_index = 3 # over the lying snow (chunks draw theirs at 2)
 	GameClock.ticked.connect(_on_tick)
 
 func add(x: float, species: String, dir: int) -> void:
-	if species != "blood" and not world.terrain.soft_at(x):
+	if species != "blood" and not (world.terrain.soft_at(x) or GameClock.weather.snow_cm > 2.0):
 		return
 	prints.append({"x": x, "s": species, "d": dir, "age": 0.0})
 	if prints.size() > MAX_PRINTS:
@@ -26,7 +26,7 @@ func add(x: float, species: String, dir: int) -> void:
 	_dirty = true
 
 func _on_tick(dh: float) -> void:
-	var wash := 1.0 + 2.5 * GameClock.weather.precip
+	var wash := 1.0 + 2.5 * GameClock.weather.precip # rain washes out, fresh snow fills in
 	for p in prints:
 		p.age += dh * wash
 	var before := prints.size()
@@ -51,8 +51,9 @@ func _draw() -> void:
 		if absf(p.x - cx) > 1600.0:
 			continue
 		var alpha: float = [0.75, 0.5, 0.28, 0.12][stage(p.age)]
-		var y := world.terrain.height_at(p.x) + 3.0
-		var c := Color(0.1, 0.07, 0.05, alpha)
+		var in_snow := GameClock.weather.snow_cm > 2.0
+		var y := world.snow_top(p.x) + (2.0 if in_snow else 3.0)
+		var c := Color(0.45, 0.52, 0.66, alpha) if in_snow else Color(0.1, 0.07, 0.05, alpha) # blue-grey hollows in snow
 		var d: float = p.d
 		if p.s == "blood":
 			var r := Color(0.45, 0.05, 0.04, alpha * 1.2)

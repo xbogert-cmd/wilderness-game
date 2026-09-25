@@ -17,6 +17,7 @@ const KINDS := {
 	"lean_to": preload("res://game/camp/lean_to.gd"),
 	"pack": preload("res://game/world/dropped_pack.gd"),
 	"carcass": preload("res://game/hunting/carcass.gd"),
+	"woodpile": preload("res://game/camp/woodpile.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)
@@ -24,6 +25,7 @@ var chunks := {} ## index -> Chunk
 var state := {} ## "index" -> {felled: {}, picked: {}, objects: [], left: hour}
 var dynamic := Node2D.new() ## persistent objects not owned by a chunk (they can move)
 var tracks := Tracks.new()
+var _snow_shown := -1.0
 
 func _ready() -> void:
 	tracks.world = self
@@ -40,6 +42,26 @@ func _ready() -> void:
 		wall.add_child(col)
 		wall.position = Vector2(x, -2000)
 		add_child(wall)
+
+func _process(_delta: float) -> void:
+	var cm := GameClock.weather.snow_cm
+	if absf(cm - _snow_shown) > 0.4 or (cm == 0.0 and _snow_shown != 0.0):
+		_snow_shown = cm
+		for c in chunks.values():
+			c.set_snow(cm)
+	RenderingServer.global_shader_parameter_set("snow", clampf(cm / 12.0, 0.0, 1.0))
+	RenderingServer.global_shader_parameter_set("autumn", GameClock.clock.leaf_turn())
+	RenderingServer.global_shader_parameter_set("bare", GameClock.clock.leaf_drop())
+	RenderingServer.global_shader_parameter_set("ice", GameClock.weather.ice)
+
+## Where an animal or dropped thing rests: the ground, or the ice over the creek when frozen.
+func ground_y(x: float) -> float:
+	var s := terrain.water_surface_at(x)
+	return s if s != INF and Creek.frozen() else terrain.height_at(x)
+
+## Where the top of the lying snow is (the terrain itself when there is none).
+func snow_top(x: float) -> float:
+	return terrain.height_at(x) - (GameClock.weather.snow_cm if terrain.water_surface_at(x) == INF else 0.0)
 
 func chunk_state(i: int) -> Dictionary:
 	var key := str(i)
@@ -65,6 +87,7 @@ func _load(i: int) -> void:
 	chunk.build(terrain, WORLD_SEED, st)
 	add_child(chunk)
 	chunks[i] = chunk
+	chunk.set_snow(maxf(_snow_shown, 0.0))
 	var elapsed := maxf(GameClock.clock.hours - float(st.left), 0.0)
 	for d in st.objects:
 		spawn(d, elapsed)

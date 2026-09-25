@@ -57,12 +57,12 @@ func _process(delta: float) -> void:
 	var twilight := exp(-pow((h - 6.3) / 1.2, 2.0)) + exp(-pow((h - 20.0) / 1.2, 2.0))
 	var night := 1.0 - smoothstep(0.0, 0.15, day)
 	var hush := 1.0 - (0.85 if w.storm_warning() else 0.0) # wildlife goes quiet before rain
-	var rain_mask := 1.0 - w.precip * 0.8
+	var rain_mask := 1.0 - w.precip * 0.8 # snow hushes the forest too
 	_gain("forest_day", smoothstep(0.05, 0.4, day) * hush * rain_mask * 0.9, delta)
 	_gain("dusk", clampf(twilight, 0.0, 1.0) * hush * rain_mask * 0.7, delta)
 	_gain("night_crickets", night * rain_mask * (1.0 if w.air_temp_c(c) > 4.0 else 0.2) * 0.6, delta)
 	_gain("wind_trees", clampf(w.wind * 1.1, 0.05, 1.0), delta)
-	_gain("rain", w.precip, delta)
+	_gain("rain", w.rain(), delta)
 
 	# A storm building is one of the few moments that earns music.
 	_music_cooldown = maxf(_music_cooldown - delta, 0.0)

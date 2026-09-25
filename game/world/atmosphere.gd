@@ -39,7 +39,7 @@ func _sample(h: float) -> Array:
 func _process(_delta: float) -> void:
 	var clock := GameClock.clock
 	var w := GameClock.weather
-	var h := clock.hour_of_day()
+	var h := clock.solar_hour() # sky keys are authored for a 6:00-20:00 day
 	var c := _sample(h)
 	var light := clock.daylight()
 	var grey := OVERCAST * lerpf(0.25, 1.0, (c[2] as Color).get_luminance() * 1.4)
@@ -66,4 +66,4 @@ func _process(_delta: float) -> void:
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
 	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip)
-	rain.set_weather(w.precip, w.wind)
+	rain.set_weather(w.rain(), w.snowfall(), w.wind)

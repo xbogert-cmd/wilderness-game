@@ -3,7 +3,7 @@ class_name Tuning extends Resource
 
 @export_group("Time")
 @export var day_length_sec := 1440.0 ## real seconds per 24 game hours
-@export var days_per_season := 4
+@export var days_per_season := 6
 @export var sleep_time_scale := 60.0 ## game-time multiplier while sleeping
 
 @export_group("Needs (per game hour)")

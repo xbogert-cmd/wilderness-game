@@ -5,6 +5,7 @@ class_name Scenario extends Node
 ## Run: godot --headless --fixed-fps 60 -- --scenario     (exit code = failed checks)
 ## Mode "life": sleep, autosave, save to slot 3, die, respawn, recover the pack.
 ## Mode "verify": run with --load=3 after "life"; checks the save came back exactly.
+## Mode "winter": woodpile, seasons, snow, tracks in snow, frozen creek, snow in the pot.
 
 var player: Player
 var world: World
@@ -19,6 +20,7 @@ func _ready() -> void:
 		"life": _life.call_deferred()
 		"verify": _verify.call_deferred()
 		"wild": _wild.call_deferred()
+		"winter": _winter.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -481,6 +483,99 @@ func _hunt() -> void:
 	check(get_tree().get_nodes_in_group("interactable").any(func(n): return n is WorldItem and n.stack.def.id == "arrows") or left == 1, "a missed arrow lands on the ground (or breaks)")
 	player.aim_override = Vector2.INF
 	player.stow()
+
+func _winter() -> void:
+	await frames(10)
+	GameClock.force_weather(Weather.Kind.CLEAR)
+
+	# Woodpile: the stack's shape follows the count; logs go in, come out, and feed a fire.
+	check(Woodpile._rows(3) == PackedInt32Array([2, 1]) and Woodpile._rows(6) == PackedInt32Array([3, 2, 1]) \
+		and Woodpile._rows(7) == PackedInt32Array([4, 3]) and Woodpile._rows(15) == PackedInt32Array([5, 4, 3, 2, 1]), "stack shapes: 3 → 2+1, 6 → 3+2+1, 7 → 4+3, 15 → full pyramid")
+	var x := 4200.0
+	await teleport(x)
+	var pile := world.spawn({"kind": "woodpile", "x": x + 60.0}) as Woodpile
+	for i in 3:
+		var lg := world.spawn({"kind": "log", "size": "short", "x": x - 40.0, "y": world.terrain.height_at(x - 40.0) - 30.0}) as WorldLog
+		await frames(2)
+		player.toggle_carry()
+		check(player.carrying == lg, "lifted short log %d" % (i + 1))
+		check(pile.interact_label(player).begins_with("Stack log"), "woodpile offers to stack it")
+		pile.interact(player)
+	check(pile.logs == 3 and player.carrying == null, "three logs stacked (%d)" % pile.logs)
+	pile.interact(player)
+	check(player.carrying != null and player.carrying.size == "short" and pile.logs == 2, "took a log back off the pile")
+	player.drop_carried()
+	await frames(2)
+	var fire := world.spawn({"kind": "campfire", "x": x + 300.0, "fuel": 0.5, "lit": true}) as Campfire
+	await teleport(x + 300.0)
+	check(fire.interact_label(player).begins_with("Add a log from the woodpile"), "the fire feeds from the woodpile nearby")
+	fire.interact(player)
+	check(pile.logs == 1 and fire.fuel > 3.0, "one log from the pile went on the fire (fuel %.1f h)" % fire.fuel)
+
+	# Into winter: the cold turns rain to snow, it lies, slows you, and holds every track.
+	GameClock.clock.hours = 24.0 * GameClock.clock.days_per_season * 1.5 + 11.0 # midwinter morning
+	check(GameClock.clock.season_name() == "midwinter", "it's %s" % GameClock.clock.season_name())
+	check(GameClock.weather.air_temp_c(GameClock.clock) < -2.0, "and cold: %.0f °C" % GameClock.weather.air_temp_c(GameClock.clock))
+	GameClock.force_weather(Weather.Kind.RAIN)
+	GameClock.time_scale = 40.0
+	await frames(120) # ~2 game hours of heavy snow
+	GameClock.time_scale = 1.0
+	var w := GameClock.weather
+	check(w.snowfall() > 0.9 and w.rain() < 0.1, "it falls as snow")
+	check(w.snow_cm > 5.0, "snow lies %.0f cm deep" % w.snow_cm)
+	check(player.snow_mult() < 1.0, "deep snow slows you (%.0f%% pace)" % (player.snow_mult() * 100.0))
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	world.tracks.prints.clear()
+	var dry := 6500.0
+	while world.terrain.soft_at(dry) or world.terrain.soft_at(dry + 200.0):
+		dry += 50.0 # somewhere that would take no prints without snow
+	await teleport(dry)
+	player.auto_dir = 1.0
+	await frames(90)
+	player.auto_dir = 0.0
+	check(world.tracks.prints.any(func(p): return p.s == "boot"), "boots print in the snow anywhere")
+
+	# The creek freezes: the ice bears you, holes must be chopped, fishing waits for one.
+	w.ice = 1.0
+	await frames(3)
+	var s := world.terrain.water_surface_at(Terrain.CREEK_X)
+	player.global_position = Vector2(Terrain.CREEK_X, s - 60.0)
+	player.velocity = Vector2.ZERO
+	await frames(40)
+	check(absf(player.global_position.y - s) < 6.0 and player.wade_depth == 0.0, "standing on the ice, not wading (%.0f vs %.0f)" % [player.global_position.y, s])
+	var creek: Creek = get_tree().get_first_node_in_group("creek")
+	check(creek.interact_label(player) == "Chop a hole in the ice", "the creek offers to chop a hole")
+	var pot: ItemStack = player.backpack.find(func(st): return st.def.id == "cook_pot")
+	pot.water = 0.0
+	player.hold(pot)
+	player.use_held()
+	check(pot.water > 0.0 and not pot.water_clean, "no hole yet: the pot packs with snow instead (%.2f L)" % pot.water)
+	pot.water = 0.0
+	creek.interact(player)
+	await frames(int(Player.SWING_TIME * 60.0) + 2)
+	check(creek.hole_open(), "chopped a hole")
+	player.use_held()
+	check(pot.water > 1.0, "filled the pot through the hole")
+
+	# Snow in the pot melts and boils clean on the fire.
+	pot.water = 0.0
+	await teleport(x + 380.0)
+	player.hold(pot)
+	player.use_held()
+	check(pot.water > 0.5 and not pot.water_clean, "packed the pot with snow")
+	await teleport(x + 300.0)
+	fire = find_fire() # the camp chunk unloaded while we were at the creek
+	fire.fuel = 4.0
+	fire.lit = true
+	fire.interact(player)
+	check(fire.pot == pot, "pot of snow on the fire")
+	fire._on_tick(Campfire.BOIL_HOURS * 1.2)
+	check(pot.water_clean, "snow melted and boiled clean")
+	w.ice = 0.0
+	w.snow_cm = 0.0
+
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
 
 func _wild() -> void:
 	await frames(10)

@@ -25,6 +25,8 @@ func _on_chunk_loaded(i: int) -> void:
 	for def: SpeciesDef in SPECIES:
 		for g in def.groups_per_chunk:
 			var x := i * Terrain.CHUNK_W + rng.randf_range(400.0, Terrain.CHUNK_W - 400.0)
+			if GameClock.clock.season() == 3 and rng.randf() < 0.5:
+				continue # winter thins the herd: many have moved down to lower valleys
 			if absf(x - player.global_position.x) < SPAWN_CLEARANCE or x < Animal.EDGE or x > Terrain.WORLD_W - Animal.EDGE:
 				continue
 			for k in rng.randi_range(def.group_min, def.group_max):

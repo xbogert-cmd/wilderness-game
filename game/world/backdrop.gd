@@ -115,7 +115,7 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 	var ground := line.duplicate()
 	ground.append(Vector2(span.y, 3000))
 	ground.append(Vector2(span.x, 3000))
-	node.add_child(SceneryArt.poly(ground, Palette.SOIL_TOP.lerp(Palette.GRASS, 0.45).darkened(0.15), mat))
+	node.add_child(SceneryArt.poly(ground, Palette.SOIL_TOP.lerp(Palette.GRASS, 0.45).darkened(0.15), mat, 0.0, SceneryArt.GROUND))
 
 	# Creek ribbon: this layer's slice of the watercourse, widening toward the next nearer layer.
 	var cx := Terrain.CREEK_X * s
@@ -124,7 +124,7 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 	var strip := DEPTH_RISE * (s_next - s) + 20.0
 	node.add_child(SceneryArt.poly(PackedVector2Array([
 		Vector2(cx - w_far * 0.5, -2), Vector2(cx + w_far * 0.5, -2),
-		Vector2(cx + w_near * 0.5, strip), Vector2(cx - w_near * 0.5, strip)]), Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat))
+		Vector2(cx + w_near * 0.5, strip), Vector2(cx - w_near * 0.5, strip)]), Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat, 0.0, SceneryArt.WATER))
 
 	var h_min := 1100.0 * s * s
 	var h_max := 1700.0 * s * s
@@ -168,12 +168,12 @@ func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 	var ground := line.duplicate()
 	ground.append(Vector2(span.y, 2000))
 	ground.append(Vector2(span.x, 2000))
-	node.add_child(SceneryArt.poly(ground, Palette.FG_DARK, mat))
+	node.add_child(SceneryArt.poly(ground, Palette.FG_DARK, mat, 0.0, SceneryArt.GROUND))
 	# Near reach of the creek, flowing out toward the viewer.
 	var w := CREEK_W * s * s
 	node.add_child(SceneryArt.poly(PackedVector2Array([
 		Vector2(cx - w * 0.5, -6), Vector2(cx + w * 0.5, -6),
-		Vector2(cx + w * 0.8, 700), Vector2(cx - w * 0.8, 700)]), Palette.WATER.darkened(0.45), mat))
+		Vector2(cx + w * 0.8, 700), Vector2(cx - w * 0.8, 700)]), Palette.WATER.darkened(0.45), mat, 0.0, SceneryArt.WATER))
 	x = span.x
 	while x < span.y:
 		x += _rng.randf_range(500, 1500)

@@ -96,7 +96,7 @@ func _finish() -> void:
 func _draw() -> void:
 	var w := width()
 	var c := Color(0.95, 0.9, 0.7, 0.55)
-	var h := 30.0 if build_id == "campfire" else 170.0
+	var h: float = def().h
 	draw_rect(Rect2(-w * 0.5, -h, w, h), c, false, 2.0)
 	for i in int(w / 20.0):
 		draw_line(Vector2(-w * 0.5 + i * 20.0, 0), Vector2(-w * 0.5 + i * 20.0 + 10.0, 0), c, 2.0)

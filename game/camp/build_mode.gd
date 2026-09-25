@@ -81,6 +81,6 @@ func _draw() -> void:
 		return
 	var w: float = Builds.STRUCTURES[build_id].width
 	var c := Color(0.6, 1.0, 0.6, 0.6) if _ok else Color(1.0, 0.45, 0.4, 0.6)
-	var h := 40.0 if build_id == "campfire" else 170.0
+	var h: float = Builds.STRUCTURES[build_id].h
 	draw_rect(Rect2(-w * 0.5, -h, w, h), c, false, 3.0)
 	draw_rect(Rect2(-w * 0.5, -h, w, h), Color(c, 0.12))

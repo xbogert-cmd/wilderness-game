@@ -4,8 +4,9 @@ class_name Builds extends RefCounted
 ## Material keys: item ids come from the pack; "short"/"medium"/"long" are carried logs.
 
 const STRUCTURES := {
-	"campfire": {"name": "Campfire", "width": 90.0, "needs": {"sticks": 3}, "hours": 0.2, "seconds": 2.0},
-	"lean_to": {"name": "Lean-to", "width": 260.0, "needs": {"long": 2, "medium": 4}, "hours": 1.0, "seconds": 4.0},
+	"campfire": {"name": "Campfire", "width": 90.0, "h": 30.0, "needs": {"sticks": 3}, "hours": 0.2, "seconds": 2.0},
+	"lean_to": {"name": "Lean-to", "width": 260.0, "h": 170.0, "needs": {"long": 2, "medium": 4}, "hours": 1.0, "seconds": 4.0},
+	"woodpile": {"name": "Woodpile", "width": 170.0, "h": 110.0, "needs": {"sticks": 4}, "hours": 0.3, "seconds": 2.0},
 }
 
 const RECIPES := {

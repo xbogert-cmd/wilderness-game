@@ -38,6 +38,9 @@ func _rules() -> Array:
 		["dusk", GameClock.clock.hour_of_day() > 18.0 and p.camp_x < 0.0, "Evening's coming. Press {build} to plan a campfire, then a lean-to to sleep in."],
 		["tired", c.fatigue > 60.0, "You're tired. Sleep under a shelter ({rest})."],
 		["cold", c.warmth < 35.0, "You're cold. A fire warms and dries you."],
+		["snow", GameClock.weather.snow_cm > 2.0, "Snow. Every animal leaves tracks in it now, and so do you. Deep snow slows you down."],
+		["ice", Creek.frozen() and f is Creek, "The creek has frozen over. Chop a hole ({interact}) to reach the water, or pack the pot with snow and melt it."],
+		["woodpile", p.carrying != null and p.carrying.size == "short", "Short logs keep best in a woodpile ({build}). At a fire close by, {interact} feeds it a log straight from the pile."],
 		["rod", p.backpack.count_of("fishing_pole") > 0, "Hold the pole (select it in your pack), then click toward the creek to cast."],
 		["fire", f is Campfire and not f.lit, "Press {interact} to light the fire. Feed it sticks or logs to keep it going."],
 	]

@@ -30,7 +30,7 @@ func _process(_delta: float) -> void:
 	var k := player.cond
 	text = "\n".join([
 		"FPS %d" % Engine.get_frames_per_second(),
-		"Day %d  %02d:%02d  %s" % [c.day() + 1, int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60), Clock.SEASONS[c.season()]],
+		"Day %d  %02d:%02d  %s" % [c.day() + 1, int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60), c.season_name()],
 		"Weather %s -> %s in %.1fh%s  cloud %.2f rain %.2f wind %.2f" % [Weather.NAMES[w.kind], Weather.NAMES[w.next_kind], w.hours_left, "  [WARNING]" if w.storm_warning() else "", w.cloud, w.precip, w.wind],
 		"Air %.1f°C" % w.air_temp_c(c),
 		"HP %.0f  STA %.0f  FOOD %.0f  WATER %.0f  WARM %.0f  WET %.2f" % [k.health, k.stamina, k.hunger, k.thirst, k.warmth, k.wetness],

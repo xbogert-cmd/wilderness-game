@@ -41,7 +41,7 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _ground(local_x: float) -> float:
-	return body.world.terrain.height_at(body.global_position.x + local_x * body.facing) - body.global_position.y
+	return body.world.ground_y(body.global_position.x + local_x * body.facing) - body.global_position.y # the ice, when the creek is frozen
 
 func _ground_slope(local_x: float) -> float:
 	return atan2(_ground(local_x + 6.0) - _ground(local_x - 6.0), 12.0)
@@ -114,6 +114,7 @@ func _draw() -> void:
 	_torso(hip, shoulder)
 	draw_circle(head, 10.5, Palette.SKIN)
 	_hat(head)
+	_breath(head)
 	var hand: Array # [hand, forearm direction]
 	if body.swing >= 0.0:
 		hand = _arm_angle(shoulder, _swing_angle(body.swing), 0.25, Palette.JACKET, Palette.SKIN)
@@ -160,6 +161,20 @@ func _aim_arc() -> void:
 		if p.y > body.world.terrain.height_at(p.x):
 			break
 		draw_circle(_to_local_space(p), 2.2, Color(1, 1, 1, alpha * (1.0 - i / 14.0)))
+
+## Breath shows as a small cloud in the cold, quicker when you're working hard.
+func _breath(head: Vector2) -> void:
+	var t_c := GameClock.weather.air_temp_c(GameClock.clock)
+	if t_c > 3.0:
+		return
+	var period := 1.6 if body.running else 3.2
+	var k := fposmod(_time, period) / period
+	if k > 0.45:
+		return
+	var a := clampf((3.0 - t_c) / 8.0, 0.25, 0.7) * (1.0 - k / 0.45)
+	var mouth := head + Vector2(12, 4)
+	for i in 3:
+		draw_circle(mouth + Vector2(8.0 + k * 40.0 + i * 5.0, -k * 10.0 - i * 2.0), 3.0 + k * 10.0 - i, Color(0.92, 0.94, 0.97, a * (1.0 - i * 0.25)))
 
 func _to_local_space(world_point: Vector2) -> Vector2:
 	var d := world_point - body.global_position

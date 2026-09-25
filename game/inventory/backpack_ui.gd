@@ -165,7 +165,7 @@ func _refresh() -> void:
 		if d.has("food"):
 			_button("Eat", func(): _use_now())
 		var creek := Creek.reachable(player)
-		if d.capacity > 0.0 and creek:
+		if d.capacity > 0.0 and creek and not (Creek.frozen() and not creek.hole_open()):
 			_button("Fill at the creek", func(): creek.fill(player, selected); _refresh())
 		if d.capacity > 0.0 and selected.water > 0.001:
 			_button("Drink", func(): _use_now())
@@ -195,8 +195,8 @@ func _refresh() -> void:
 		var b := _button("Craft %s — %s (%.2f h)" % [Items.get_def(id).name.to_lower(), Builds.needs_text(r.needs, have), r.hours], _craft.bind(id))
 		b.disabled = not ok
 	var c := player.cond
-	_status.text = "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%%\nInjuries: %s\nPack %.1f kg%s" % [
-		c.health, c.stamina, c.hunger, c.thirst, c.warmth, int(c.wetness * 100),
+	_status.text = "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%% · Air %d °C\nInjuries: %s\nPack %.1f kg%s" % [
+		c.health, c.stamina, c.hunger, c.thirst, c.warmth, int(c.wetness * 100), roundi(GameClock.weather.air_temp_c(GameClock.clock)),
 		", ".join(c.injuries.keys().map(func(k): return "%s %s%s" % [c.injuries[k].kind, k, " (treated)" if c.injuries[k].treated else ""])) if c.injuries else "none",
 		player.backpack.weight(), " (heavy: slower)" if player.backpack.encumbrance_mult() < 1.0 else ""]
 
