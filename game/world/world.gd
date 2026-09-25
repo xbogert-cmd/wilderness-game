@@ -16,6 +16,7 @@ const KINDS := {
 	"blueprint": preload("res://game/camp/blueprint.gd"),
 	"lean_to": preload("res://game/camp/lean_to.gd"),
 	"pack": preload("res://game/world/dropped_pack.gd"),
+	"carcass": preload("res://game/hunting/carcass.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)

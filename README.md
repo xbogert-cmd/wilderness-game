@@ -17,8 +17,8 @@ godot
 | Space | Hop |
 | Tab | Backpack (pauses the game): drag to pack, R rotates while dragging |
 | 1 / 2 | Draw the tool strapped outside the pack (hatchet, knife), or put it back |
-| Left click | Use what's in hand: chop, eat, drink, treat, fish. With a felled trunk, aim at a length mark |
-| E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire |
+| Left click | Use what's in hand: chop, eat, drink, treat, fish, knife an unaware deer. Bow: hold to draw, release to loose. With a felled trunk, aim at a length mark |
+| E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire, field dress a carcass |
 | F | Lift or set down a log. Short and medium logs ride on the shoulder; long logs drag |
 | Q | Put away what's in hand |
 | B | Build menu (campfire, lean-to), then click to place a blueprint and right-click to cancel |
@@ -32,6 +32,8 @@ godot
 
 **Wildlife and fishing:** mule deer graze at dawn and dusk, bed down midday, and read your noise and silhouette. Running spooks them from far off; crouching (Ctrl) and moving slowly gets you close. They bolt, stot away, and settle somewhere new, never chasing across the map. Hooves and boots print in the dark bank mud; press E on deer tracks to read their age and direction. Rain washes tracks out faster. Small birds burst up when you come close. To fish, craft a pole in the backpack (2 sticks + line & hooks), click toward the creek to cast, click when the bobber plunges, then click whenever the needle is in the green. Cook the catch at a lit fire (E) rather than eating it raw.
 
+**Hunting:** creep up behind a grazing deer that hasn't noticed you and click with the knife; if it's alert it bolts. From range, craft a bow (3 sticks + the paracord in your kit) and arrows (2 sticks make 4) in the backpack. Hold click to draw; at a good draw a dotted arc shows the drop. The arrow strikes what you aimed at: a chest or head hit drops the deer within a few seconds, anything else wounds it and it runs longer, leaving blood drops you can follow and examine (E). Missed arrows usually survive in the dirt. Field dress the carcass with E (knife in the pack or hand) for 4 venison, which spoils from the moment of the kill; cook it at a fire.
+
 **First camp:** gather fallen sticks (E), press B to place a campfire blueprint and deliver 3 sticks, build it, then light it with E. For a lean-to, fell a tree with the hatchet, strip its branches, cut 2 long and 4 medium logs at the marks, and haul them to a lean-to blueprint. To make water safe, fill the cook pot at the creek, set it on a lit fire until it boils, take it back, and pour it into your bottle from the backpack.
 
 ## Checks
@@ -42,6 +44,7 @@ godot --headless --quit-after 600         # smoke run
 godot --headless -- --tour                # walk every chunk and back, verify streaming
 godot --headless --fixed-fps 60 -- --scenario   # full camp loop end to end (~3 min)
 godot --fixed-fps 60 --resolution 1280x720 -- --scenario   # same, windowed: only this catches UI eating clicks
+# Any run with flags after `--` saves to user://test_saves, never to the player's user://saves.
 godot --headless --fixed-fps 60 -- --scenario=life                # sleep, autosave, save slot 3, die, respawn, recover
 godot --headless --fixed-fps 60 -- --load=3 --scenario=verify     # then cold-load slot 3 and check it matches
 godot --headless --fixed-fps 60 -- --scenario=wild                # deer senses, tracks, fishing, cooking, birds

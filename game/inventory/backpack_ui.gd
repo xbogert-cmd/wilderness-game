@@ -53,7 +53,8 @@ func _hands_rect() -> Rect2:
 	return Rect2(GRID_POS + Vector2(0, Backpack.H * CELL + 30.0), Vector2(CELL * 3, CELL * 2))
 
 func _panel_rect() -> Rect2:
-	return Rect2(GRID_POS - Vector2(30, 70), Vector2(_panel_right() + 470.0 - GRID_POS.x, Backpack.H * CELL + 260.0))
+	var right := maxf(_panel_right() + 470.0, _side.position.x + _side.size.x + 30.0) # grows to fit the side text
+	return Rect2(GRID_POS - Vector2(30, 70), Vector2(right - GRID_POS.x + 30.0, Backpack.H * CELL + 260.0))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("backpack") or (visible and event.is_action_pressed("menu")):
@@ -234,7 +235,7 @@ func _craft(id: String) -> void:
 		player.backpack.take(k, r.needs[k])
 	toggle()
 	player.work(r.seconds, r.hours, "Crafting " + Items.get_def(id).name.to_lower(), func():
-		player.receive(ItemStack.make(id, GameClock.clock.hours)))
+		player.receive(ItemStack.make(id, GameClock.clock.hours, r.get("count", 1))))
 
 # --- Drawing -----------------------------------------------------------------------
 

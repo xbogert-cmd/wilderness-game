@@ -84,8 +84,10 @@ func _draw() -> void:
 		hand = "Hands: %s log (F to set down)" % player.carrying.size
 	elif player.held:
 		hand = "Hands: " + player.held.label(GameClock.clock.hours)
-		if player.held.def.has("tool"):
+		if player.held.def.has("axe") or player.held.def.has("knife"):
 			hand += "  · edge %d%%" % int(player.held.sharpness * 100.0)
+		elif player.held.def.has("bow"):
+			hand += "  · %d arrows" % player.backpack.count_of("arrows")
 	_text(Vector2(GAP * 4 + 30, size.y - 40), hand, 15, Color(TEXT, 0.85))
 
 	# Interaction popups: a key-cap plus action, floating over the thing you'd act on.

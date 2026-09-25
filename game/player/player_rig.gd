@@ -123,6 +123,8 @@ func _draw() -> void:
 		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, Palette.JACKET, Palette.SKIN)
 	if body.held:
 		_held_item(body.held, hand[0], hand[1])
+	if body.bow_draw >= 0.5:
+		_aim_arc()
 
 ## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
 func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
@@ -133,12 +135,31 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 		if body.carrying.size == "short":
 			return [shoulder + Vector2(18, 26), shoulder + Vector2(10, 30)]
 		return [shoulder + Vector2(8, -16), shoulder + Vector2(-6, -16)]
+	if body.bow_draw >= 0.0: # bow arm out toward the aim, string hand pulled back to the chin
+		var aim := _aim_dir(shoulder)
+		return [shoulder + aim * 50.0, shoulder + aim * (46.0 - 40.0 * body.bow_draw)]
 	if body.held and body.held.def.has("rod") and body.fishing and body.fishing.state != Fishing.State.IDLE:
 		return [shoulder + Vector2(20, 14), shoulder + Vector2(12, 18)] # pole held out over the water
 	if body.working > 0.0:
 		var w := Vector2(sin(_time * 7.0) * 6.0, cos(_time * 7.0) * 4.0)
 		return [hip + Vector2(30, -8) + w, hip + Vector2(24, -4) - w]
 	return []
+
+func _aim_dir(from: Vector2) -> Vector2:
+	return (_to_local_space(body.aim_point()) - from).normalized()
+
+## Where a loosed arrow would go for the first half second: a steadying hint at a good draw.
+func _aim_arc() -> void:
+	var p := body.arrow_origin()
+	var v := body.arrow_velocity()
+	var alpha := (body.bow_draw - 0.5) * 0.9
+	for i in 14:
+		var dt := 0.035
+		v.y += Arrow.GRAVITY * dt
+		p += v * dt
+		if p.y > body.world.terrain.height_at(p.x):
+			break
+		draw_circle(_to_local_space(p), 2.2, Color(1, 1, 1, alpha * (1.0 - i / 14.0)))
 
 func _to_local_space(world_point: Vector2) -> Vector2:
 	var d := world_point - body.global_position
@@ -198,6 +219,18 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			var up := Vector2.from_angle(-0.75)
 			draw_line(hand - up * 10.0, hand + up * 120.0, c, 3.0)
 			draw_line(hand + up * 60.0, hand + up * 120.0, c.lightened(0.2), 2.0)
+		"bow":
+			var fwd := _aim_dir(hand) if body.bow_draw >= 0.0 else Vector2(1, 0.2).normalized()
+			var ax := fwd.orthogonal()
+			var pull := maxf(body.bow_draw, 0.0)
+			var bend := 10.0 + 10.0 * pull
+			var top := hand + ax * 48.0 - fwd * bend
+			var bot := hand - ax * 48.0 - fwd * bend
+			draw_polyline(PackedVector2Array([top, hand + ax * 26.0 - fwd * bend * 0.35, hand, hand - ax * 26.0 - fwd * bend * 0.35, bot]), c, 4.0)
+			var nock := hand - fwd * (bend + 4.0 + 36.0 * pull)
+			draw_polyline(PackedVector2Array([top, nock, bot]), Color(0.9, 0.88, 0.8, 0.8), 1.2)
+			if body.bow_draw >= 0.0:
+				draw_line(nock, hand + fwd * 16.0, Color("b0966b"), 2.0)
 		"sticks":
 			for i in 3:
 				draw_line(hand + Vector2(-14, -2 + i * 4), hand + Vector2(20, -6 + i * 5), c, 3.0)

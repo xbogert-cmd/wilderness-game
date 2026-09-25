@@ -1,11 +1,12 @@
 class_name Tracks extends Node2D
-## Footprints pressed into soft ground (mud now, snow later). They age through readable
-## stages and rain washes them out faster. One node holds them all; E examines the nearest.
+## Footprints pressed into soft ground (mud now, snow later), and blood drops from a wounded
+## animal (on any ground). They age through readable stages and rain washes them out faster.
+## One node holds them all; E examines the nearest.
 
 const STAGES := [[2.0, "fresh"], [12.0, "a few hours old"], [36.0, "old"]]
 const LIFETIME := 48.0
 const MAX_PRINTS := 700
-const NAMES := {"boot": "Your own boot prints", "deer": "Mule deer tracks"}
+const NAMES := {"boot": "Your own boot prints", "deer": "Mule deer tracks", "blood": "Blood drops"}
 
 var world: World
 var prints: Array = [] ## {x, s: species, d: dir, age: hours}
@@ -17,7 +18,7 @@ func _ready() -> void:
 	GameClock.ticked.connect(_on_tick)
 
 func add(x: float, species: String, dir: int) -> void:
-	if not world.terrain.soft_at(x):
+	if species != "blood" and not world.terrain.soft_at(x):
 		return
 	prints.append({"x": x, "s": species, "d": dir, "age": 0.0})
 	if prints.size() > MAX_PRINTS:
@@ -53,7 +54,11 @@ func _draw() -> void:
 		var y := world.terrain.height_at(p.x) + 3.0
 		var c := Color(0.1, 0.07, 0.05, alpha)
 		var d: float = p.d
-		if p.s == "deer": # split heart-shaped hoof, toes pointing the way it walked
+		if p.s == "blood":
+			var r := Color(0.45, 0.05, 0.04, alpha * 1.2)
+			draw_circle(Vector2(p.x, y - 1.0), 3.6, r)
+			draw_circle(Vector2(p.x + d * 8.0, y), 2.2, r)
+		elif p.s == "deer": # split heart-shaped hoof, toes pointing the way it walked
 			draw_colored_polygon(PackedVector2Array([Vector2(p.x - d * 5, y), Vector2(p.x + d * 5, y - 1.5), Vector2(p.x + d * 5, y - 0.2)]), c)
 			draw_colored_polygon(PackedVector2Array([Vector2(p.x - d * 5, y + 1.2), Vector2(p.x + d * 5, y + 0.6), Vector2(p.x + d * 5, y + 2.2)]), c)
 		else: # boot: sole and heel
@@ -86,7 +91,7 @@ func interact(p: Player) -> void:
 	var dirs := same.map(func(o): return o.d)
 	var heading := "east" if dirs.count(1) >= dirs.count(-1) else "west"
 	var age: String = "washed nearly away" if stage(t.age) >= STAGES.size() else STAGES[stage(t.age)][1]
-	p.message.emit("%s, %s, heading %s. About %d prints here." % [NAMES.get(t.s, "Tracks"), age, heading, same.size()])
+	p.message.emit("%s, %s, heading %s. About %d marks here." % [NAMES.get(t.s, "Tracks"), age, heading, same.size()])
 
 func to_array() -> Array:
 	return prints.duplicate(true)

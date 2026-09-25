@@ -3,7 +3,8 @@ class_name SaveGame extends RefCounted
 ## Loading works by reloading the main scene with `pending` set; Main applies it on startup.
 
 const VERSION := 1
-const DIR := "user://saves"
+## Runs with debug flags (checks, previews) save apart so they can never touch a player's saves.
+static var DIR := "user://test_saves" if OS.get_cmdline_user_args().size() > 0 else "user://saves"
 const SLOTS: PackedStringArray = ["1", "2", "3", "auto"]
 
 static var pending := {} ## save data waiting for the next scene start

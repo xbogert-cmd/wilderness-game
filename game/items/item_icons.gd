@@ -97,6 +97,31 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 			ci.draw_line(Vector2(w * 0.5, h * 0.97), Vector2(w * 0.5, h * 0.75), a.call(c.darkened(0.35)), u * 0.16)
 			ci.draw_circle(Vector2(w * 0.66, h * 0.72), u * 0.12, a.call(STEEL))
 			ci.draw_line(Vector2(w * 0.66, h * 0.72), Vector2(w * 0.54, h * 0.03), a.call(Color(1, 1, 1, 0.5)), 1.0)
+		"cordage":
+			for i in 3:
+				ci.draw_arc(Vector2(w * 0.5, h * 0.5), u * (0.18 + i * 0.1), 0.0, TAU, 18, a.call(c.darkened(i * 0.15)), u * 0.08)
+			ci.draw_line(Vector2(w * 0.72, h * 0.62), Vector2(w * 0.9, h * 0.88), a.call(c), u * 0.07)
+		"bow":
+			var pts := PackedVector2Array()
+			for i in 13:
+				var t := i / 12.0
+				pts.append(Vector2(w * (0.3 + 0.38 * sin(t * PI)), h * (0.04 + 0.92 * t)))
+			ci.draw_polyline(pts, a.call(c), u * 0.14)
+			ci.draw_line(pts[0], pts[12], a.call(Color(0.9, 0.88, 0.8)), 1.2)
+			ci.draw_rect(Rect2(w * 0.58, h * 0.45, w * 0.16, h * 0.1), a.call(DARK))
+		"arrows":
+			for i in mini(s.count, 3):
+				var x := w * (0.3 + i * 0.2)
+				ci.draw_line(Vector2(x, h * 0.1), Vector2(x, h * 0.92), a.call(c), 2.0)
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(x - 4, h * 0.12), Vector2(x, h * 0.03), Vector2(x + 4, h * 0.12)]), a.call(DARK))
+				ci.draw_line(Vector2(x, h * 0.8), Vector2(x, h * 0.93), a.call(Color("d8d0c0")), 6.0)
+		"venison_raw", "venison_cooked":
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.08, h * 0.45), Vector2(w * 0.3, h * 0.2), Vector2(w * 0.75, h * 0.22),
+				Vector2(w * 0.93, h * 0.5), Vector2(w * 0.7, h * 0.8), Vector2(w * 0.25, h * 0.78)]), a.call(c))
+			ci.draw_arc(Vector2(w * 0.55, h * 0.5), u * 0.22, 0.0, TAU, 14, a.call(c.lightened(0.35) if d.id == "venison_raw" else c.darkened(0.3)), 2.0)
+			if d.id == "venison_cooked":
+				for i in 3:
+					ci.draw_line(Vector2(w * (0.3 + i * 0.18), h * 0.28), Vector2(w * (0.22 + i * 0.18), h * 0.72), a.call(Color(0.2, 0.12, 0.06, 0.7)), 2.5)
 		"trout_raw", "trout_cooked", "whitefish_raw", "whitefish_cooked":
 			_fish(ci, a, w, h, c, d.id.begins_with("trout"), d.id.ends_with("cooked"))
 		_:

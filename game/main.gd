@@ -160,6 +160,18 @@ func _ready() -> void:
 			a.def = a.def.duplicate()
 			a.def.hearing = 0.0 # hold the pose for the screenshot
 			a.def.sight = 0.0
+	if args.has("hunt"): # preview: bow at full draw on a grazing deer, a carcass behind, blood drops
+		var a := wildlife.spawn(Wildlife.SPECIES[0], x + 800.0, 1)
+		a.def = a.def.duplicate()
+		a.def.hearing = 0.0
+		a.def.sight = 0.0
+		world.spawn({"kind": "carcass", "x": x - 380.0, "facing": -1, "species": "mule_deer", "hour": GameClock.clock.hours, "arrows": 1})
+		for k in 6:
+			world.tracks.add(x - 300.0 + k * 45.0, "blood", 1)
+		player.receive(ItemStack.make("arrows", GameClock.clock.hours, 6))
+		player.hold(ItemStack.make("bow", GameClock.clock.hours))
+		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
+		player.bow_draw = 0.0
 	if args.has("fish"): # preview: mid-fight with a trout at the creek bank
 		_preview_fish.call_deferred(fishing)
 	if args.has("flee"): # preview: a deer bounding away

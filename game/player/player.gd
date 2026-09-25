@@ -19,6 +19,9 @@ const SWING_TIME := 0.6
 const SWING_IMPACT := 0.62 ## fraction of the swing where the blade lands
 const SWING_STAMINA := 4.0
 const CARRY_STAMINA_PER_SEC := 2.5
+const DRAW_TIME := 0.9 ## seconds to full draw
+const ARROW_SPEED := Vector2(1100.0, 2800.0) ## px/s at a light and a full draw
+const KNIFE_REACH := 150.0
 const DEATH_LOSS_CHANCE := 0.2 ## per consumable stack (doubled roll, loses half the stack)
 
 var world: World
@@ -38,7 +41,9 @@ var swing := -1.0 ## 0..1 through a tool swing, -1 idle
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
-var known_recipes: PackedStringArray = ["splint", "fishing_pole"]
+const RECIPES: PackedStringArray = ["splint", "fishing_pole", "bow", "arrows"]
+var known_recipes := RECIPES
+var bow_draw := -1.0 ## 0..1, -1 not drawing
 var fishing: Fishing ## set by Main
 var facing := 1
 var running := false
@@ -87,7 +92,8 @@ func _starting_kit() -> void:
 	var bottle := ItemStack.make("water_bottle", h)
 	bottle.add_water(0.8, true)
 	for s in [bottle, ItemStack.make("cook_pot", h), ItemStack.make("lighter", h), ItemStack.make("sleeping_bag", h),
-			ItemStack.make("bandage", h, 2), ItemStack.make("jerky", h, 3), ItemStack.make("fishing_kit", h)]:
+			ItemStack.make("bandage", h, 2), ItemStack.make("jerky", h, 3), ItemStack.make("fishing_kit", h),
+			ItemStack.make("cordage", h)]:
 		backpack.add(s)
 
 # --- Movement ----------------------------------------------------------------
@@ -112,7 +118,16 @@ func _physics_process(delta: float) -> void:
 	running = (Input.is_action_pressed("run") or auto_run) and dir != 0.0 and not crouching and _can_run and carrying == null
 	wade_depth = world.terrain.water_depth_at(global_position.x, global_position.y)
 
+	if bow_draw >= 0.0:
+		running = false
+		bow_draw = minf(bow_draw + delta / DRAW_TIME, 1.0)
+		if held == null or not held.def.has("bow"):
+			bow_draw = -1.0
+		else:
+			facing = 1 if aim_point().x >= global_position.x else -1
 	var speed := CROUCH if crouching else (RUN if running else WALK)
+	if bow_draw >= 0.0:
+		speed *= 0.4
 	speed *= cond.move_speed_mult() * (1.0 - clampf(wade_depth / 130.0, 0.0, 0.65)) * backpack.encumbrance_mult()
 	if carrying:
 		speed *= carrying.speed_mult()
@@ -134,7 +149,7 @@ func _physics_process(delta: float) -> void:
 		_on_landed(_fall_vy)
 		footsteps.step()
 		_fall_vy = 0.0
-	if dir != 0.0:
+	if dir != 0.0 and bow_draw < 0.0:
 		facing = 1 if dir > 0.0 else -1
 	world.update_focus(global_position.x)
 
@@ -161,6 +176,8 @@ func noise() -> float:
 		n = 0.13 if crouching else 0.42
 	if swing >= 0.0 or (carrying and moving):
 		n = maxf(n, 0.9)
+	if bow_draw >= 0.0:
+		n = maxf(n, 0.1)
 	if wade_depth > 0.0 and moving:
 		n += 0.3
 	return n
@@ -227,6 +244,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		draw_slot(1)
 	elif event.is_action_pressed("use") and not placing:
 		use_held()
+	elif event.is_action_released("use") and bow_draw >= 0.0:
+		loose()
 
 func aim_point() -> Vector2:
 	return aim_override if aim_override != Vector2.INF else get_global_mouse_position()
@@ -257,6 +276,13 @@ func use_held() -> void:
 	var d := held.def
 	if d.has("rod"):
 		fishing.press()
+	elif d.has("bow"):
+		if backpack.count_of("arrows") == 0:
+			message.emit("No arrows. Craft some from sticks.")
+		else:
+			bow_draw = 0.0
+	elif d.has("knife"):
+		_knife()
 	elif d.has("axe"):
 		if chop_target == null:
 			message.emit("Nothing to chop within reach.")
@@ -297,6 +323,45 @@ func use_held() -> void:
 			message.emit("Nothing that needs a %s." % d.name.to_lower())
 	else:
 		message.emit("Nothing to do with that here.")
+
+## The bow hand holds; the arrow leaves from about shoulder height toward the aim.
+func arrow_origin() -> Vector2:
+	return global_position + Vector2(facing * 24.0, -150.0 + (30.0 if crouching else 0.0))
+
+func arrow_velocity() -> Vector2:
+	var dir := (aim_point() - arrow_origin()).normalized()
+	return dir * lerpf(ARROW_SPEED.x, ARROW_SPEED.y, maxf(bow_draw, 0.0))
+
+func loose() -> void:
+	var v := arrow_velocity()
+	var power := bow_draw
+	bow_draw = -1.0
+	if power < 0.2 or not backpack.take("arrows", 1):
+		return # let down gently
+	var a := Arrow.new()
+	a.world = world
+	a.position = arrow_origin()
+	a.velocity = v
+	a.arm_x = aim_point().x
+	world.add_child(a)
+
+## Close work: only an animal that hasn't noticed you can be taken with the knife.
+func _knife() -> void:
+	var best: Animal = null
+	for a: Animal in get_tree().get_nodes_in_group("animals"):
+		var d := absf(a.position.x - global_position.x)
+		if d < KNIFE_REACH * a.def.size and (best == null or d < absf(best.position.x - global_position.x)):
+			best = a
+	if best == null:
+		message.emit("Nothing to do with that here.")
+		return
+	swing = 0.0
+	if best.wound < 0.0 and best.state in [Animal.State.GRAZE, Animal.State.WALK, Animal.State.BEDDED] and best.awareness < best.def.alert_at:
+		best.kill()
+		message.emit("Quick and quiet. It never knew you were there.")
+	else:
+		best.bolt()
+		message.emit("It sees you coming and bolts.")
 
 func _consume_one() -> void:
 	held.count -= 1
@@ -540,4 +605,9 @@ func from_dict(d: Dictionary) -> void:
 	held = ItemStack.from_dict(d.held) if d.held else null
 	held_slot = int(d.held_slot)
 	known_recipes = PackedStringArray(d.recipes)
+	if "bow" not in known_recipes: # saves from before hunting: learn it, and get the cord for a string
+		backpack.add(ItemStack.make("cordage", GameClock.clock.hours))
+	for r in RECIPES:
+		if r not in known_recipes:
+			known_recipes.append(r)
 	camp_x = float(d.camp_x)

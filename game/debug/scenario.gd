@@ -10,7 +10,7 @@ var player: Player
 var world: World
 var shot := ""
 var mode := "camp"
-const EXPECT := "user://saves/scenario_expect.json"
+var EXPECT := SaveGame.DIR + "/scenario_expect.json"
 var failures := 0
 
 func _ready() -> void:
@@ -377,6 +377,111 @@ func _deer(x: float, seed_value: int) -> Animal:
 	a.facing = 1 # grazing, facing away
 	return a
 
+func _carcasses() -> Array:
+	return get_tree().get_nodes_in_group("persist").filter(func(n): return n is Carcass and not n.is_queued_for_deletion())
+
+## Aim point that allows for the arrow's drop over the distance (a player learns this by eye).
+func _lead(target: Vector2) -> Vector2:
+	var t := (target - player.arrow_origin()).length() / Player.ARROW_SPEED.y
+	return target - Vector2(0, 0.5 * Arrow.GRAVITY * t * t)
+
+func _hunt() -> void:
+	player.stow()
+	await teleport(9000.0)
+	player.cond.stamina = 100.0
+	var deer: Animal = await _deer(9110.0, 21)
+	player.draw_slot(1)
+	check(player.held and player.held.def.has("knife"), "knife in hand")
+	deer.awareness = 0.0
+	player.use_held()
+	await frames(3)
+	check(_carcasses().size() == 1, "the knife takes a deer that never noticed you")
+	await frames(int(Player.SWING_TIME * 60.0) + 2)
+	deer = await _deer(9110.0, 22)
+	deer.state = Animal.State.ALERT
+	deer.awareness = deer.def.alert_at
+	player.use_held()
+	await frames(3)
+	check(deer.state == Animal.State.FLEE and _carcasses().size() == 1, "an alert deer bolts before the knife reaches it")
+	await frames(int(Player.SWING_TIME * 60.0) + 2)
+
+	var carcass: Carcass = _carcasses()[0]
+	await teleport(carcass.global_position.x)
+	check(carcass.interact_label(player) == "Field dress", "carcass offers field dressing")
+	carcass.interact(player)
+	await frames(int(Carcass.DRESS_SECONDS * 60.0) + 10)
+	check(player.backpack.count_of("venison_raw") == Carcass.MEAT and _carcasses().is_empty(), "field dressed: %d venison" % player.backpack.count_of("venison_raw"))
+
+	# Bow: craft it and some arrows from sticks and the paracord in the starting kit.
+	check(player.backpack.count_of("cordage") == 1, "paracord in the starting kit")
+	player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 5))
+	for id in ["bow", "arrows"]:
+		var r: Dictionary = Builds.RECIPES[id]
+		for k in r.needs:
+			check(player.backpack.take(k, r.needs[k]), "have %s for the %s" % [k, id])
+		player.receive(ItemStack.make(id, GameClock.clock.hours, r.get("count", 1)))
+	check(player.backpack.count_of("bow") == 1 and player.backpack.count_of("arrows") == 4, "crafted a bow and 4 arrows")
+	player.hold(player.backpack.find(func(st): return st.def.has("bow")))
+
+	# A chest shot from 9 m: it runs a short way, bleeding, and drops.
+	await teleport(9000.0)
+	deer = await _deer(9900.0, 23)
+	await frames(2) # let it settle onto the ground before aiming
+	player.aim_override = _lead(deer.position + Vector2(30.0, -92.0))
+	player.use_held()
+	await frames(int(Player.DRAW_TIME * 60.0) + 5)
+	check(player.bow_draw >= 1.0 and deer.state != Animal.State.FLEE, "full draw at 9 m without spooking it")
+	player.loose()
+	check(player.backpack.count_of("arrows") == 3, "loosing spends an arrow")
+	var guard := 0
+	while deer.wound < 0.0 and is_instance_valid(deer) and guard < 120:
+		await frames(1)
+		guard += 1
+	check(is_instance_valid(deer) and deer.wound >= 0.0 and deer.wound < 3.1, "chest hit: a quick kill")
+	world.tracks.prints.clear()
+	guard = 0
+	while is_instance_valid(deer) and guard < 400:
+		await frames(1)
+		guard += 1
+	check(_carcasses().size() == 1, "it dropped after %.1f s" % (guard / 60.0))
+	var ran: float = _carcasses()[0].global_position.x - 9900.0
+	check(ran > 150.0 and ran < 2500.0, "it ran %.0f px before falling" % ran)
+	check(world.tracks.prints.any(func(p): return p.s == "blood"), "it left a blood trail")
+
+	# A shot too far back only wounds: it runs much longer, but still goes down.
+	_carcasses()[0].free()
+	await teleport(9000.0)
+	deer = await _deer(9900.0, 24)
+	await frames(2) # let it settle onto the ground before aiming
+	player.aim_override = _lead(deer.position + Vector2(-40.0, -92.0))
+	player.use_held()
+	await frames(int(Player.DRAW_TIME * 60.0) + 5)
+	player.loose()
+	guard = 0
+	while deer.wound < 0.0 and guard < 120:
+		await frames(1)
+		guard += 1
+	check(deer.wound > 5.0, "gut shot: wounded, not down (%.1f s left)" % deer.wound)
+	guard = 0
+	while is_instance_valid(deer) and guard < 60 * 20:
+		await frames(1)
+		guard += 1
+	check(_carcasses().size() == 1, "the wounded deer goes down after %.1f s" % (guard / 60.0))
+	var tr := world.tracks
+	await teleport(tr.prints.filter(func(p): return p.s == "blood")[0].x)
+	tr.interact(player)
+
+	# A miss lands in the dirt: usually recoverable.
+	player.aim_override = player.global_position + Vector2(400.0, 60.0)
+	player.use_held()
+	await frames(int(Player.DRAW_TIME * 60.0) + 5)
+	player.loose()
+	await frames(40)
+	var left := player.backpack.count_of("arrows")
+	check(get_tree().get_nodes_in_group("interactable").any(func(n): return n is WorldItem and n.stack.def.id == "arrows") or left == 1, "a missed arrow lands on the ground (or breaks)")
+	player.aim_override = Vector2.INF
+	player.stow()
+
 func _wild() -> void:
 	await frames(10)
 	GameClock.clock.hours = 7.0 # morning: deer are up and feeding
@@ -473,6 +578,9 @@ func _wild() -> void:
 	find_fire().interact(player)
 	await frames(60 * 4)
 	check(player.backpack.count_of("trout_cooked") == 1 or (player.held and player.held.def.id == "trout_cooked"), "cooked the trout over the fire")
+
+	# Hunting: the knife takes only an unaware deer; the bow works from range.
+	await _hunt()
 
 	# Birds burst up when you come close.
 	var flock := BirdFlock.new()

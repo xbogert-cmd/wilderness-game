@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "arrows"
+name = "Arrows"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)])
+weight = 0.05
+color = Color(0.690, 0.588, 0.420, 1)
+tags = PackedStringArray("ammo")
+max_stack = 12
+description = "Straight shoots, fire-hardened points. Recover them after a shot if they did not break."

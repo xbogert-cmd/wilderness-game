@@ -2,6 +2,7 @@ class_name Animal extends Node2D
 ## Generic animal brain: routine (graze, wander, bed down) plus awareness built from what it
 ## hears and sees. Enough awareness makes it stop and look; more makes it bolt away. It calms
 ## once it has put flee_distance between itself and the threat. It never chases.
+## Hunting: shot() wounds it (it runs, bleeds, then drops); kill() takes it outright.
 
 enum State { GRAZE, WALK, BEDDED, ALERT, FLEE }
 const STATE_NAMES: PackedStringArray = ["graze", "walk", "bedded", "alert", "flee"]
@@ -18,6 +19,10 @@ var speed := 0.0
 var home_x := 0.0
 var _timer := 0.0
 var _since_print := 0.0
+var wound := -1.0 ## seconds until a wounded animal drops; -1 = unhurt
+var _limp := 1.0 ## flee speed multiplier while wounded
+var _arrows := 0 ## arrows in it, drawn on the carcass
+var _since_blood := 0.0
 var _rng := RandomNumberGenerator.new()
 
 func setup(species: SpeciesDef, x: float, seed_value: int) -> void:
@@ -44,6 +49,11 @@ func _active() -> bool:
 	return false
 
 func _physics_process(delta: float) -> void:
+	if wound >= 0.0:
+		wound -= delta
+		if wound <= 0.0:
+			_die()
+			return
 	_perceive(delta)
 	match state:
 		State.GRAZE, State.BEDDED, State.ALERT:
@@ -51,7 +61,7 @@ func _physics_process(delta: float) -> void:
 		State.WALK:
 			speed = def.walk_speed
 		State.FLEE:
-			speed = move_toward(speed, def.flee_speed, 900.0 * delta)
+			speed = move_toward(speed, def.flee_speed * _limp, 900.0 * delta)
 			facing = 1 if position.x >= player.global_position.x else -1
 	_timer -= delta
 	if _timer <= 0.0:
@@ -63,6 +73,10 @@ func _physics_process(delta: float) -> void:
 	position.x = nx
 	position.y = world.terrain.height_at(position.x)
 	_since_print += absf(step)
+	_since_blood += absf(step)
+	if wound >= 0.0 and _since_blood > 45.0:
+		_since_blood = 0.0
+		tracks.add(position.x, "blood", facing)
 	if _since_print > def.stride:
 		_since_print = 0.0
 		tracks.add(position.x + facing * 20.0, def.track, facing)
@@ -102,6 +116,8 @@ func _perceive(delta: float) -> void:
 	if d < sight:
 		stim += (1.0 - d / sight) * 2.0
 	if state == State.FLEE:
+		if wound >= 0.0:
+			return # hurt animals keep running until they drop
 		awareness = maxf(awareness - (0.5 if d > def.flee_distance else 0.0) * delta, 0.0)
 		if awareness < def.alert_at * 0.6:
 			state = State.WALK
@@ -126,3 +142,34 @@ func bolt(alarm := true) -> void:
 	for other in get_tree().get_nodes_in_group("animals"): # the herd follows the first to bolt
 		if other != self and other.def == def and absf(other.position.x - position.x) < 900.0:
 			other.bolt.call_deferred(false)
+
+## Where a point falls on the body: 0 miss, 1 body, 2 vitals (heart-lung area or head).
+func zone_at(p: Vector2) -> int:
+	var l := (p - position) / def.size
+	l.x *= facing
+	if state != State.GRAZE and state != State.BEDDED and l.distance_to(Vector2(66, -142)) < 17.0:
+		return 2 # head up
+	var cy := -40.0 if state == State.BEDDED else -92.0
+	var e := Vector2((l.x + 3.0) / 64.0, (l.y - cy) / 28.0)
+	if e.length() > 1.0:
+		return 0
+	return 2 if l.x > 8.0 else 1
+
+func shot(zone: int) -> void:
+	_arrows += 1
+	if zone == 2:
+		wound = _rng.randf_range(1.8, 3.0) if wound < 0.0 else minf(wound, 1.5)
+		_limp = 0.9
+	else:
+		wound = _rng.randf_range(10.0, 16.0) if wound < 0.0 else wound * 0.5
+		_limp = 0.6
+	bolt()
+
+## A clean kill at close quarters.
+func kill() -> void:
+	_die()
+
+func _die() -> void:
+	world.spawn({"kind": "carcass", "x": position.x, "facing": facing, "species": def.id,
+		"hour": GameClock.clock.hours, "arrows": _arrows})
+	queue_free()
