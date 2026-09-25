@@ -66,7 +66,9 @@ func _ready() -> void:
 	world.add_child(sign)
 	world.update_focus(x)
 	player.died.connect(_on_player_died)
-	player.made_camp.connect(func(): save_to("auto"))
+	player.made_camp.connect(func():
+		Journal.note("camp", "Made camp. A roof to sleep under and somewhere to come back to.")
+		save_to("auto"))
 
 	camera = FollowCamera.new()
 	camera.target = player
@@ -113,6 +115,13 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.player = player
 	ui.add_child(hud)
+	Journal.current = Journal.new()
+	if save and save.has("journal"):
+		Journal.current.from_dict(save.journal)
+	if save and save.has("explored"):
+		world.explored = PackedByteArray(save.explored)
+	Journal.current.written.connect(func(t: String): player.message.emit("Journal: \"%s…\"  (%s)" % [t.left(48).strip_edges(), Keys.label("map")]))
+	Journal.note("start", "Day one. Came in on the Rattlesnake Creek trail with a pack, a hatchet and a knife. The valley's quiet. The old fire lookout stands on the east ridge; the sign says a mile to the creek.")
 	tips = Tips.new()
 	tips.player = player
 	tips.hud = hud
@@ -138,6 +147,10 @@ func _ready() -> void:
 	var pack_ui := BackpackUI.new()
 	pack_ui.player = player
 	ui.add_child(pack_ui)
+	var map_ui := MapUI.new()
+	map_ui.player = player
+	map_ui.world = world
+	ui.add_child(map_ui) # after the pause menu so Esc closes the map first
 	var dbg := DebugOverlay.new()
 	dbg.player = player
 	dbg.world = world
@@ -240,6 +253,12 @@ func _ready() -> void:
 		player.sleep.call_deferred()
 	if args.has("menu"):
 		pause.toggle.call_deferred()
+	if args.has("top"): # preview: up on the lookout catwalk
+		player.global_position = Vector2(Terrain.LOOKOUT_X - 40.0, world.terrain.summit_y + Lookout.FLOOR - 6.0)
+	if args.has("reveal"): # preview: the whole map explored
+		world.reveal_all()
+	if args.has("map"): # preview: the map and journal
+		map_ui.toggle.call_deferred()
 	if args.has("pack"):
 		if args.pack == "all": # preview: one of every item, to check the icons
 			for id in ["trout_raw", "whitefish_cooked", "berries", "splint", "fishing_pole", "fishing_kit", "sticks", "trout_cooked", "bandage"]:
@@ -271,10 +290,13 @@ func _preview_notch() -> void:
 		best.hit(player, 0.9, Vector2.ZERO)
 
 func _process(delta: float) -> void:
+	if GameClock.weather.snow_cm > 2.0:
+		Journal.note("first_snow", "First snow lying in the valley. Every track shows now, mine included, and the creek will freeze if the cold holds.")
 	var season := GameClock.clock.season()
 	if season != _season:
 		if _season != -1:
 			player.message.emit(SEASON_NOTES[season])
+			Journal.note("season_%d_%d" % [season, GameClock.clock.day()], SEASON_NOTES[season])
 		_season = season
 	_autosave_t += delta
 	if _autosave_t >= AUTOSAVE_SECONDS and player.unsafe_reason() == "":
@@ -292,7 +314,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func snapshot() -> Dictionary:
 	return {"clock": GameClock.clock.to_dict(), "weather": GameClock.weather.to_dict(),
 		"player": player.to_dict(), "world": world.snapshot(), "tracks": world.tracks.to_array(),
-		"tips": tips.seen.keys()}
+		"tips": tips.seen.keys(), "journal": Journal.current.to_dict(), "explored": Array(world.explored)}
 
 func save_to(slot: String) -> Error:
 	var err := SaveGame.write(slot, snapshot())

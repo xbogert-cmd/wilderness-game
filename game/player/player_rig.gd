@@ -41,7 +41,10 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _ground(local_x: float) -> float:
-	return body.world.ground_y(body.global_position.x + local_x * body.facing) - body.global_position.y # the ice, when the creek is frozen
+	var g := body.world.ground_y(body.global_position.x + local_x * body.facing) - body.global_position.y # the ice, when the creek is frozen
+	if body.is_on_floor() and g > 40.0:
+		return 0.0 # standing on something built above the ground (the lookout catwalk): plant the feet there
+	return g
 
 func _ground_slope(local_x: float) -> float:
 	return atan2(_ground(local_x + 6.0) - _ground(local_x - 6.0), 12.0)

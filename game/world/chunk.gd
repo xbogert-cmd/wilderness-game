@@ -50,6 +50,12 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	_grass(terrain, rng, low_mat, x0, x1)
 	if _contains(Terrain.CREEK_X):
 		_creek(terrain)
+	for lm in [[Terrain.CAVE_X, Cave], [Terrain.LOOKOUT_X, Lookout]]:
+		if _contains(lm[0]):
+			var n: Node2D = lm[1].new()
+			n.world = world
+			n.chunk_index = index
+			add_child(n)
 	_vines(terrain, world_seed, st)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
@@ -150,7 +156,10 @@ func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
 		for p in surface:
 			pts.append(p + Vector2(0, r[0]))
 			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x)
-			cols.append(MUD if mud else r[1])
+			var c: Color = r[1]
+			if r[0] < 20.0: # drier, stonier topsoil going east
+				c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x))
+			cols.append(MUD if mud else c)
 	for row in rows.size() - 1:
 		for i in n - 1:
 			var a := row * n + i
@@ -173,13 +182,20 @@ func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material,
 	var end := (index + 1) * Terrain.CHUNK_W
 	var n := 0
 	while x < end:
-		if not _near_creek(x, 120.0) and x > 400.0 and x < Terrain.WORLD_W - 400.0:
+		var clear := absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF + 250.0 or absf(x - Terrain.LOOKOUT_X) < 500.0
+		if not _near_creek(x, 120.0) and not clear and x > 400.0 and x < Terrain.WORLD_W - 400.0:
 			n += 1
 			var roll := rng.randf()
 			var pos := Vector2(x, terrain.height_at(x) + 6)
+			# East of the valley: fewer aspens and more rock in the foothills, sparse pines on the ridge.
+			var fh := Terrain.foothills(x)
+			var rg := Terrain.ridge(x)
+			var tree_cut := 0.75 - 0.08 * fh - 0.25 * rg
+			var conifer_cut := lerpf(0.45, tree_cut - 0.07, fh)
+			var bush_cut := 0.9 - 0.12 * fh - 0.1 * rg
 			# Art is always generated so the rng sequence (and the rest of the chunk) stays stable.
-			if roll < 0.75:
-				var conifer := roll < 0.45
+			if roll < tree_cut:
+				var conifer := roll < conifer_cut
 				var h := rng.randf_range(900, 1500) if conifer else rng.randf_range(650, 1000)
 				var art := SceneryArt.conifer(rng, h, Palette.FIR_DARK, Palette.FIR_LIGHT, Palette.BARK, mat) if conifer \
 					else SceneryArt.broadleaf(rng, h, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT, Palette.ASPEN_BARK, mat)
@@ -188,14 +204,14 @@ func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material,
 				tree.position = pos
 				tree.z_index = -10
 				add_child(tree)
-			elif roll < 0.9:
+			elif roll < bush_cut:
 				var w := rng.randf_range(90, 170)
 				var bush := BerryBush.new()
 				bush.setup(self, n, SceneryArt.bush(rng, w, Palette.BUSH, low_mat), w, rng.randf() < 0.4, st.picked.get(str(n), -INF))
 				bush.position = pos
 				add_child(bush)
 			else:
-				var rock := SceneryArt.rock(rng, rng.randf_range(60, 150), low_mat)
+				var rock := SceneryArt.rock(rng, rng.randf_range(60, 150) * (1.0 + 0.9 * fh), low_mat)
 				rock.position = pos
 				add_child(rock)
 		x += rng.randf_range(180, 520)

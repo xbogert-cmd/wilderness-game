@@ -20,6 +20,9 @@ func _ready() -> void:
 	z_as_relative = false
 	z_index = 3
 
+func _enter_tree() -> void:
+	Journal.note("first_kill", "Took my first deer. Meat for days if I can keep it from spoiling, and a hide worth curing.")
+
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	species = d.species
 	facing = int(d.facing)

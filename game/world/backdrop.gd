@@ -14,6 +14,7 @@ var player: Node2D
 var layers: Array[Dictionary] = []
 var fg_items: Array[Node2D] = []
 var fog_material: ShaderMaterial
+var _far_tower: Node2D ## the lookout as a far silhouette; fades as the real one comes near
 var _ref_cy := 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -43,6 +44,10 @@ func _process(delta: float) -> void:
 	for l in layers:
 		l.node.position = Vector2(c.x * (1.0 - l.s), c.y * (1.0 - l.sy) + l.bias)
 	_fade_foreground(delta)
+	var fg: Node2D = layers[-1].node # the near foreground makes no sense in a wide view: let it go
+	fg.modulate.a = move_toward(fg.modulate.a, 0.0 if camera.zoom.x < 0.75 else 1.0, delta * 1.5)
+	if _far_tower:
+		_far_tower.modulate.a = 1.0 - smoothstep(Terrain.RIDGE_X - 8000.0, Terrain.RIDGE_X - 3000.0, c.x)
 
 func _fade_foreground(delta: float) -> void:
 	var p := player.get_global_transform_with_canvas().origin
@@ -102,6 +107,7 @@ func _mountains(node: Node2D, s: float, mat: Material) -> void:
 	tower.add_child(SceneryArt.poly(PackedVector2Array([Vector2(4, 0), Vector2(7, 0), Vector2(5, -26), Vector2(2, -26)]), c, mat))
 	tower.add_child(SceneryArt.poly(PackedVector2Array([Vector2(-7, -26), Vector2(7, -26), Vector2(7, -36), Vector2(0, -41), Vector2(-7, -36)]), c, mat))
 	node.add_child(tower)
+	_far_tower = tower
 
 func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 	var span := _span(s)
@@ -135,12 +141,13 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 			var roll := _rng.randf()
 			var tree: Node2D
 			var detail := s > 0.5
-			if roll < 0.6:
+			var fh := Terrain.foothills(x / s) # the same thinning east as the gameplay plane
+			if roll > 0.9 - 0.2 * fh:
+				tree = SceneryArt.rock(_rng, _rng.randf_range(90.0, 260.0) * s, mat) if fh > 0.5 else SceneryArt.bush(_rng, 160.0 * s, Palette.BUSH, mat)
+			elif roll < 0.6:
 				tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max), Palette.FIR_DARK, Palette.FIR_LIGHT if detail else Palette.FIR_DARK, Palette.BARK, mat)
 			elif roll < 0.9:
 				tree = SceneryArt.broadleaf(_rng, _rng.randf_range(h_min, h_max) * 0.7, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT if detail else Palette.ASPEN_LEAF_DARK, Palette.ASPEN_BARK, mat)
-			else:
-				tree = SceneryArt.bush(_rng, 160.0 * s, Palette.BUSH, mat)
 			tree.position = Vector2(x, _ground_line(s, n, amp, x) + 3.0)
 			node.add_child(tree)
 		x += _rng.randf_range(gap * 0.35, gap * 1.3)

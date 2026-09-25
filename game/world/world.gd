@@ -33,6 +33,9 @@ var state := {} ## "index" -> {felled: {}, picked: {}, objects: [], left: hour}
 var dynamic := Node2D.new() ## persistent objects not owned by a chunk (they can move)
 var tracks := Tracks.new()
 var _snow_shown := -1.0
+const MAP_CELL := 200.0 ## explored-map resolution
+const SIGHT := 1100.0 ## how far either side you take in as you walk
+var explored := PackedByteArray() ## one byte per MAP_CELL: 1 once seen
 
 func _ready() -> void:
 	tracks.world = self
@@ -76,7 +79,24 @@ func chunk_state(i: int) -> Dictionary:
 		state[key] = {"felled": {}, "picked": {}, "objects": _initial_objects(i), "left": GameClock.clock.hours}
 	return state[key]
 
+func explore(x: float) -> void:
+	if explored.size() != int(Terrain.WORLD_W / MAP_CELL):
+		explored.resize(int(Terrain.WORLD_W / MAP_CELL))
+	for i in range(maxi(int((x - SIGHT) / MAP_CELL), 0), mini(int((x + SIGHT) / MAP_CELL) + 1, explored.size())):
+		explored[i] = 1
+	if x > Terrain.FOOTHILLS_X:
+		Journal.note("foothills", "Walked out of the creek valley into the foothills. Rockier ground, fewer aspens, and the land climbing toward the ridge and the lookout.")
+
+func reveal_all() -> void:
+	explored.resize(int(Terrain.WORLD_W / MAP_CELL))
+	explored.fill(1)
+
+func seen(x: float) -> bool:
+	var i := int(x / MAP_CELL)
+	return i >= 0 and i < explored.size() and explored[i] == 1
+
 func update_focus(x: float) -> void:
+	explore(x)
 	var c := terrain.chunk_of(x)
 	for i in chunks.keys():
 		if absi(i - c) > 1:

@@ -7,6 +7,7 @@ class_name Scenario extends Node
 ## Mode "verify": run with --load=3 after "life"; checks the save came back exactly.
 ## Mode "winter": woodpile, seasons, snow, tracks in snow, frozen creek, snow in the pot,
 ## then the camp builds: hide frame and coat, drying rack, log cabin.
+## Mode "world": the foothills, the rock shelter, the fire lookout, the map, and the herd.
 
 var player: Player
 var world: World
@@ -17,7 +18,10 @@ var failures := 0
 
 func _ready() -> void:
 	player.message.connect(func(t): print("  msg: ", t))
+	var wl: Wildlife = get_parent().find_children("*", "Wildlife", false, false)[0]
+	wl.auto_spawn = false # the checks place their own deer
 	match mode:
+		"world": _world_tour.call_deferred()
 		"life": _life.call_deferred()
 		"verify": _verify.call_deferred()
 		"wild": _wild.call_deferred()
@@ -336,7 +340,8 @@ func _life() -> void:
 	var expect := {"x": player.global_position.x, "hours": GameClock.clock.hours, "weather": GameClock.weather.kind,
 		"health": player.cond.health, "fatigue": player.cond.fatigue, "camp_x": player.camp_x, "pack": ids,
 		"bottle": bottle.water, "bottle_clean": bottle.water_clean,
-		"berries_made": player.backpack.find(func(s): return s.def.id == "berries").made_hour}
+		"berries_made": player.backpack.find(func(s): return s.def.id == "berries").made_hour,
+		"journal": Journal.current.entries.size(), "explored": Array(world.explored).count(1)}
 	var f := FileAccess.open(EXPECT, FileAccess.WRITE)
 	f.store_string(JSON.stringify(expect))
 	f.close()
@@ -395,6 +400,96 @@ func _verify() -> void:
 	check(logs.size() == 1, "cut log still lying by camp")
 	var berries: ItemStack = player.backpack.find(func(s): return s.def.id == "berries")
 	check(berries and absf(berries.made_hour - float(e.berries_made)) < 0.01 and berries.freshness(GameClock.clock.hours) == ItemStack.Fresh.STALE, "food keeps its age: stale berries are still stale")
+	check(Journal.current.entries.size() == int(e.journal) and Array(world.explored).count(1) >= int(e.explored), "journal (%d entries) and explored map restored" % Journal.current.entries.size())
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+# --- Mode "world": foothills, rock shelter, lookout, map, herd ------------------------
+
+func _world_tour() -> void:
+	await frames(10)
+	GameClock.clock.hours = 10.0
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	var t := world.terrain
+	check(t.height_at(40000.0) < t.height_at(20000.0) - 800.0 and t.summit_y < t.height_at(40000.0) - 500.0, "the land climbs east through the foothills to the summit")
+
+	# The rock shelter: shelter, a little warmth when it's cold, and an old cache.
+	await teleport(Terrain.CAVE_X)
+	var cave: Cave = get_tree().get_first_node_in_group("landmark") if get_tree().get_first_node_in_group("landmark") is Cave else null
+	for n in get_tree().get_nodes_in_group("landmark"):
+		if n is Cave:
+			cave = n
+	check(cave != null and world.sheltered_at(player.global_position.x), "the rock shelter keeps the weather off")
+	check(Journal.has("cave"), "finding it goes in the journal")
+	await teleport(cave.interact_pos().x)
+	check(cave.interact_label(player) == "Search the old camp", "there's an old camp to search at the back")
+	var kits := player.backpack.count_of("fishing_kit")
+	cave.interact(player)
+	check(player.backpack.count_of("fishing_kit") == kits + 1 and Journal.has("cave_page") and cave.interact_label(player) == "", "cache found once: line & hooks, and a torn page")
+
+	# The fire lookout: climb, take in the view (the whole map fills in), search, sleep, climb down.
+	await teleport(Terrain.LOOKOUT_X + Lookout.LADDER_X)
+	var lk: Lookout = null
+	for n in get_tree().get_nodes_in_group("landmark"):
+		if n is Lookout:
+			lk = n
+	check(lk != null and lk.interact_label(player) == "Climb the lookout tower", "the ladder at the foot of the tower")
+	lk.interact(player)
+	await frames(int(2.5 * 60.0) + 20)
+	check(lk.on_top(player), "up on the catwalk (%.0f px up)" % (lk.global_position.y - player.global_position.y))
+	await frames(30)
+	check(Array(world.explored).count(0) == 0 and Journal.has("lookout"), "the whole map fills in from up here")
+	var cam := get_viewport().get_camera_2d() as FollowCamera
+	check(cam.view_zoom == Lookout.VIEW_ZOOM, "the view pulls back over the valley")
+	var cupboard: Node2D = null
+	for n in get_tree().get_nodes_in_group("interactable"):
+		if n.get_script() and n.get("lookout") == lk:
+			cupboard = n
+	player.global_position.x = cupboard.global_position.x
+	await frames(5)
+	check(player.focus == cupboard, "the keeper's cupboard is in reach")
+	cupboard.interact(player)
+	check(Journal.has("log_3") and player.backpack.count_of("lighter") >= 2, "supplies and the keeper's logbook (3 pages)")
+	check(world.sheltered_at(player.global_position.x), "the cab is shelter: you can sleep up here")
+	player.global_position.x = lk.global_position.x + Lookout.LADDER_X
+	await frames(5)
+	check(lk.interact_label(player) == "Climb down", "the ladder back down")
+	lk.interact(player)
+	await frames(int(2.5 * 60.0) + 30)
+	check(not lk.on_top(player) and player.is_on_floor(), "back on the ground")
+	await frames(60)
+	check(cam.view_zoom == 0.0, "and the view comes back in")
+
+	# The map: opens paused, lists what you've built.
+	var map: MapUI = get_tree().get_root().find_children("*", "MapUI", true, false)[0]
+	map.toggle()
+	check(map.visible and get_tree().paused, "M opens the map and pauses")
+	check(map._list.get_child_count() >= 4 or Journal.current.entries.size() >= 4, "the journal is filling up (%d entries)" % Journal.current.entries.size())
+	map.toggle()
+	check(not get_tree().paused, "and closes")
+
+	# The herd: deer appear out of sight on either side and far ones leave.
+	var wl: Wildlife = get_parent().find_children("*", "Wildlife", false, false)[0]
+	await teleport(18000.0)
+	var sides := {}
+	for k in 12:
+		for a in get_tree().get_nodes_in_group("animals"):
+			a.free()
+		wl._manage_herd()
+		for a in get_tree().get_nodes_in_group("animals"):
+			sides[signf(a.position.x - player.global_position.x)] = true
+			check(absf(a.position.x - player.global_position.x) >= Wildlife.SPAWN_CLEARANCE, "spawned out of sight (%.0f px)" % absf(a.position.x - player.global_position.x)) if k == 0 else null
+	check(sides.has(-1.0) and sides.has(1.0), "deer turn up on both sides of you")
+	await teleport(21000.0) # both test deer within loaded ground
+	for a in get_tree().get_nodes_in_group("animals"):
+		a.free()
+	var far := wl.spawn(Wildlife.SPECIES[0], player.global_position.x + 7000.0, 1)
+	var hurt := wl.spawn(Wildlife.SPECIES[0], player.global_position.x - 7000.0, 2)
+	hurt.wound = 30.0
+	wl._manage_herd()
+	await frames(2)
+	check(not is_instance_valid(far) and is_instance_valid(hurt), "a far-off deer leaves; a wounded one stays to be tracked")
+
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)
 

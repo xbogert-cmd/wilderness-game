@@ -16,6 +16,7 @@ godot
 | Ctrl | Crouch |
 | Space | Hop |
 | Tab | Backpack (pauses the game): drag to pack, R rotates while dragging |
+| M | Map and field journal (pauses the game) |
 | 1 / 2 | Draw the tool strapped outside the pack (hatchet, knife), or put it back |
 | Left click | Use what's in hand: chop, eat, drink, treat, fish, knife an unaware deer. Bow: hold to draw, release to loose. With a felled trunk, aim at a length mark |
 | E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire, field dress a carcass |
@@ -43,6 +44,12 @@ godot
 - *Drying rack* (2 medium logs, 4 sticks): hold raw venison or fish and press E to hang it (8 strips). It dries into jerky in about 12 hours, faster beside a fire, stalled by rain. Hanging meat doesn't spoil.
 - *Log cabin* (6 long logs, 6 medium, 4 sticks, 8 hours to build): shelter whose walls hold warmth like a fire. Building or sleeping in it makes it camp, and it's the best sleep in the valley.
 
+**The wider world:** east of the creek valley the land climbs through rockier foothills (fewer aspens, more boulders) past a *rock shelter*, then up the ridge to the *fire lookout* (about 450 m of country in all). The rock shelter is dry and a little warmer than outside, somewhere to sleep, and someone left a cache there. At the lookout, E at the ladder climbs the tower: the view pulls back, the whole map fills in, the cab is shelter to sleep in, and the keeper's cupboard holds supplies and the logbook. Don't step off the catwalk.
+
+**Map and journal (M):** the map is the land's profile as you've seen it (unexplored stretches stay blank), with the trailhead, creek, rock shelter, lookout, your camp and structures, a dropped pack, game trails you've crossed, and you. The field journal writes itself the first time things happen or are found: making camp, first snow, the seasons turning, your first deer, the rock shelter, the lookout, and pages left by the last keeper.
+
+**Deer around you:** a small herd is kept around you (fewer in winter): new deer appear out of sight on either side, on that stretch's game trail, and deer that wander 60 m off and out of view leave. Wounded deer never leave, so a blood trail always ends at the deer.
+
 **Workbench, tools, storage:** a *workbench* (2 medium logs, 2 sticks) is needed for the bigger crafting: bow, arrows, hide coat, deer call (the recipe list says "at a workbench"). Quick things (vine cord, splint, fishing pole) work anywhere. Tools dull as you use them and their handles wear: a worn tool works slower but never breaks. Select the hatchet or knife in the pack to *sharpen* it on a whetstone (two lie on the creek banks; ~30 sharpenings each), or to *repair the handle* with 2 sticks at the workbench. A *storage chest* (1 medium log, 3 sticks) opens beside the pack: drag between them, or use Move to chest / Move to pack.
 
 **Wind, trails, bait, calls:** the wind has a direction (arrow, bottom right) and carries your scent: a deer downwind smells you from 8-17 m depending on the wind, blind or no blind, so come at deer from downwind. Each part of the valley has a game trail, a worn path between bedding cover and a feeding ground; deer bed there by day and walk it at dawn and dusk. A *bait pile* (4 berries, via B) draws active deer within 26 m to feed until it's eaten or goes off in two days. A *deer call* (bench, 1 stick) bleats: curious deer walk toward you, but a third call in a short while makes them wary.
@@ -67,7 +74,8 @@ godot --fixed-fps 60 --resolution 1280x720 -- --scenario   # same, windowed: onl
 godot --headless --fixed-fps 60 -- --scenario=life                # sleep, autosave, save slot 3, die, respawn, recover
 godot --headless --fixed-fps 60 -- --load=3 --scenario=verify     # then cold-load slot 3 and check it matches
 godot --headless --fixed-fps 60 -- --scenario=wild                # deer senses, tracks, fishing, cooking, birds, hunting
-godot --headless --fixed-fps 60 -- --scenario=winter              # woodpile, seasons, snow, tracks in snow, frozen creek
+godot --headless --fixed-fps 60 -- --scenario=winter              # woodpile, seasons, snow, tracks in snow, frozen creek, camp builds
+godot --headless --fixed-fps 60 -- --scenario=world               # foothills, rock shelter, lookout, map, journal, the herd
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
 Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.
