@@ -69,7 +69,7 @@ func _gain(n: String, target: float, delta: float) -> void:
 	var cur := db_to_linear(p.volume_db)
 	p.volume_db = linear_to_db(maxf(move_toward(cur, target, FADE * delta), 0.0001))
 
-func _exit_tree() -> void:
-	for p in beds.values():
+func _exit_tree() -> void: # release playbacks so shutdown doesn't report them as leaks
+	for p in beds.values() + [creek, owl]:
 		p.stop()
-	creek.stop()
+		p.stream = null
