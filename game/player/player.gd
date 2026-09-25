@@ -41,7 +41,8 @@ var swing := -1.0 ## 0..1 through a tool swing, -1 idle
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
-const RECIPES: PackedStringArray = ["splint", "vine_cord", "fishing_pole", "bow", "arrows", "hide_coat"]
+const RECIPES: PackedStringArray = ["splint", "vine_cord", "fishing_pole", "bow", "arrows", "hide_coat", "deer_call"]
+const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never breaks
 var known_recipes := RECIPES
 var bow_draw := -1.0 ## 0..1, -1 not drawing
 var fishing: Fishing ## set by Main
@@ -291,6 +292,8 @@ func use_held() -> void:
 			bow_draw = 0.0
 	elif d.has("knife"):
 		_knife()
+	elif d.has("call"):
+		_call()
 	elif d.has("axe"):
 		if chop_target == null:
 			message.emit("Nothing to chop within reach.")
@@ -356,6 +359,14 @@ func loose() -> void:
 	a.arm_x = aim_point().x
 	world.add_child(a)
 
+const CALL_REACH := 3000.0
+
+func _call() -> void:
+	Sfx.play_at(self, global_position + Vector2(facing * 20.0, -170.0), Sfx.bleat(), -2.0)
+	for a: Animal in get_tree().get_nodes_in_group("animals"):
+		if absf(a.position.x - global_position.x) < CALL_REACH:
+			a.hear_call(global_position.x)
+
 ## Close work: only an animal that hasn't noticed you can be taken with the knife.
 func _knife() -> void:
 	var best: Animal = null
@@ -386,8 +397,9 @@ func _advance_swing(delta: float) -> void:
 	var before := swing
 	swing += delta / SWING_TIME
 	if before < SWING_IMPACT and swing >= SWING_IMPACT and chop_target and is_instance_valid(chop_target) and held:
-		var power := held.sharpness * cond.tool_speed_mult()
+		var power := held.sharpness * lerpf(0.6, 1.0, held.condition) * cond.tool_speed_mult()
 		held.sharpness = maxf(0.35, held.sharpness - 0.003)
+		held.condition = maxf(0.3, held.condition - WEAR_PER_SWING)
 		chop_target.hit(self, power, aim_point())
 	if swing >= 1.0:
 		swing = -1.0

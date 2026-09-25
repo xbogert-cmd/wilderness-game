@@ -13,6 +13,7 @@ class_name SpeciesDef extends Resource
 @export_group("Senses (px at full strength)")
 @export var sight := 950.0
 @export var hearing := 1500.0
+@export var scent := 1300.0 ## how far downwind it smells you at a stiff wind (half that when calm)
 @export var alert_at := 0.45 ## awareness to stop and look
 @export var flee_at := 1.0 ## awareness to bolt
 @export var flee_distance := 2200.0 ## calms once this far from the threat; never chases or flees map-wide

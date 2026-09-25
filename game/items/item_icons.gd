@@ -122,6 +122,18 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 			if d.id == "venison_cooked":
 				for i in 3:
 					ci.draw_line(Vector2(w * (0.3 + i * 0.18), h * 0.28), Vector2(w * (0.22 + i * 0.18), h * 0.72), a.call(Color(0.2, 0.12, 0.06, 0.7)), 2.5)
+		"whetstone":
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.12, h * 0.55), Vector2(w * 0.3, h * 0.36), Vector2(w * 0.86, h * 0.4),
+				Vector2(w * 0.9, h * 0.6), Vector2(w * 0.7, h * 0.72), Vector2(w * 0.2, h * 0.7)]), a.call(c))
+			ci.draw_line(Vector2(w * 0.3, h * 0.42), Vector2(w * 0.84, h * 0.46), a.call(c.lightened(0.3)), 2.0)
+			if s.uses_left < d.uses:
+				var worn := 1.0 - float(s.uses_left) / d.uses
+				ci.draw_line(Vector2(w * 0.4, h * 0.5), Vector2(w * (0.4 + 0.4 * worn), h * 0.52), a.call(c.darkened(0.3)), 3.0)
+		"deer_call":
+			ci.draw_rect(Rect2(w * 0.12, h * 0.4, w * 0.56, h * 0.22), a.call(c))
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.66, h * 0.36), Vector2(w * 0.9, h * 0.28), Vector2(w * 0.9, h * 0.74), Vector2(w * 0.66, h * 0.66)]), a.call(c.darkened(0.2)))
+			ci.draw_line(Vector2(w * 0.1, h * 0.51), Vector2(w * 0.04, h * 0.51), a.call(DARK), 3.0)
+			ci.draw_line(Vector2(w * 0.3, h * 0.4), Vector2(w * 0.3, h * 0.62), a.call(DARK), 1.5)
 		"vine":
 			for k in mini(s.count, 3):
 				var pts := PackedVector2Array()

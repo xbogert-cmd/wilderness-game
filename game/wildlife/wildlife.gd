@@ -19,18 +19,32 @@ func _ready() -> void:
 	for i in world.chunks:
 		_on_chunk_loaded(i)
 
+## Each chunk's game trail: (bedding x, feeding x). Deer bed in cover by day and walk the same
+## line to feed at dawn and dusk, so their tracks and the worn path build up along it.
+static func trail(i: int) -> Vector2:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([World.WORLD_SEED, i, "trail"])
+	var bed := i * Terrain.CHUNK_W + rng.randf_range(900.0, Terrain.CHUNK_W - 900.0)
+	var feed := bed + (1.0 if rng.randf() < 0.5 else -1.0) * rng.randf_range(1600.0, 2600.0)
+	feed = clampf(feed, Animal.EDGE + 200.0, Terrain.WORLD_W - Animal.EDGE - 200.0)
+	return Vector2(clampf(bed, Animal.EDGE + 200.0, Terrain.WORLD_W - Animal.EDGE - 200.0), feed)
+
 func _on_chunk_loaded(i: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([World.WORLD_SEED, i, GameClock.clock.day(), "animals"])
+	var t := trail(i)
 	for def: SpeciesDef in SPECIES:
 		for g in def.groups_per_chunk:
-			var x := i * Terrain.CHUNK_W + rng.randf_range(400.0, Terrain.CHUNK_W - 400.0)
+			var active := Animal.active_at(def, GameClock.clock.hour_of_day())
+			var x := (t.y if active else t.x) + rng.randf_range(-300.0, 300.0)
 			if GameClock.clock.season() == 3 and rng.randf() < 0.5:
 				continue # winter thins the herd: many have moved down to lower valleys
 			if absf(x - player.global_position.x) < SPAWN_CLEARANCE or x < Animal.EDGE or x > Terrain.WORLD_W - Animal.EDGE:
 				continue
 			for k in rng.randi_range(def.group_min, def.group_max):
-				spawn(def, x + k * rng.randf_range(90.0, 220.0), rng.randi())
+				var a := spawn(def, x + k * rng.randf_range(90.0, 220.0), rng.randi())
+				a.bed_x = t.x
+				a.feed_x = t.y
 
 func spawn(def: SpeciesDef, x: float, seed_value: int) -> Animal:
 	var a := Animal.new()

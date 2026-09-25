@@ -172,6 +172,8 @@ func _ready() -> void:
 		world.spawn({"kind": "woodpile", "x": x + 360.0, "logs": 9})
 		world.spawn({"kind": "hide_frame", "x": x + 560.0, "curing": true, "cured": 7.0})
 		world.spawn({"kind": "drying_rack", "x": x + 780.0, "pieces": [0.0, 2.0, 5.0, 7.0, 9.0, 12.0]})
+		world.spawn({"kind": "workbench", "x": x - 170.0})
+		world.spawn({"kind": "chest", "x": x - 20.0})
 	if args.has("carry"): # preview: carrying a short or medium log
 		var lg := world.spawn({"kind": "log", "size": args.carry, "x": x, "y": world.terrain.height_at(x) - 30.0}) as WorldLog
 		player.carrying = lg
@@ -184,6 +186,22 @@ func _ready() -> void:
 		player.auto_crouch = true
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		var d := wildlife.spawn(Wildlife.SPECIES[0], x + 420.0, 4)
+		d.state = Animal.State.WALK
+		d.facing = -1
+	if args.has("chest"): # preview: a chest open beside the pack
+		var chest := world.spawn({"kind": "chest", "x": x + 60.0}) as StorageChest
+		for id in ["jerky", "venison_cooked", "hide", "whetstone", "arrows"]:
+			chest.store.add(ItemStack.make(id, GameClock.clock.hours, 4 if id in ["jerky", "arrows"] else 1))
+		chest.interact.call_deferred(player)
+	if args.has("bait"): # preview: a bait pile on a game trail, a deer coming to it
+		var t := Wildlife.trail(world.terrain.chunk_of(x))
+		var bx := lerpf(t.x, t.y, 0.5)
+		player.global_position.x = bx - 260.0
+		world.spawn({"kind": "bait", "x": bx, "laid": GameClock.clock.hours})
+		world.spawn({"kind": "blind", "x": bx - 260.0})
+		player.auto_crouch = true
+		GameClock.weather.wind_dir = -1 # into the wind, or it would smell us
+		var d := wildlife.spawn(Wildlife.SPECIES[0], bx + 380.0, 6)
 		d.state = Animal.State.WALK
 		d.facing = -1
 	if args.has("piles"): # preview: woodpiles with 1, 3, 6, 7, 10 and 15 logs

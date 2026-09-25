@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "deer_call"
+name = "Deer Call"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.05
+color = Color(0.620, 0.494, 0.318, 1)
+tags = PackedStringArray("call")
+description = "Hold it and click: a soft doe bleat draws curious deer in. Call too often and they grow wary."

@@ -21,7 +21,7 @@ godot
 | E | Interact: pick up, fill a container at the creek, deliver materials, fuel or light a fire, pot on/off the fire, field dress a carcass |
 | F | Lift or set down a log. Short and medium logs ride on the shoulder; long logs drag |
 | Q | Put away what's in hand |
-| B | Build menu (campfire, lean-to, woodpile, pot tripod, hunting blind, hide frame, drying rack, log cabin), then click to place a blueprint and right-click to cancel |
+| B | Build menu (campfire, lean-to, woodpile, pot tripod, workbench, storage chest, bait pile, hunting blind, hide frame, drying rack, log cabin), then click to place a blueprint and right-click to cancel |
 | F3 | Debug overlay |
 | Z | Sleep under a shelter; time runs about 60× faster, and any key wakes you |
 | Esc | Pause menu: save to slots 1–3 (only when safe), load any slot or the autosave |
@@ -42,6 +42,10 @@ godot
 - *Hide frame* (2 medium logs, 2 sticks): field dressing now also gives a raw deer hide, which rots in two days unless you stretch it on the frame. It cures in 18 hours into tanned hide. Two tanned hides and paracord make a *hide coat* (backpack recipe), worn whenever it's in your pack: much warmer, and your jacket turns buckskin.
 - *Drying rack* (2 medium logs, 4 sticks): hold raw venison or fish and press E to hang it (8 strips). It dries into jerky in about 12 hours, faster beside a fire, stalled by rain. Hanging meat doesn't spoil.
 - *Log cabin* (6 long logs, 6 medium, 4 sticks, 8 hours to build): shelter whose walls hold warmth like a fire. Building or sleeping in it makes it camp, and it's the best sleep in the valley.
+
+**Workbench, tools, storage:** a *workbench* (2 medium logs, 2 sticks) is needed for the bigger crafting: bow, arrows, hide coat, deer call (the recipe list says "at a workbench"). Quick things (vine cord, splint, fishing pole) work anywhere. Tools dull as you use them and their handles wear: a worn tool works slower but never breaks. Select the hatchet or knife in the pack to *sharpen* it on a whetstone (two lie on the creek banks; ~30 sharpenings each), or to *repair the handle* with 2 sticks at the workbench. A *storage chest* (1 medium log, 3 sticks) opens beside the pack: drag between them, or use Move to chest / Move to pack.
+
+**Wind, trails, bait, calls:** the wind has a direction (arrow, bottom right) and carries your scent: a deer downwind smells you from 8-17 m depending on the wind, blind or no blind, so come at deer from downwind. Each part of the valley has a game trail, a worn path between bedding cover and a feeding ground; deer bed there by day and walk it at dawn and dusk. A *bait pile* (4 berries, via B) draws active deer within 26 m to feed until it's eaten or goes off in two days. A *deer call* (bench, 1 stick) bleats: curious deer walk toward you, but a third call in a short while makes them wary.
 
 **Vines and cord:** vine tangles trail over the ground (they regrow in a few days). Three vines twist into vine cord in the backpack. Recipes ask for "cord" (paracord or vine cord: bow, hide coat) or "line" (line & hooks, or vine cord with a carved hook: fishing pole).
 

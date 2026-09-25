@@ -13,6 +13,7 @@ var _surface: PackedVector2Array
 var _snow: Polygon2D ## lying snow over the ground, behind the player
 var _lip: Polygon2D ## the front edge of it, over the boots, so you wade in it
 var _grass_nodes: Array[Node2D] = []
+var _trail: Polygon2D ## worn game-trail path over the ground (and over snow)
 
 func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -52,6 +53,7 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	_vines(terrain, world_seed, st)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
+	_trail = _trail_poly()
 
 ## Vine tangles on their own seed, so adding them never moved the trees of existing saves.
 func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
@@ -66,6 +68,40 @@ func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 		v.setup(self, id, st.picked.get(str(id), -INF))
 		v.position = Vector2(x, terrain.height_at(x) + 2.0)
 		add_child(v)
+
+## Dashes of packed, hoof-worn earth along each game trail crossing this chunk.
+func _trail_poly() -> Polygon2D:
+	var shapes := []
+	var x0 := index * Terrain.CHUNK_W
+	var x1 := x0 + Terrain.CHUNK_W
+	for i in range(index - 1, index + 2):
+		if i < 0 or i >= Terrain.CHUNKS:
+			continue
+		var t := Wildlife.trail(i)
+		var a := maxf(minf(t.x, t.y), x0)
+		var b := minf(maxf(t.x, t.y), x1)
+		var x := a
+		while x < b:
+			var seg := minf(x + 70.0, b)
+			if _terrain.water_surface_at(x) == INF:
+				shapes.append(PackedVector2Array([Vector2(x, _terrain.height_at(x) - 3.0), Vector2(seg, _terrain.height_at(seg) - 3.0),
+					Vector2(seg, _terrain.height_at(seg) + 7.0), Vector2(x, _terrain.height_at(x) + 7.0)]))
+			x += 95.0
+	var p := SceneryArt.multi(shapes, Palette.SOIL_TOP.lightened(0.32), null) if shapes else Polygon2D.new()
+	p.z_index = 2
+	add_child(p)
+	return p
+
+## Whether x lies on a game trail (for hints).
+static func on_trail(x: float) -> bool:
+	var i := int(x / Terrain.CHUNK_W)
+	for k in range(i - 1, i + 2):
+		if k < 0 or k >= Terrain.CHUNKS:
+			continue
+		var t := Wildlife.trail(k)
+		if x > minf(t.x, t.y) and x < maxf(t.x, t.y):
+			return true
+	return false
 
 func _snow_poly(z: int) -> Polygon2D:
 	var p := Polygon2D.new()
@@ -82,6 +118,8 @@ func set_snow(cm: float) -> void:
 		g.visible = cm < 10.0
 	if _snow.visible:
 		_band(_snow, maxf(cm, 3.0), 6.0)
+	_trail.position.y = -minf(cm, 60.0) if cm > 0.3 else 0.0 # trodden into the snow's surface
+	_trail.color = Color(0.62, 0.68, 0.78) if cm > 2.0 else Palette.SOIL_TOP.lightened(0.32)
 	if _lip.visible:
 		_band(_lip, minf(cm * 0.45, 18.0), 2.0)
 

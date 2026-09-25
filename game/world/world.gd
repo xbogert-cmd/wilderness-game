@@ -22,6 +22,9 @@ const KINDS := {
 	"drying_rack": preload("res://game/camp/drying_rack.gd"),
 	"cabin": preload("res://game/camp/cabin.gd"),
 	"blind": preload("res://game/camp/hunting_blind.gd"),
+	"workbench": preload("res://game/camp/workbench.gd"),
+	"chest": preload("res://game/camp/storage_chest.gd"),
+	"bait": preload("res://game/hunting/bait_pile.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)
@@ -96,6 +99,10 @@ func _load(i: int) -> void:
 	for d in st.objects:
 		spawn(d, elapsed)
 	st.objects = []
+	if chunk._contains(Terrain.CREEK_X) and not st.get("whetstones", false): # also reaches saves from before whetstones
+		st.whetstones = true
+		for side in [-1.0, 1.0]:
+			spawn({"kind": "item", "x": Terrain.CREEK_X + side * (Terrain.CREEK_HALF + 140.0 + 90.0 * side), "stack": ItemStack.make("whetstone").to_dict()})
 	chunk_loaded.emit(i)
 
 func _unload(i: int) -> void:

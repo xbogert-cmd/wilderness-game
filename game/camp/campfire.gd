@@ -19,6 +19,7 @@ var _embers: GPUParticles2D
 var _smoke: GPUParticles2D
 var _sound: AudioStreamPlayer2D
 var _t := 0.0
+var _smoke_mat: ParticleProcessMaterial
 
 func _ready() -> void:
 	add_to_group("persist")
@@ -46,6 +47,7 @@ func _ready() -> void:
 	add_child(_light)
 	_embers = _particles(Color(1, 0.6, 0.2), 30, 1.6, Vector2(0, -90), 3.0)
 	_smoke = _particles(Color(0.55, 0.55, 0.55, 0.25), 24, 4.0, Vector2(12, -60), 14.0)
+	_smoke_mat = _smoke.process_material
 	_sound = AudioStreamPlayer2D.new()
 	_sound.stream = load("res://assets/audio/campfire.wav")
 	_sound.bus = &"SFX"
@@ -117,6 +119,7 @@ func _process(delta: float) -> void:
 	_light.visible = lit
 	var dark := 1.0 - GameClock.clock.daylight() * (1.0 - GameClock.weather.cloud * 0.5)
 	_light.energy = strength * lerpf(0.12, 1.1, dark) * (1.0 + 0.14 * sin(_t * 11.0) + 0.09 * sin(_t * 23.0))
+	_smoke_mat.gravity = Vector3(GameClock.weather.wind_dir * (6.0 + 40.0 * GameClock.weather.wind), 0, 0) # smoke leans downwind
 	_embers.emitting = lit
 	_smoke.emitting = lit or fuel > 0.0 and fuel < START_FUEL * 0.5
 	if lit != _sound.playing:

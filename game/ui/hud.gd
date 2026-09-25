@@ -43,6 +43,18 @@ func _process(delta: float) -> void:
 	_highlight()
 	queue_redraw()
 
+## Which way the wind blows and how hard: scent travels with it, so hunt into the wind.
+func _wind(at: Vector2) -> void:
+	var w := GameClock.weather
+	var dir := float(w.wind_dir)
+	var word := "calm" if w.wind < 0.2 else ("breeze" if w.wind < 0.45 else ("windy" if w.wind < 0.7 else "gale"))
+	var c := Color(TEXT, 0.8)
+	var mid := at + Vector2(22, -5)
+	var len := 12.0 + 14.0 * clampf(w.wind, 0.0, 1.0)
+	draw_line(mid - Vector2(dir * len, 0), mid + Vector2(dir * len, 0), c, 2.0)
+	draw_colored_polygon(PackedVector2Array([mid + Vector2(dir * (len + 7.0), 0), mid + Vector2(dir * len, -5), mid + Vector2(dir * len, 5)]), c)
+	_text(at + Vector2(54, 0), "Wind: " + word, 15, c)
+
 func _text(pos: Vector2, s: String, size := 16, col := TEXT, center := false) -> void:
 	var w := _font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var p := pos - Vector2(w * 0.5 if center else 0.0, 0)
@@ -89,6 +101,7 @@ func _draw() -> void:
 		elif player.held.def.has("bow"):
 			hand += "  · %d arrows" % player.backpack.count_of("arrows")
 	_text(Vector2(GAP * 4 + 30, size.y - 40), hand, 15, Color(TEXT, 0.85))
+	_wind(Vector2(size.x - 190, size.y - 44))
 
 	# Interaction popups: a key-cap plus action, floating over the thing you'd act on.
 	var placed: Array[Vector2] = []

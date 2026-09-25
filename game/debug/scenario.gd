@@ -446,6 +446,20 @@ func _hunt() -> void:
 	check(player.backpack.count_of("venison_raw") == Carcass.MEAT and _carcasses().is_empty(), "field dressed: %d venison" % player.backpack.count_of("venison_raw"))
 	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
 
+	# Scent: the same still, standing player, 700 px off: smelled downwind, not upwind.
+	player.stow()
+	for wind in [1, -1]:
+		GameClock.weather.wind_dir = wind
+		await teleport(9000.0)
+		deer = await _deer(9700.0, 40 + wind)
+		deer.facing = 1 # looking away: only the nose can find you
+		await frames(60 * 3)
+		if wind == 1:
+			check(deer.awareness >= deer.def.alert_at, "downwind, it smells you at 7 m and looks up (%.2f)" % deer.awareness)
+		else:
+			check(deer.awareness < 0.1, "upwind, it never knows you're there (%.2f)" % deer.awareness)
+	GameClock.weather.wind_dir = -1
+
 	# Hunting blind: a deer walking toward you, looking your way, spots a crouched player in
 	# the open, but walks on unaware of one crouched in the blind.
 	player.stow()
@@ -465,6 +479,64 @@ func _hunt() -> void:
 		else:
 			check(deer.awareness >= deer.def.alert_at, "in the open it spots you crouching (%.2f)" % deer.awareness)
 	player.auto_crouch = false
+
+	# Game trail: a deer on a trail walks from its bedding cover toward the feeding ground at dawn.
+	await teleport(3000.0)
+	var t := Wildlife.trail(1)
+	var wl: Wildlife = get_parent().find_children("*", "Wildlife", false, false)[0]
+	for a in get_tree().get_nodes_in_group("animals"):
+		a.queue_free()
+	await frames(2)
+	var trail_deer := wl.spawn(Wildlife.SPECIES[0], t.x, 50)
+	trail_deer.bed_x = t.x
+	trail_deer.feed_x = t.y
+	trail_deer.def = trail_deer.def.duplicate()
+	trail_deer.def.hearing = 0.0 # the check is about the trail, not the player
+	trail_deer.def.sight = 0.0
+	trail_deer.def.scent = 0.0
+	trail_deer._timer = 0.1
+	await frames(60 * 12)
+	var moved: float = (trail_deer.position.x - t.x) * signf(t.y - t.x)
+	check(moved > 300.0, "at dawn it walks its trail toward the feeding ground (%.0f px)" % moved)
+	check(Chunk.on_trail(lerpf(t.x, t.y, 0.5)), "the trail between its bed and feed shows on the ground")
+
+	# Bait: a deer drifts to a bait pile and feeds there.
+	trail_deer.queue_free()
+	await teleport(9000.0)
+	deer = await _deer(10400.0, 51)
+	deer.def = deer.def.duplicate()
+	deer.def.hearing = 0.0
+	deer.def.sight = 0.0
+	deer.def.scent = 0.0
+	var bait := world.spawn({"kind": "bait", "x": 11400.0, "laid": GameClock.clock.hours}) as BaitPile
+	deer._timer = 0.1
+	var walked := 0
+	while absf(deer.position.x - 11400.0) > 80.0 and walked < 60 * 30:
+		await frames(1)
+		walked += 1
+	check(absf(deer.position.x - 11400.0) <= 80.0, "it walks 10 m to the bait pile (%.0f s)" % (walked / 60.0))
+	var had := bait.amount
+	await frames(60 * 8)
+	check(not is_instance_valid(bait) or bait.amount < had or deer.state != Animal.State.GRAZE, "and feeds on it")
+	if is_instance_valid(bait):
+		bait.queue_free()
+
+	# Deer call: curious deer come toward the caller; overdo it and they turn wary.
+	deer = await _deer(10500.0, 52)
+	deer.def = deer.def.duplicate()
+	deer.def.hearing = 0.0
+	deer.def.sight = 0.0
+	deer.def.scent = 0.0
+	player.hold(ItemStack.make("deer_call", GameClock.clock.hours))
+	var before := absf(deer.position.x - player.global_position.x)
+	player.use_held()
+	await frames(60 * 6)
+	var after := absf(deer.position.x - player.global_position.x)
+	check(after < before - 150.0, "a bleat brings it closer (%.0f → %.0f px)" % [before, after])
+	player.use_held()
+	player.use_held()
+	check(deer.state == Animal.State.ALERT, "a third call in a row and it turns wary")
+	player.stow()
 
 	# Vines: gathered and twisted into cord, which strings a bow as well as paracord.
 	var vines := get_tree().get_nodes_in_group("interactable").filter(func(n): return n is VineTangle and n.ripe())
@@ -694,6 +766,52 @@ func _builds() -> void:
 	rack.interact(player)
 	check(player.backpack.count_of("jerky") == jerky + 4 and rack.pieces.is_empty(), "took down 4 jerky")
 
+	# Workbench: the bow needs one; handles are repaired there; a whetstone sharpens anywhere.
+	check(Builds.RECIPES.bow.get("bench", false) and not Workbench.near(player), "the bow is bench work, and there's no bench here")
+	world.spawn({"kind": "workbench", "x": x + 480.0})
+	await teleport(x + 480.0)
+	check(Workbench.near(player), "at the workbench")
+	var ui: BackpackUI = get_tree().get_first_node_in_group("backpack_ui")
+	var axe: ItemStack = player.backpack.find(func(st): return st.def.has("axe"))
+	axe.sharpness = 0.5
+	axe.condition = 0.5
+	var whets := player.backpack.count_of("whetstone")
+	if whets == 0:
+		player.backpack.add(ItemStack.make("whetstone", h))
+	var whet: ItemStack = player.backpack.find(func(st): return st.def.has("whetstone"))
+	var uses := whet.uses_left
+	ui.toggle()
+	ui.selected = axe
+	ui._refresh()
+	var labels: Array = ui._actions.get_children().filter(func(n): return n is Button).map(func(b): return b.text)
+	check(labels.any(func(t): return t.begins_with("Sharpen on the whetstone")) and labels.any(func(t): return t.begins_with("Repair the handle")), "the pack offers to sharpen and repair the hatchet")
+	ui._sharpen()
+	await frames(int(2.5 * 60.0) + 10)
+	check(axe.sharpness == 1.0 and whet.uses_left == uses - 1, "sharpened: keen edge, one use off the whetstone")
+	player.backpack.add(ItemStack.make("sticks", h, 2))
+	ui.toggle()
+	ui.selected = axe
+	ui._repair()
+	await frames(int(3.0 * 60.0) + 10)
+	check(axe.condition == 1.0, "new handle fitted at the bench")
+
+	# Storage chest: items move from the pack into it, stay there through a save, and come back.
+	var chest := world.spawn({"kind": "chest", "x": x + 640.0}) as StorageChest
+	var jerky_n := player.backpack.count_of("jerky")
+	var jerky_stack: ItemStack = player.backpack.find(func(st): return st.def.id == "jerky")
+	await teleport(x + 640.0)
+	chest.interact(player)
+	check(ui.visible and ui.storage == chest.store, "the chest opens beside the pack")
+	while jerky_stack: # every stack of it
+		ui._lift(jerky_stack)
+		chest.store.add(jerky_stack)
+		jerky_stack = player.backpack.find(func(st): return st.def.id == "jerky")
+	ui.toggle()
+	check(player.backpack.count_of("jerky") == 0 and chest.store.count_of("jerky") == jerky_n and ui.storage == null, "jerky stored in the chest (%d)" % jerky_n)
+	var again := world.spawn(chest.to_state()) as StorageChest
+	check(again.store.count_of("jerky") == jerky_n, "and it's still there after a save round-trip")
+	again.queue_free()
+
 	# Log cabin: shelter that holds warmth; sleeping there makes it camp.
 	var cx := x + 900.0
 	var cabin := world.spawn({"kind": "cabin", "x": cx, "fresh": true}) as Cabin
@@ -707,6 +825,7 @@ func _wild() -> void:
 	await frames(10)
 	GameClock.clock.hours = 7.0 # morning: deer are up and feeding
 	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.wind_dir = -1 # blowing toward us from the deer (east of us): hunt into the wind
 
 	# Running at a deer spooks it; it bolts away, then calms once far enough off.
 	await teleport(9000.0)

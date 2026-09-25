@@ -10,6 +10,8 @@
   resonances, with a second smaller puff).
 - sfx/chop_1..4.wav: an axe biting wood: a sharp impact, a few damped wood resonances and
   a short splintery crunch, in a little forest space.
+- sfx/bleat_1.wav, bleat_2.wav: a doe bleat for the deer call (a nasal, falling tone with
+  a little tremble), what curious deer come to investigate.
 - sfx/tree_fall.wav: the trunk giving (stick-slip creak), branches rushing through the air,
   then the crash at 1.7 s, when the falling tree meets the ground (ChoppableTree.FALL_TIME).
 Pure stdlib so it runs anywhere.
@@ -201,6 +203,24 @@ def tree_fall() -> list[float]:
     return reverb(out, 0.32)
 
 
+def bleat(seed: int) -> list[float]:
+    rng = random.Random(200 + seed)
+    length = 0.7
+    f0, f1 = 470.0 + seed * 25.0, 360.0
+    nose = Biquad(760.0, 3.0)
+    mouth = Biquad(1650.0, 4.0)
+    out = []
+    phase = 0.0
+    for i in range(int(length * SR)):
+        t = i / SR
+        f = f0 + (f1 - f0) * min(1.0, t / 0.55) + 6.0 * math.sin(2 * math.pi * 7.5 * t)
+        phase += f / SR
+        saw = 2.0 * (phase % 1.0) - 1.0 + rng.uniform(-0.05, 0.05)  # reedy source with breath
+        e = min(1.0, t / 0.03) * math.exp(-max(0.0, t - 0.35) / 0.12)
+        out.append((nose(saw) * 1.4 + mouth(saw) * 0.6) * e)
+    return reverb(out, 0.25)
+
+
 if __name__ == "__main__":
     write(OUT / "music" / "storm_cue.wav", storm_cue())
     write(OUT / "sfx" / "snort_1.wav", snort(1))
@@ -208,3 +228,5 @@ if __name__ == "__main__":
     for k in range(1, 5):
         write(OUT / "sfx" / f"chop_{k}.wav", chop(k))
     write(OUT / "sfx" / "tree_fall.wav", tree_fall())
+    for k in (1, 2):
+        write(OUT / "sfx" / f"bleat_{k}.wav", bleat(k))

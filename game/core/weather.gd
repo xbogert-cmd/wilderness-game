@@ -28,6 +28,7 @@ var warning_hours := 1.5 ## game hours of visible/audible signs before rain star
 var cloud := 0.1
 var precip := 0.0
 var wind := 0.15
+var wind_dir := 1 ## which way it blows: +1 toward the east (right), -1 toward the west
 var snow_frac := 0.0 ## 0 = falls as rain, 1 = as snow (eases across freezing)
 var snow_cm := 0.0 ## lying snow
 var ice := 0.0 ## creek ice, 0 open to 1 frozen hard
@@ -42,6 +43,8 @@ func step(dh: float, clock: Clock = null) -> void:
 		kind = next_kind
 		next_kind = _roll(kind)
 		hours_left = rng.randf_range(2.0, 8.0)
+		if rng.randf() < 0.35:
+			wind_dir = -wind_dir # a front brings the wind round
 	var target_cloud := CLOUD[kind]
 	var target_wind := WIND[kind]
 	if storm_warning():
@@ -91,7 +94,7 @@ func _roll(from: int) -> int:
 func to_dict() -> Dictionary:
 	return {"kind": kind, "next": next_kind, "left": hours_left, "cloud": cloud,
 		"precip": precip, "wind": wind, "rng_state": str(rng.state),
-		"snow_frac": snow_frac, "snow_cm": snow_cm, "ice": ice}
+		"snow_frac": snow_frac, "snow_cm": snow_cm, "ice": ice, "wind_dir": wind_dir}
 
 func from_dict(d: Dictionary) -> void:
 	kind = int(d.kind)
@@ -104,3 +107,4 @@ func from_dict(d: Dictionary) -> void:
 	snow_frac = float(d.get("snow_frac", 0.0))
 	snow_cm = float(d.get("snow_cm", 0.0))
 	ice = float(d.get("ice", 0.0))
+	wind_dir = int(d.get("wind_dir", 1))

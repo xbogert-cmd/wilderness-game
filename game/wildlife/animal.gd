@@ -17,6 +17,13 @@ var awareness := 0.0
 var facing := 1
 var speed := 0.0
 var home_x := 0.0
+var bed_x := NAN ## game trail ends (NAN: no trail, wander around home_x)
+var feed_x := NAN
+var _calls := [] ## hours of recent calls heard, to grow wary of a caller
+var _lure_x := 0.0 ## where a call came from
+var _lure_until := -INF
+const CALL_WINDOW := 1.5 ## game hours: this many calls inside it and it gets suspicious
+const CALLS_TOLERATED := 2
 var _timer := 0.0
 var _since_print := 0.0
 var wound := -1.0 ## seconds until a wounded animal drops; -1 = unhurt
@@ -42,11 +49,25 @@ func _ready() -> void:
 	add_child(rig)
 
 func _active() -> bool:
-	var h := GameClock.clock.hour_of_day()
-	for r in def.active_hours:
+	return active_at(def, GameClock.clock.hour_of_day())
+
+static func active_at(species: SpeciesDef, h: float) -> bool:
+	for r in species.active_hours:
 		if h >= r.x and h < r.y:
 			return true
 	return false
+
+## Where it's heading when calm: a bait pile it can smell, else its end of the game trail.
+func _goal() -> float:
+	if GameClock.clock.hours < _lure_until:
+		return _lure_x
+	if _active():
+		var bait := BaitPile.nearest(get_tree(), position.x)
+		if bait:
+			return bait.global_position.x
+	if is_nan(bed_x):
+		return home_x
+	return feed_x if _active() else bed_x
 
 func _physics_process(delta: float) -> void:
 	if wound >= 0.0:
@@ -87,17 +108,25 @@ func _physics_process(delta: float) -> void:
 func _routine() -> void:
 	_timer = _rng.randf_range(3.0, 9.0)
 	match state:
-		State.GRAZE:
-			if not _active():
+		State.GRAZE, State.BEDDED:
+			var goal := _goal()
+			var far := absf(goal - position.x) > (60.0 if goal != home_x else def.home_range)
+			if far and (state == State.GRAZE or _active()):
+				state = State.WALK # off along the trail (or to the bait)
+				facing = int(signf(goal - position.x))
+			elif state == State.GRAZE and not _active():
 				state = State.BEDDED
-			elif _rng.randf() < 0.5:
+			elif state == State.BEDDED and _active():
+				state = State.GRAZE
+			elif state == State.GRAZE and _rng.randf() < 0.3:
 				state = State.WALK
-				var toward_home := signf(home_x - position.x)
-				facing = int(toward_home) if absf(home_x - position.x) > def.home_range and toward_home != 0.0 else (1 if _rng.randf() < 0.5 else -1)
+				facing = 1 if _rng.randf() < 0.5 else -1
 		State.WALK:
-			state = State.GRAZE
-		State.BEDDED:
-			if _active():
+			var goal := _goal()
+			if absf(goal - position.x) > 60.0 and goal != home_x:
+				facing = int(signf(goal - position.x)) # keep going
+				_timer = _rng.randf_range(4.0, 10.0)
+			else:
 				state = State.GRAZE
 		State.ALERT:
 			if awareness < def.alert_at * 0.6:
@@ -115,6 +144,12 @@ func _perceive(delta: float) -> void:
 	sight *= (0.45 if state in [State.GRAZE, State.BEDDED] else 1.0) * (1.0 if looking else 0.55)
 	if d < sight:
 		stim += (1.0 - d / sight) * 2.0
+	# Scent carries downwind: if the wind blows from you toward it, it smells you from far off,
+	# blind or no blind.
+	var w := GameClock.weather
+	var scent := def.scent * (0.5 + w.wind)
+	if signf(position.x - player.global_position.x) == float(w.wind_dir) and d < scent and not player.sleeping:
+		stim += (1.0 - d / scent) * 2.5
 	if state == State.FLEE:
 		if wound >= 0.0:
 			return # hurt animals keep running until they drop
@@ -164,6 +199,24 @@ func shot(zone: int) -> void:
 		wound = _rng.randf_range(10.0, 16.0) if wound < 0.0 else wound * 0.5
 		_limp = 0.6
 	bolt()
+
+## A doe bleat from x: curious deer come to look; too many calls and they turn wary.
+func hear_call(x: float) -> void:
+	if state == State.FLEE or wound >= 0.0:
+		return
+	var now := GameClock.clock.hours
+	_calls = _calls.filter(func(h): return now - h < CALL_WINDOW)
+	_calls.append(now)
+	facing = int(signf(x - position.x)) if x != position.x else facing
+	if _calls.size() > CALLS_TOLERATED:
+		awareness = maxf(awareness, def.alert_at)
+		state = State.ALERT
+		_timer = _rng.randf_range(4.0, 8.0)
+		return
+	_lure_x = x
+	_lure_until = now + 0.6
+	state = State.WALK
+	_timer = _rng.randf_range(6.0, 10.0)
 
 ## A clean kill at close quarters.
 func kill() -> void:

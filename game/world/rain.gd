@@ -86,10 +86,10 @@ func set_weather(rain: float, snow: float, wind: float) -> void:
 	for p in [near, far]:
 		p.emitting = rain > 0.02
 		p.amount_ratio = clampf(rain, 0.0, 1.0)
-		(p.process_material as ParticleProcessMaterial).direction = Vector3(wind * 0.35, 1, 0)
+		(p.process_material as ParticleProcessMaterial).direction = Vector3(wind * 0.35 * GameClock.weather.wind_dir, 1, 0)
 	for p in [flakes_near, flakes_far]:
 		if snow > 0.02 and not p.emitting:
 			p.restart() # fill the sky at once (preprocess) instead of waiting for flakes to fall in
 		p.emitting = snow > 0.02
 		p.amount_ratio = clampf(snow * 1.2, 0.0, 1.0)
-		(p.process_material as ParticleProcessMaterial).direction = Vector3(wind * 1.1, 1, 0)
+		(p.process_material as ParticleProcessMaterial).direction = Vector3(wind * 1.1 * GameClock.weather.wind_dir, 1, 0)
