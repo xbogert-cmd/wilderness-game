@@ -12,6 +12,7 @@ var build_id := ""
 var _ok := false
 
 func _ready() -> void:
+	add_to_group("build_mode")
 	z_index = 9
 	menu.visible = false
 	for id in Builds.STRUCTURES:
@@ -53,7 +54,7 @@ func _cancel() -> void:
 func _process(_delta: float) -> void:
 	if build_id == "":
 		return
-	var x := clampf(get_global_mouse_position().x, player.global_position.x - RANGE, player.global_position.x + RANGE)
+	var x := clampf(player.aim_point().x, player.global_position.x - RANGE, player.global_position.x + RANGE)
 	global_position = Vector2(x, world.terrain.height_at(x))
 	_ok = fits(x, Builds.STRUCTURES[build_id].width)
 	queue_redraw()

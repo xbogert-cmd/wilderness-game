@@ -38,6 +38,8 @@ func _draw() -> void:
 			var y := -3.0 - i * 3.0
 			draw_line(Vector2(-22 + i * 3, y), Vector2(20 - i * 4, y - 2 + i), c.darkened(0.1 * i), 4.0)
 		return
-	var s := Vector2(stack.def.size()) * 9.0
-	draw_rect(Rect2(Vector2(-s.x / 2.0, -s.y), s), c)
-	draw_rect(Rect2(Vector2(-s.x / 2.0, -s.y), s), c.darkened(0.4), false, 1.5)
+	const CELL := 14.0
+	var sz := Vector2(stack.def.size())
+	var flat := sz.y > sz.x # tall things lie on their side
+	var box := (Vector2(sz.y, sz.x) if flat else sz) * CELL
+	ItemIcons.draw(self, stack, Vector2(-box.x / 2.0, -box.y), CELL, flat)

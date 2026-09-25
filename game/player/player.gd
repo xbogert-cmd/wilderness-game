@@ -28,8 +28,12 @@ var backpack := Backpack.new()
 var held: ItemStack ## the one object in hand
 var held_slot := -1 ## attachment slot it came from, to return it there
 var carrying: WorldLog ## oversized object on the shoulder or dragged
-var focus: Node ## interactable in reach
-var chop_target: Node
+## Interactable in reach. Getters hide nodes freed since the last focus update (a finished
+## blueprint, a fully bucked trunk) so nothing reads a dead reference.
+var focus: Node:
+	get: return focus if is_instance_valid(focus) else null
+var chop_target: Node:
+	get: return chop_target if is_instance_valid(chop_target) else null
 var swing := -1.0 ## 0..1 through a tool swing, -1 idle
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""

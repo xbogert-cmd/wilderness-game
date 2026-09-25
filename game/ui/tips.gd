@@ -15,18 +15,19 @@ var _age := 0.0
 func _rules() -> Array:
 	var p := player
 	var c := p.cond
+	var f := p.focus
 	return [
 		["start", _age > 3.0, "The valley's quiet this morning. Your hatchet and knife are strapped to your pack: {slot_1} and {slot_2} draw them."],
 		["pack", _age > 25.0, "{backpack} opens your pack. Everything you carry lives there."],
-		["sign", p.focus is TrailSign, "A trail sign. Press {interact} to read it."],
-		["sticks", p.focus is WorldItem and p.focus.stack.def.id == "sticks", "Fallen sticks. Press {interact} to pick them up. Fires need them."],
-		["item", p.focus is WorldItem, "Press {interact} to pick things up."],
+		["sign", f is TrailSign, "A trail sign. Press {interact} to read it."],
+		["sticks", f is WorldItem and f.stack.def.id == "sticks", "Fallen sticks. Press {interact} to pick them up. Fires need them."],
+		["item", f is WorldItem, "Press {interact} to pick things up."],
 		["chop", p.chop_target is ChoppableTree, "Click ({use}) to chop. The tree falls away from you."],
 		["trunk", p.chop_target is FelledTrunk, "Strip the branches, then aim at a mark and click to cut a log to that length."],
 		["log", p.carrying == null and p.nearest_log() != null, "{lift} lifts a log. Long logs drag behind you."],
-		["creek", p.focus is Creek, "{interact} to drink here, or fill a container you're holding. Creek water is dirty: boil it first."],
-		["berries", p.focus is BerryBush, "Serviceberries. {interact} to pick them."],
-		["tracks", p.focus is Tracks, "Tracks in the mud. {interact} to read how old they are and which way they went."],
+		["creek", f is Creek, "{interact} to drink here, or fill a container you're holding. Creek water is dirty: boil it first."],
+		["berries", f is BerryBush, "Serviceberries. {interact} to pick them."],
+		["tracks", f is Tracks, "Tracks in the mud. {interact} to read how old they are and which way they went."],
 		["deer", _deer_near(), "Deer. Crouch ({crouch}) and move slowly to get closer. Running will spook them."],
 		["thirst", c.thirst < 45.0, "You're thirsty. Open the pack ({backpack}), select your bottle, and drink."],
 		["hunger", c.hunger < 50.0, "You're hungry. Open the pack ({backpack}) and eat something."],
@@ -34,7 +35,7 @@ func _rules() -> Array:
 		["tired", c.fatigue > 60.0, "You're tired. Sleep under a shelter ({rest})."],
 		["cold", c.warmth < 35.0, "You're cold. A fire warms and dries you."],
 		["rod", p.backpack.count_of("fishing_pole") > 0, "Hold the pole (select it in your pack), then click toward the creek to cast."],
-		["fire", p.focus is Campfire and not p.focus.lit, "Press {interact} to light the fire. Feed it sticks or logs to keep it going."],
+		["fire", f is Campfire and not f.lit, "Press {interact} to light the fire. Feed it sticks or logs to keep it going."],
 	]
 
 func _deer_near() -> bool:

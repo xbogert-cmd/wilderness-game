@@ -35,6 +35,24 @@ func teleport(x: float) -> void:
 	player.velocity = Vector2.ZERO
 	await frames(6)
 
+## A left click pushed through the viewport, so GUI controls get their chance to eat it.
+func click(at := Vector2.INF) -> void:
+	if at == Vector2.INF:
+		at = get_viewport().get_visible_rect().size * 0.5
+	var move := InputEventMouseMotion.new()
+	move.position = at
+	move.global_position = at
+	get_viewport().push_input(move, true)
+	await frames(2)
+	for pressed in [true, false]:
+		var e := InputEventMouseButton.new()
+		e.button_index = MOUSE_BUTTON_LEFT
+		e.pressed = pressed
+		e.position = at
+		e.global_position = at
+		get_viewport().push_input(e, true)
+		await frames(1)
+
 func swing() -> void:
 	player.use_held()
 	await frames(int(Player.SWING_TIME * 60.0) + 2)
@@ -67,6 +85,10 @@ func _run() -> void:
 			break
 		player.facing = 1
 		await teleport(tree.global_position.x - 70.0)
+		if felled == 0:
+			await click()
+			check(player.swing >= 0.0, "a real left click swings the hatchet (no UI swallows it)")
+			await frames(int(Player.SWING_TIME * 60.0) + 2)
 		var guard := 0
 		while not tree.felled and guard < 60:
 			await swing()
@@ -135,7 +157,29 @@ func _run() -> void:
 			it.interact(player)
 	check(player.backpack.count_of("sticks") >= 3, "gathered sticks: %d" % player.backpack.count_of("sticks"))
 	var fire_x := camp_x + 260.0
-	var fbp := world.spawn({"kind": "blueprint", "build": "campfire", "x": fire_x}) as Blueprint
+	await teleport(fire_x)
+	# Through the real build UI: B, click the Campfire button, click the ground.
+	var key := InputEventAction.new()
+	key.action = "build"
+	key.pressed = true
+	get_viewport().push_input(key)
+	await frames(2)
+	var menu := (get_tree().get_first_node_in_group("build_mode") as BuildMode).menu
+	check(menu.visible, "B opens the build menu")
+	await click((menu.get_child(0) as Button).get_global_rect().get_center())
+	check(player.placing, "clicking Campfire starts placement")
+	player.aim_override = Vector2(fire_x, world.terrain.height_at(fire_x))
+	await click()
+	player.aim_override = Vector2.INF
+	var fbp: Blueprint = null
+	for b in get_tree().get_nodes_in_group("structure"):
+		if b is Blueprint and absf(b.global_position.x - fire_x) < 40.0:
+			fbp = b
+			print("  blueprint at %d (aimed %d)" % [b.global_position.x, fire_x])
+			fire_x = b.global_position.x
+	check(fbp != null, "left click places the campfire blueprint")
+	if fbp == null:
+		fbp = world.spawn({"kind": "blueprint", "build": "campfire", "x": fire_x}) as Blueprint
 	await teleport(fire_x)
 	fbp.interact(player)
 	check(fbp.complete(), "campfire sticks delivered")

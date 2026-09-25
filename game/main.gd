@@ -33,6 +33,7 @@ func _ready() -> void:
 	sky_layer.layer = -10
 	var sky := ColorRect.new()
 	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sky.mouse_filter = Control.MOUSE_FILTER_IGNORE # a full-screen Control would eat every click
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = preload("res://game/world/sky.gdshader")
 	sky.material = sky_mat
@@ -173,6 +174,10 @@ func _ready() -> void:
 	if args.has("menu"):
 		pause.toggle.call_deferred()
 	if args.has("pack"):
+		if args.pack == "all": # preview: one of every item, to check the icons
+			for id in ["trout_raw", "whitefish_cooked", "berries", "splint", "fishing_pole", "fishing_kit", "sticks", "trout_cooked", "bandage"]:
+				var st := ItemStack.make(id, GameClock.clock.hours, 3 if id in ["sticks", "berries"] else 1)
+				player.backpack.add(st)
 		pack_ui.toggle.call_deferred()
 	if args.has("debug"):
 		dbg.visible = true

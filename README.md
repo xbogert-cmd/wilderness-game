@@ -41,6 +41,7 @@ godot --headless -s tests/run.gd          # unit tests (exit code = failure coun
 godot --headless --quit-after 600         # smoke run
 godot --headless -- --tour                # walk every chunk and back, verify streaming
 godot --headless --fixed-fps 60 -- --scenario   # full camp loop end to end (~3 min)
+godot --fixed-fps 60 --resolution 1280x720 -- --scenario   # same, windowed: only this catches UI eating clicks
 godot --headless --fixed-fps 60 -- --scenario=life                # sleep, autosave, save slot 3, die, respawn, recover
 godot --headless --fixed-fps 60 -- --load=3 --scenario=verify     # then cold-load slot 3 and check it matches
 godot --headless --fixed-fps 60 -- --scenario=wild                # deer senses, tracks, fishing, cooking, birds

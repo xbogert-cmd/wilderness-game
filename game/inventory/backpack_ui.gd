@@ -85,31 +85,32 @@ func _gui_input(event: InputEvent) -> void:
 		elif _drag:
 			_release(event.position)
 		accept_event()
-	elif event is InputEventMouseMotion and _drag:
-		if event.position.distance_to(_press_pos) > 6.0:
+	elif event is InputEventMouseMotion:
+		if _drag and event.position.distance_to(_press_pos) > 6.0:
 			_drag.moved = true
 		queue_redraw()
 
 func _press(p: Vector2) -> void:
 	_press_pos = p
-	var stack: ItemStack = null
-	var rot := false
-	var grab := Vector2.ZERO
+	var hit := _stack_at(p)
+	if hit:
+		_drag = {"stack": hit.stack, "rot": hit.rot, "grab": hit.grab, "moved": false}
+		selected = hit.stack
+		_refresh()
+
+## Whatever sits under p: {stack, rot, grab} or {}.
+func _stack_at(p: Vector2) -> Dictionary:
+	var hit := {}
 	if _in_grid(p):
 		var e := player.backpack.entry_at(_cell_at(p))
 		if e:
-			stack = e.stack
-			rot = e.rot
-			grab = Vector2(_cell_at(p) - e.pos)
+			hit = {"stack": e.stack, "rot": e.rot, "grab": Vector2(_cell_at(p) - e.pos)}
 	for i in Backpack.ATTACH_SLOTS:
 		if _slot_rect(i).has_point(p) and player.backpack.attachments[i]:
-			stack = player.backpack.attachments[i]
+			hit = {"stack": player.backpack.attachments[i], "rot": false, "grab": Vector2.ZERO}
 	if _hands_rect().has_point(p) and player.held:
-		stack = player.held
-	if stack:
-		_drag = {"stack": stack, "rot": rot, "grab": grab, "moved": false}
-		selected = stack
-		_refresh()
+		hit = {"stack": player.held, "rot": false, "grab": Vector2.ZERO}
+	return hit
 
 func _release(p: Vector2) -> void:
 	var s: ItemStack = _drag.stack
@@ -267,36 +268,31 @@ func _draw() -> void:
 			for c in Backpack.cells(_drag.stack.def, _drag.rot):
 				draw_rect(Rect2(GRID_POS + Vector2(pos + c) * CELL, Vector2(CELL, CELL)).grow(-2), Color(0.5, 1, 0.5, 0.25) if ok else Color(1, 0.4, 0.4, 0.25))
 		_item(_drag.stack, top, _drag.rot, 0.85)
+	else:
+		var hit := _stack_at(get_local_mouse_position())
+		if hit:
+			var t: String = hit.stack.label(GameClock.clock.hours)
+			var at := get_local_mouse_position() + Vector2(16, -10)
+			var sz := _font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15)
+			draw_rect(Rect2(at - Vector2(6, sz.y - 2), sz + Vector2(12, 8)), Color(0, 0, 0, 0.85))
+			_text(at, t, 15)
 
 func _item(s: ItemStack, top_left: Vector2, rot: bool, alpha := 1.0) -> void:
-	var col := s.def.color
-	col.a = alpha
+	var outline := Color(1, 1, 1, 0.9) if s == selected else Color(1, 1, 1, 0.18)
 	for c in Backpack.cells(s.def, rot):
-		draw_rect(Rect2(top_left + Vector2(c) * CELL, Vector2(CELL, CELL)).grow(-3), col)
-	var outline := Color(1, 1, 1, 0.9) if s == selected else Color(0, 0, 0, 0.5)
-	for c in Backpack.cells(s.def, rot):
-		draw_rect(Rect2(top_left + Vector2(c) * CELL, Vector2(CELL, CELL)).grow(-3), outline, false, 1.5)
-	var title := s.def.name if s.count == 1 else "%s ×%d" % [s.def.name, s.count]
-	var cols: int = Backpack.cells(s.def, rot).reduce(func(m, c): return maxi(m, c.x + 1), 1)
-	var ink := Color(0.1, 0.1, 0.1) if s.def.color.get_luminance() > 0.55 else TEXT
-	draw_string(_font, top_left + Vector2(6, 18), _fit(title, cols * CELL - 12.0, 12), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ink)
-	var now := GameClock.clock.hours
+		var r := Rect2(top_left + Vector2(c) * CELL, Vector2(CELL, CELL)).grow(-3)
+		draw_rect(r, Color(s.def.color.darkened(0.7), 0.55 * alpha))
+		draw_rect(r, outline, false, 1.5)
+	ItemIcons.draw(self, s, top_left, CELL, rot, alpha)
+	var size := Vector2(Backpack.cells(s.def, rot).reduce(func(m, c): return Vector2i(maxi(m.x, c.x + 1), maxi(m.y, c.y + 1)), Vector2i.ONE)) * CELL
+	if s.count > 1:
+		var t := "×%d" % s.count
+		var at := top_left + size - Vector2(_font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 7, 7)
+		draw_string_outline(_font, at, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+		draw_string(_font, at, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, TEXT)
 	if s.def.has("food") and s.def.spoil_hours > 0.0:
-		var f := s.freshness(now)
-		draw_rect(Rect2(top_left + Vector2(4, CELL - 10), Vector2(CELL - 8, 5)), [Color("7cc06a"), Color("d8b050"), Color("a05a3a")][f])
-	if s.def.capacity > 0.0:
-		var k := s.water / s.def.capacity
-		var r := Rect2(top_left + Vector2(CELL - 12, 26), Vector2(6, CELL * s.def.size().y - 34))
-		draw_rect(r, Color(0, 0, 0, 0.4))
-		draw_rect(Rect2(r.position + Vector2(0, r.size.y * (1.0 - k)), Vector2(6, r.size.y * k)), Color("7fc3e0") if s.water_clean else Color("8a7a52"))
-
-## Trims with an ellipsis so labels stay inside their tile.
-func _fit(t: String, width: float, size: int) -> String:
-	if _font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= width:
-		return t
-	while t.length() > 1 and _font.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width:
-		t = t.left(-1)
-	return t + "…"
+		var f := s.freshness(GameClock.clock.hours)
+		draw_rect(Rect2(top_left + Vector2(5, size.y - 9), Vector2(CELL * 0.5, 4)), [Color("7cc06a"), Color("d8b050"), Color("a05a3a")][f])
 
 func _text(pos: Vector2, s: String, size := 14) -> void:
 	draw_string(_font, pos, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, TEXT)
