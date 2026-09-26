@@ -44,6 +44,8 @@ godot
 - *Thin ice*: new ice, and thawing ice, is thin: it creaks and sags under you, then cracks, then gives way. Through the ice you're soaked to the skin in freezing water, and until you get to a fire it hurts you badly (it won't kill you on its own). Hard ice is safe.
 - *The breakup*: in a thaw the ice goes out down the creeks in grinding, cracking floes, and the water comes up behind it.
 
+**The look:** flat, low-poly shapes, lit. Below the line you walk on is the top of the ground running toward you (grass and bare patches, stones, the game trails as a worn path, creeks flowing out toward you, snowfields in winter; underground it's the cut earth again). The sun lights the side of every tree, bush and rock facing it and the mountains' faces, shadows lie under everything and stretch when it's low, sunbeams slant through the forest morning and evening, broken cloud drifts shadow over the land, fire and lanterns glow, water shows the sky and glints. On clear nights there are more stars and the Milky Way; on summer nights fireflies over the valley and meadows. The falls come down a cliff of layered rock with a rainbow in the spray on sunny days. At the lookout, the tarn, the falls and the canyon rims the view draws back to take it in. (`ground.gdshader`, `scenery.gdshader`, `light.gdshader`, `sky.gdshader`, `Shadows`, `Glow`, `Fireflies`.)
+
 **Stepping stones** (build book, no materials, 2 hours of rolling rocks out of the creek bed): a line of flat rocks across a creek to cross with dry feet. The river's too deep for them, and in flood the water runs over them.
 
 **Woodpile:** build one (B, 4 sticks) and stack short logs in it with E. It holds 15, drawn end-on as a pyramid that matches the count. E with empty hands takes one back out, and a fire within a few metres feeds straight from the pile.
@@ -144,7 +146,7 @@ godot --fixed-fps 60 -- --scenario=icons                          # (windowed) r
 godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id] --stores[=wind] --chase --fishgear --thunder --fog[=0..1] --flood[=0..1] --chinook --baro
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
-Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.
+Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--nohud` (clean screenshots), `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.
 
 ## Layout
 - `game/core/`: pure rules with no nodes (clock, weather, condition, tuning). All unit-tested.

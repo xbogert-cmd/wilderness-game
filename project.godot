@@ -166,3 +166,23 @@ bare={
 "type": "float",
 "value": 0.0
 }
+sun_dir={
+"type": "float",
+"value": 0.0
+}
+sun_k={
+"type": "float",
+"value": 0.0
+}
+sun_col={
+"type": "color",
+"value": Color(1, 0.95, 0.85, 1)
+}
+under={
+"type": "float",
+"value": 0.0
+}
+cam_x={
+"type": "float",
+"value": 0.0
+}

@@ -139,6 +139,7 @@ func _ready() -> void:
 	_torch_light.position = Vector2(0, -170)
 	_torch_light.visible = false
 	add_child(_torch_light)
+	Glow.on(_torch_light, 220.0)
 	GameClock.ticked.connect(_on_tick)
 	_starting_kit()
 

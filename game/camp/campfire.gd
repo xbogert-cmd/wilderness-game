@@ -46,6 +46,7 @@ func _ready() -> void:
 	_light.color = Color(1.0, 0.62, 0.3)
 	_light.position = Vector2(0, -30)
 	add_child(_light)
+	Glow.on(_light, 300.0)
 	_embers = _particles(Color(1, 0.6, 0.2), 30, 1.6, Vector2(0, -90), 3.0)
 	_smoke = _particles(Color(0.55, 0.55, 0.55, 0.25), 24, 4.0, Vector2(12, -60), 14.0)
 	_smoke_mat = _smoke.process_material

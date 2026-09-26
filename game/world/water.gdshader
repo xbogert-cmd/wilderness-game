@@ -4,6 +4,8 @@ shader_type canvas_item;
 global uniform vec4 haze_color;
 global uniform float ice; // 0 open .. 1 frozen hard
 global uniform float snow;
+global uniform float sun_k;
+global uniform vec4 sun_col;
 uniform vec4 deep : source_color = vec4(0.16, 0.3, 0.34, 0.85);
 uniform vec4 shallow : source_color = vec4(0.36, 0.55, 0.6, 0.55);
 uniform float surface_y; // world y of the surface (it rises in a flood)
@@ -28,6 +30,15 @@ void fragment() {
 	c.rgb = mix(c.rgb, vec3(0.56, 0.46, 0.32) + (n - 0.5) * 0.12, mud * 0.75);
 	c.a = mix(c.a, 0.88, mud * 0.6);
 	c.rgb += (n - 0.5) * 0.06;
+	{ // clear water: deep down you see the creek running on behind (the far reach), not a bowl
+		c.a *= 1.0 - 0.75 * smoothstep(20.0, 90.0, d) * (1.0 - mud);
+	}
+	{ // the sky in the surface, and the sun glinting off the ripples
+		float refl = smoothstep(40.0, 0.0, d) * (1.0 - mud);
+		c.rgb = mix(c.rgb, haze_color.rgb * 0.95, refl * 0.45);
+		float glint = step(0.9, vnoise(vec2(world.x * 0.09 + TIME * 0.7, d * 0.4 - TIME * 0.3))) * smoothstep(30.0, 2.0, d);
+		c.rgb += sun_col.rgb * glint * (0.25 + 0.6 * sun_k) * (1.0 - mud);
+	}
 	float line = smoothstep(4.0, 0.0, d) * (0.6 + 0.4 * vnoise(vec2(world.x * 0.05 + TIME, TIME)));
 	c.rgb = mix(c.rgb, haze_color.rgb, line * 0.7);
 	c.a = max(c.a, line * 0.8);

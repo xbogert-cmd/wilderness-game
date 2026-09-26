@@ -28,6 +28,7 @@ func _ready() -> void:
 	_light.color = Color(1.0, 0.35, 0.25)
 	_light.energy = 0.0
 	add_child(_light)
+	Glow.on(_light, 260.0)
 	for p in get_tree().get_nodes_in_group("predators"):
 		if absf(p.position.x - global_position.x) < 1600.0:
 			p.flee(global_position.x)

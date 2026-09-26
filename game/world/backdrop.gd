@@ -122,14 +122,36 @@ func _mountains(node: Node2D, s: float, mat: Material) -> void:
 		if absf(x - Terrain.LOOKOUT_X * s) < 400.0 and yf < peak.y: # the highest point near the real lookout
 			peak = Vector2(x, yf)
 		x += 30.0
-	for ridge in [[back, Palette.MOUNTAIN.lightened(0.18)], [front, Palette.MOUNTAIN]]:
+	var ridges := [[back, Palette.MOUNTAIN.lightened(0.18)], [front, Palette.MOUNTAIN]]
+	var far := PackedVector2Array()
+	x = span.x
+	while x <= span.y:
+		far.append(Vector2(x, -330.0 - absf(n.get_noise_1d(x * 0.45 + 9000.0)) * 560.0))
+		x += 30.0
+	ridges.push_front([far, Palette.MOUNTAIN.lerp(Color(0.72, 0.77, 0.86), 0.5)])
+	for ridge in ridges:
 		var pts: PackedVector2Array = ridge[0].duplicate()
 		pts.append(Vector2(span.y, 3000))
 		pts.append(Vector2(span.x, 3000))
-		node.add_child(SceneryArt.poly(pts, ridge[1], mat))
-		var cap := PackedVector2Array([Vector2(span.x, -2000), Vector2(span.y, -2000), Vector2(span.y, -330), Vector2(span.x, -330)])
+		var body := SceneryArt.poly(pts, ridge[1], mat)
+		var uv := PackedVector2Array() # far land: hazier toward the base (UV.y 0 up on the ridge, 1 far below)
+		for v in pts:
+			uv.append(Vector2(6.0, clampf((v.y + 900.0) / 3900.0, 0.0, 1.0)))
+		body.uv = uv
+		node.add_child(body)
+		var cap := PackedVector2Array([Vector2(span.x, -2000), Vector2(span.y, -2000)])
+		var cx := span.y
+		while cx >= span.x: # a ragged snowline: lower in the gullies, streaks down the faces
+			cap.append(Vector2(cx, -350.0 + n.get_noise_1d(cx * 3.0 + 300.0) * 90.0 + absf(n.get_noise_1d(cx * 9.0)) * 70.0))
+			cx -= 25.0
 		for snow in Geometry2D.intersect_polygons(pts, cap):
-			node.add_child(SceneryArt.poly(snow, Palette.SNOW, mat))
+			var sp := SceneryArt.poly(snow, Palette.SNOW, mat)
+			var suv := PackedVector2Array() # far land, high up: little haze on it
+			for v in snow:
+				suv.append(Vector2(6.0, 0.0))
+			sp.uv = suv
+			node.add_child(sp)
+		node.add_child(_faces(ridge[0], ridge[1].darkened(0.45), mat))
 	# The fire lookout on the far eastern ridge: a soft long-term goal visible from the valley.
 	var tower := Node2D.new()
 	tower.position = peak + Vector2(0, 4)
@@ -140,6 +162,47 @@ func _mountains(node: Node2D, s: float, mat: Material) -> void:
 	node.add_child(tower)
 	_far_tower = tower
 
+
+## The shaded faces of a ridge: each run of slope facing one way gets a face that
+## the shader darkens when it's turned from the sun, so the range has sides by day.
+func _faces(full: PackedVector2Array, c: Color, mat: Material) -> Polygon2D:
+	var ridge := PackedVector2Array()
+	for k in range(0, full.size(), 3): # the big shapes, not every bump
+		ridge.append(full[k])
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	var polys := []
+	var i := 0
+	while i < ridge.size() - 1:
+		var right := ridge[i + 1].y > ridge[i].y # going down to the right: faces right
+		var j := i
+		while j < ridge.size() - 1 and (ridge[j + 1].y > ridge[j].y) == right:
+			j += 1
+		var hi := ridge[i] if right else ridge[j]
+		var drop := absf(ridge[i].y - ridge[j].y) + 90.0
+		var first := pts.size()
+		for k in range(i, j + 1): # a strip under this run of slope, fading out downward and away from the crest
+			var t := float(k - i) / maxf(j - i, 1)
+			var from_peak := t if right else 1.0 - t
+			pts.append(ridge[k])
+			pts.append(ridge[k] + Vector2((ridge[k].x - hi.x) * -0.25, drop * (1.0 - 0.5 * from_peak)))
+			for e in 2:
+				uvs.append(Vector2(5.0, 1.0 if right else 0.0))
+			cols.append(c)
+			cols.append(Color(c, 0.0))
+		for k in j - i:
+			var a := first + k * 2
+			polys.append(PackedInt32Array([a, a + 2, a + 3, a + 1]))
+		i = j
+	var p := Polygon2D.new()
+	p.polygon = pts
+	p.uv = uvs
+	p.vertex_colors = cols
+	p.polygons = polys
+	p.texture = SceneryArt.WHITE
+	p.material = mat
+	return p
 
 ## The lights, on a layer so far off it barely moves: always somewhere off to the east over the
 ## far range, beyond the edge of the map. Each carries a small light so the night can't dim it.
@@ -195,6 +258,8 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 		var w_far: float = 2.0 * wd.half * s * s
 		var w_near: float = 2.0 * wd.half * s_next * s_next
 		var strip := DEPTH_RISE * (s_next - s) + 20.0
+		if s_next >= 1.0: # the nearest reach runs on down behind the gameplay creek bed: no land showing between
+			strip += 520.0
 		node.add_child(SceneryArt.poly(PackedVector2Array([
 			Vector2(cx - w_far * 0.5, -2), Vector2(cx + w_far * 0.5, -2),
 			Vector2(cx + w_near * 0.5, strip), Vector2(cx - w_near * 0.5, strip)]), Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat, 0.0, SceneryArt.WATER))
@@ -300,7 +365,7 @@ func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 		elif _rng.randf() < (0.7 if fb == "oldgrowth" else 0.35): # trunks right in front of you; many more in the big timber
 			var tw := _rng.randf_range(60, 130) * (1.8 if fb == "oldgrowth" else 1.0)
 			item = Node2D.new()
-			item.add_child(SceneryArt.poly(PackedVector2Array([Vector2(-tw * 0.55, 40), Vector2(tw * 0.55, 40), Vector2(tw * 0.42, -2600), Vector2(-tw * 0.42, -2600)]), Palette.FG_DARK, mat))
+			item.add_child(_soft_trunk(tw, mat)) # out of focus: bark-brown, soft at the edges
 			item.set_meta("half_w", tw * 0.55)
 			item.set_meta("height", 2600.0)
 		else:
@@ -311,3 +376,30 @@ func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 		item.position = Vector2(x, 10)
 		node.add_child(item)
 		fg_items.append(item)
+
+## A trunk right in front of the lens: dark bark, softened edges.
+func _soft_trunk(tw: float, mat: Material) -> Polygon2D:
+	var xs := [-0.62, -0.42, 0.42, 0.62]
+	var alpha := [0.0, 0.92, 0.92, 0.0]
+	var c := Palette.BARK_DARK.darkened(0.35)
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var uvs := PackedVector2Array()
+	for k in 4:
+		pts.append(Vector2(tw * xs[k], 40))
+		pts.append(Vector2(tw * xs[k] * 0.78, -2600))
+		for j in 2:
+			cols.append(Color(c.lightened(0.12 if k == 2 else 0.0), alpha[k]))
+			uvs.append(Vector2(0.0, 0.5))
+	var polys := []
+	for k in 3:
+		polys.append(PackedInt32Array([k * 2, k * 2 + 2, k * 2 + 3, k * 2 + 1]))
+	var p := Polygon2D.new()
+	p.polygon = pts
+	p.vertex_colors = cols
+	p.uv = uvs
+	p.polygons = polys
+	p.texture = SceneryArt.WHITE
+	p.material = mat
+	return p
+

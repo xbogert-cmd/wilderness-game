@@ -33,14 +33,37 @@ void fragment() {
 	float h = hash(floor(p * 220.0));
 	col += step(0.9972, h) * (0.55 + 0.45 * sin(TIME * 1.5 + h * 60.0)) * stars * clear * (1.0 - UV.y);
 
+	{ // on a clear night: a sky full of stars, and the Milky Way across it
+		float h2 = hash(floor(p * 520.0) + 17.0);
+		col += step(0.9965, h2) * (0.35 + 0.25 * sin(TIME * 2.3 + h2 * 90.0)) * stars * clear;
+		vec2 q = vec2(p.x * 0.8 + p.y * 0.55, p.y - p.x * 0.35);
+		float band = exp(-pow((q.y - 0.18) * 5.5, 2.0));
+		float dust = fbm(q * 6.0) * fbm(q * 13.0 + 4.0);
+		col += vec3(0.75, 0.8, 0.95) * band * smoothstep(0.1, 0.5, dust) * 0.22 * stars * clear * (1.0 - UV.y * 0.7);
+		col += step(0.9985, hash(floor(p * 900.0) + 3.0)) * band * 0.6 * stars * clear;
+	}
 	float ds = distance(p, vec2(sun_uv.x * aspect, sun_uv.y));
 	col += sun_color.rgb * (smoothstep(0.034, 0.028, ds) * clear + 0.3 * exp(-ds * 4.0)) * sun_alpha;
 
 	float dm = distance(p, vec2(moon_uv.x * aspect, moon_uv.y));
 	col = mix(col, vec3(0.86, 0.88, 0.9), smoothstep(0.02, 0.016, dm) * moon_alpha * clear);
 
+	{
+		// low sun: the horizon glows warm on its side, a wide halo round it
+		float low = smoothstep(0.35, 0.72, sun_uv.y) * sun_alpha;
+		float along = exp(-abs(p.x - sun_uv.x * aspect) * 1.1);
+		col += sun_color.rgb * low * along * smoothstep(0.3, 1.0, UV.y) * 0.45 * clear;
+		col += sun_color.rgb * 0.18 * exp(-ds * 1.6) * sun_alpha * clear;
+		// high thin cloud, even on fair days, catching the colour of a low sun
+		float streak = fbm(vec2(p.x * 1.1 + TIME * 0.002, p.y * 11.0 + 3.0)) * fbm(vec2(p.x * 3.0 - 7.0, p.y * 2.0));
+		float wisp = smoothstep(0.2, 0.42, streak) * smoothstep(0.75, 0.15, UV.y) * (1.0 - cloud);
+		vec3 wisp_col = mix(vec3(1.0), sun_color.rgb * 1.3 + 0.1, low * 0.8) * mix(0.35, 1.0, sun_alpha);
+		col = mix(col, wisp_col, wisp * 0.4);
+	}
 	float n = fbm(vec2(p.x * 2.2 + TIME * (0.004 + wind * 0.012), p.y * 7.0));
 	float cov = smoothstep(1.02 - cloud, 1.25 - cloud, n) * smoothstep(0.95, 0.35, UV.y);
-	col = mix(col, cloud_color.rgb * (0.85 + 0.25 * n), clamp(cov + cloud * 0.35, 0.0, 1.0));
+	vec3 cc = cloud_color.rgb * (0.85 + 0.25 * n);
+	cc += sun_color.rgb * 0.35 * exp(-ds * 2.2) * sun_alpha * smoothstep(0.9, 0.4, cov); // lit edges near the sun
+	col = mix(col, cc, clamp(cov + cloud * 0.35, 0.0, 1.0));
 	COLOR = vec4(col, 1.0);
 }

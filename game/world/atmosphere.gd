@@ -22,6 +22,10 @@ var canvas_mod: CanvasModulate
 var backdrop: Backdrop
 var rain: Rain
 var veil: ShaderMaterial ## fog and blizzard over the view (visibility.gdshader)
+static var sun_dir := 0.0 ## -1 the sun's off to the left .. 1 to the right
+static var sun_k := 0.0 ## how strongly the sun's shining (0 night, cloud, underground)
+var beams: ShaderMaterial ## sunbeams, cloud shadows and vignette
+const BEAMS := {"valley": 1.0, "river": 0.7, "oldgrowth": 1.0, "grove": 0.9, "foothills": 0.7, "burn": 0.5, "marsh": 0.5, "meadow": 0.6}
 var _keys: Array = []
 
 func _ready() -> void:
@@ -77,6 +81,14 @@ func _process(_delta: float) -> void:
 	var t := (h - Clock.SUNRISE) / (Clock.SUNSET - Clock.SUNRISE)
 	sky.set_shader_parameter("sun_uv", Vector2(lerpf(0.08, 0.92, t), 0.78 - sin(clampf(t, 0.0, 1.0) * PI) * 0.62))
 	sky.set_shader_parameter("sun_alpha", smoothstep(-0.03, 0.05, t) * smoothstep(1.03, 0.95, t))
+	# Where the sun is and how strongly it lights things (scenery, ground)
+	sun_dir = clampf((t - 0.5) * 2.0, -1.0, 1.0)
+	RenderingServer.global_shader_parameter_set("sun_dir", sun_dir)
+	sun_k = smoothstep(-0.03, 0.08, t) * smoothstep(1.03, 0.92, t) * (1.0 - w.cloud * 0.85) * (1.0 - under)
+	RenderingServer.global_shader_parameter_set("sun_k", sun_k)
+	RenderingServer.global_shader_parameter_set("sun_col", (c[3] as Color).lerp(Color(1, 0.97, 0.9), 0.3))
+	RenderingServer.global_shader_parameter_set("under", under)
+	RenderingServer.global_shader_parameter_set("cam_x", get_viewport().get_camera_2d().get_screen_center_position().x if get_viewport().get_camera_2d() else 0.0)
 	var tm := fposmod(h - Clock.SUNSET, 24.0) / (24.0 - (Clock.SUNSET - Clock.SUNRISE))
 	sky.set_shader_parameter("moon_uv", Vector2(lerpf(0.1, 0.9, tm), 0.7 - sin(clampf(tm, 0.0, 1.0) * PI) * 0.55))
 	sky.set_shader_parameter("moon_alpha", 1.0 - smoothstep(0.0, 0.1, light))
@@ -84,6 +96,19 @@ func _process(_delta: float) -> void:
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
 	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz + 1.2 * w.fog)
+	if beams and p:
+		var vp := get_viewport()
+		var view := vp.get_visible_rect().size
+		beams.set_shader_parameter("view", view)
+		var sun_uv: Vector2 = sky.get_shader_parameter("sun_uv")
+		beams.set_shader_parameter("sun", sun_uv * view)
+		var low := smoothstep(0.3, 0.7, sun_uv.y) # low in the sky: long beams
+		beams.set_shader_parameter("rays", low * float(sky.get_shader_parameter("sun_alpha")) * (1.0 - w.cloud) * (1.0 - under) * BEAMS.get(Terrain.biome(p.global_position.x), 0.3) * (1.0 + fog))
+		beams.set_shader_parameter("ray_col", (c[3] as Color).lerp(Color(1, 0.95, 0.8), 0.3))
+		beams.set_shader_parameter("vignette", 0.3)
+		beams.set_shader_parameter("scroll", -vp.get_canvas_transform().origin)
+		var sunlit := smoothstep(-0.03, 0.08, t) * smoothstep(1.03, 0.92, t) * (1.0 - under) # the sun's up, clouds or no
+		beams.set_shader_parameter("cloud_shade", sunlit * smoothstep(0.15, 0.4, w.cloud) * (1.0 - smoothstep(0.7, 0.92, w.cloud))) # broken cloud: patches of shadow
 	if veil and p:
 		var vp := get_viewport()
 		var ct := vp.get_canvas_transform()

@@ -32,6 +32,7 @@ func _ready() -> void:
 	_light.color = Color(1.0, 0.55, 0.25)
 	_light.position = Vector2(0, -height * 0.45)
 	add_child(_light)
+	Glow.on(_light, 700.0)
 	_embers = _particles(Color(1.0, 0.6, 0.2), 110, 3.6, 10.0, Vector3(0, 140, 0)) # sparks falling out of the crown
 	_smoke = _particles(Color(0.35, 0.35, 0.35, 0.35), 40, 5.0, 26.0, Vector3(0, -50, 0))
 	GameClock.ticked.connect(_on_tick)

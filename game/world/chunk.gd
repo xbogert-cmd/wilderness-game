@@ -4,6 +4,7 @@ class_name Chunk extends Node2D
 const STEP := 40.0
 const DEPTH := 2400.0
 const WATER_SHADER := preload("res://game/world/water.gdshader")
+const GROUND_SHADER := preload("res://game/world/ground.gdshader")
 const MUD := Color("3f3226")
 
 var index := 0
@@ -13,7 +14,6 @@ var _surface: PackedVector2Array
 var _snow: Polygon2D ## lying snow over the ground, behind the player
 var _lip: Polygon2D ## the front edge of it, over the boots, so you wade in it
 var _grass_nodes: Array[Node2D] = []
-var _trail: Polygon2D ## worn game-trail path over the ground (and over snow)
 
 func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -88,7 +88,6 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	_finds(terrain, world_seed)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
-	_trail = _trail_poly()
 
 ## Vine tangles on their own seed, so adding them never moved the trees of existing saves.
 func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
@@ -138,29 +137,6 @@ func _finds(terrain: Terrain, world_seed: int) -> void:
 		f.position = Vector2(x, terrain.height_at(x) + 2.0)
 		add_child(f)
 
-## Dashes of packed, hoof-worn earth along each game trail crossing this chunk.
-func _trail_poly() -> Polygon2D:
-	var shapes := []
-	var x0 := index * Terrain.CHUNK_W
-	var x1 := x0 + Terrain.CHUNK_W
-	for i in range(index - 1, index + 2):
-		if i < Terrain.FIRST or i > Terrain.LAST:
-			continue
-		var t := Wildlife.trail(i)
-		var a := maxf(minf(t.x, t.y), x0)
-		var b := minf(maxf(t.x, t.y), x1)
-		var x := a
-		while x < b:
-			var seg := minf(x + 70.0, b)
-			if _terrain.water_surface_at(x, false) == INF:
-				shapes.append(PackedVector2Array([Vector2(x, _terrain.height_at(x) - 3.0), Vector2(seg, _terrain.height_at(seg) - 3.0),
-					Vector2(seg, _terrain.height_at(seg) + 7.0), Vector2(x, _terrain.height_at(x) + 7.0)]))
-			x += 95.0
-	var p := SceneryArt.multi(shapes, Palette.SOIL_TOP.lightened(0.32), null) if shapes else Polygon2D.new()
-	p.z_index = 2
-	add_child(p)
-	return p
-
 ## Whether x lies on a game trail (for hints).
 static func on_trail(x: float) -> bool:
 	var i := int(floor(x / Terrain.CHUNK_W))
@@ -187,8 +163,6 @@ func set_snow(cm: float) -> void:
 		g.visible = cm < 10.0
 	if _snow.visible:
 		_band(_snow, maxf(cm, 3.0), 6.0)
-	_trail.position.y = -minf(cm, 60.0) if cm > 0.3 else 0.0 # trodden into the snow's surface
-	_trail.color = Color(0.62, 0.68, 0.78) if cm > 2.0 else Palette.SOIL_TOP.lightened(0.32)
 	if _lip.visible:
 		_band(_lip, minf(cm * 0.45, 18.0), 2.0)
 
@@ -208,25 +182,32 @@ func _band(p: Polygon2D, depth: float, below: float) -> void:
 	p.polygon = pts
 	p.vertex_colors = cols
 
-## Topsoil strip that fades into deep earth, so the ground cross-section reads as depth, not a slab.
+## The top of the ground, running toward you below the line (ground.gdshader draws it): rows of
+## one colour per place (UV.y = how far below the line, from the banks' level in a creek; alpha
+## marks a game trail); underground the same shader shows the cut earth.
 func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
-	var rows := [[0.0, Palette.GRASS.darkened(0.25)], [14.0, Palette.SOIL_TOP], [90.0, Palette.SOIL_TOP.lerp(Palette.SOIL_DEEP, 0.55)], [320.0, Palette.SOIL_DEEP]]
+	var g := Palette.GRASS.darkened(0.1).lerp(Palette.SOIL_TOP, 0.18)
+	var rows := [[0.0, g], [14.0, g], [90.0, g], [320.0, g], [900.0, g]]
 	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
 	var cols := PackedColorArray()
 	var polys := []
 	var n := surface.size()
 	for r in rows:
 		for p in surface:
 			pts.append(p + Vector2(0, r[0]))
-			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x)
+			var wi := terrain.water_index(p.x, 60.0)
+			uvs.append(Vector2(p.x, r[0] + (maxf(p.y - terrain.banks[wi], 0.0) if wi >= 0 else 0.0))) # in a creek: from the banks' level
+			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x) # damp ground darker near the line
 			var c: Color = r[1]
-			if r[0] < 20.0: # drier, stonier topsoil going east
-				c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x) * (0.2 if Terrain.biome(p.x) in ["oldgrowth", "grove"] else 1.0))
-				if p.x < -25000.0: # red sand in the dry country
-					c = c.lerp(Color("a0704a") if r[0] < 5.0 else Color("8a5a3a"), smoothstep(-25000.0, -27500.0, p.x))
-				elif p.x > 78000.0 and p.x < 89000.0: # dark duff under the big trees
-					c = c.lerp(Color("3a2e20"), 0.6 * smoothstep(78000.0, 80000.0, p.x))
-			cols.append(MUD if mud else c)
+			c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x) * (0.2 if Terrain.biome(p.x) in ["oldgrowth", "grove"] else 1.0))
+			if p.x < -25000.0: # red sand in the dry country
+				c = c.lerp(Color("a0704a") if r[0] < 5.0 else Color("8a5a3a"), smoothstep(-25000.0, -27500.0, p.x))
+			elif p.x > 78000.0 and p.x < 89000.0: # dark duff under the big trees
+				c = c.lerp(Color("3a2e20"), 0.6 * smoothstep(78000.0, 80000.0, p.x))
+			c = c.lerp(MUD, 0.45) if mud else c
+			c.a = 0.5 if on_trail(p.x) and _terrain.water_surface_at(p.x, false) == INF else 1.0
+			cols.append(c)
 	for row in rows.size() - 1:
 		for i in n - 1:
 			var a := row * n + i
@@ -236,6 +217,22 @@ func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
 	band.vertex_colors = cols
 	band.polygons = polys
 	band.z_index = 1
+	band.uv = uvs
+	band.texture = SceneryArt.WHITE
+	var m := ShaderMaterial.new()
+	m.shader = GROUND_SHADER
+	var cr := Vector4(0.0, -1.0, 0.0, -1.0)
+	var k := 0
+	for w in Terrain.WATERS:
+		if w.kind in ["creek", "river"] and absf(w.x - (index + 0.5) * Terrain.CHUNK_W) < Terrain.CHUNK_W and k < 2:
+			cr[k * 2] = w.x
+			cr[k * 2 + 1] = w.half
+			k += 1
+	m.set_shader_parameter("creeks", cr)
+	m.set_shader_parameter("soil_top", Palette.SOIL_TOP)
+	m.set_shader_parameter("soil_deep", Palette.SOIL_DEEP)
+	m.set_shader_parameter("water_col", Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35))
+	band.material = m
 	return band
 
 func _contains(x: float) -> bool:

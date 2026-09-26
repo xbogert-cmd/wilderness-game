@@ -36,6 +36,7 @@ func _ready() -> void:
 	_lamp.color = Color(1.0, 0.7, 0.38)
 	_lamp.position = Vector2(108, -128)
 	add_child(_lamp)
+	Glow.on(_lamp, 160.0)
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
 	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)))

@@ -78,6 +78,14 @@ func _ready() -> void:
 	add_child(camera)
 	var rain := Rain.new()
 	camera.add_child(rain)
+	var glow_layer := CanvasLayer.new()
+	glow_layer.layer = 1
+	glow_layer.follow_viewport_enabled = true
+	add_child(glow_layer)
+	var flies := Fireflies.new()
+	flies.player = player
+	flies.camera = camera
+	glow_layer.add_child(flies)
 
 	backdrop = Backdrop.new()
 	add_child(backdrop)
@@ -98,9 +106,20 @@ func _ready() -> void:
 	atmo.veil = ShaderMaterial.new()
 	atmo.veil.shader = preload("res://game/world/visibility.gdshader")
 	veil.material = atmo.veil
+	var light := ColorRect.new()
+	light.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	light.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	atmo.beams = ShaderMaterial.new()
+	atmo.beams.shader = preload("res://game/world/light.gdshader")
+	light.material = atmo.beams
+	veil_layer.add_child(light)
 	veil_layer.add_child(veil)
 	add_child(veil_layer)
 	add_child(atmo)
+	var shadows := Shadows.new()
+	shadows.world = world
+	shadows.player = player
+	world.add_child(shadows)
 	var storm := Storm.new()
 	storm.player = player
 	storm.world = world
@@ -203,6 +222,8 @@ func _ready() -> void:
 		player.auto_dir = float(args.walk)
 	if args.has("run"):
 		player.auto_run = true
+	if args.has("nohud"): # clean screenshots
+		ui.visible = false
 	if args.has("zoom"):
 		camera.zoom_override = float(args.zoom)
 	if args.has("camp"): # preview a finished camp next to the player
