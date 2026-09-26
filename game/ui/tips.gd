@@ -78,6 +78,31 @@ func _pack_cells_free() -> int:
 		used += e.stack.def.shape.size()
 	return Backpack.W * Backpack.H - used
 
+## The first days, as a checklist in the corner until it's done: [id, text, done?]
+func _goals() -> Array:
+	var p := player
+	var fires := get_tree().get_nodes_in_group("heat").filter(func(n): return n is Campfire)
+	return [
+		["sticks", "Gather sticks (%s)" % Keys.label("interact"), p.backpack.count_of("sticks") >= 3 or not fires.is_empty()],
+		["fire", "Build a campfire (%s) and light it" % Keys.label("build"), fires.any(func(f): return f.lit)],
+		["camp", "Build a lean-to to sleep in", p.camp_x >= 0.0],
+		["water", "Boil water: the pot, hung on a tripod over the fire", fires.any(func(f): return f.pot and f.pot.water > 0.01 and f.pot.water_clean)],
+		["food", "Find food: berries, a fish, a deer", p.backpack.find(func(s): return s.def.has("food") and s.def.id != "jerky") != null],
+		["bench", "Build a workbench: bows, arrows, clothes", not get_tree().get_nodes_in_group("workbench").is_empty()],
+	]
+
+func _update_goals() -> void:
+	var list := []
+	for g in _goals():
+		if g[2]:
+			seen["goal_" + g[0]] = true
+		list.append([g[1], seen.has("goal_" + g[0])])
+	var all_done := list.all(func(g): return g[1])
+	if all_done and not seen.has("goals_done"):
+		seen["goals_done"] = true
+		Journal.note("first_days", "A fire, a roof, clean water, food and a bench to work at. I've got my feet under me out here.")
+	hud.goals = [] if seen.has("goals_done") or not Settings.hints else list
+
 func _near(species: String, reach: float) -> bool:
 	return get_tree().get_nodes_in_group("predators").any(func(a): return a.def.id == species and absf(a.position.x - player.global_position.x) < reach)
 
@@ -90,9 +115,10 @@ func _deer_near() -> bool:
 func _process(delta: float) -> void:
 	_age += delta
 	_t -= delta
-	if _t > 0.0 or player.sleeping or player.dead or get_tree().paused:
+	if _t > 0.0 or player.sleeping or player.dead or get_tree().paused or not Settings.hints:
 		return
 	_t = CHECK_EVERY
+	_update_goals()
 	for r in _rules():
 		if r[1] and not seen.has(r[0]):
 			seen[r[0]] = true

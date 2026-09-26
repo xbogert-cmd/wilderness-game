@@ -44,6 +44,8 @@ godot
 - *Drying rack* (2 medium logs, 4 sticks): hang raw venison or fish from your hands or straight from the pack (8 strips). It dries into jerky in about 12 hours, faster beside a fire, stalled by rain. Hanging meat doesn't spoil.
 - *Log cabin* (6 long logs, 6 medium, 4 sticks, 8 hours to build): shelter whose walls hold warmth like a fire. Building or sleeping in it makes it camp, and it's the best sleep in the valley.
 
+**The whole country, west to east:** the sage flats and Alder Creek at the western edge, an old homestead in a meadow, a marsh with a pond, the Sweetwater River (chest-deep and cold: build a *log bridge*, 4 long and 2 medium logs, over it or any creek) with an old trapper's camp on its east bank, then the valley. Past the lookout the land drops into an old burn where a bush plane came down, then climbs to a high basin with a tarn. Each biome has its own plants and trees. The homestead, the trapper's camp and the wreck each have things to search (E shows the choices) and pages for the journal; the wreck is shelter. Some nights, from the ridge or anywhere east of it, pale lights move along the far skyline. Signal flares (from the wreck) light up the sky and scatter anything wild.
+
 **The wider world:** east of the creek valley the land climbs through rockier foothills (fewer aspens, more boulders) past a *rock shelter*, then up the ridge to the *fire lookout* (about 450 m of country in all). The rock shelter is dry and a little warmer than outside, somewhere to sleep, and someone left a cache there. At the lookout, E at the ladder climbs the tower, hand over hand: the view pulls back, the whole map fills in, the cab is shelter to sleep in, and the keeper's cupboard holds supplies and the logbook. Don't step off the catwalk.
 
 **Map and journal (M):** the map is the land's profile as you've seen it (unexplored stretches stay blank), with the trailhead, creek, rock shelter, lookout, your camp and structures, a dropped pack, game trails you've crossed, and you. The field journal writes itself the first time things happen or are found: making camp, first snow, the seasons turning, your first deer, the rock shelter, the lookout, and pages left by the last keeper.
@@ -55,6 +57,18 @@ godot
 **Wolves and the bear:** they never come near your camp (a lean-to, cabin or campfire, lit or not) or a torch in your hand. They come for food left out: a carcass, a gut pile, meat on the ground, a rabbit in a snare, and (the bear) bait piles. Ravens circle anything dead by day, a sign for you and for them, and anything left out overnight away from camp is mostly eaten by morning. A wolf pack comes after dark (any time in winter), follows the smell of raw meat you carry, and howls at night. Wolves stalk, spring and bite someone who's hurt or carrying meat after dark (the bear rears and swipes; either knocks you back): face them with a spear or torch and they won't close in, and hurting one scatters the pack. The black bear keeps to the foothills around the rock shelter and sleeps through winter. Walk up on it (or its food) and it bluff-charges and stops short; come back at it and the next charge is real. An arrow to the chest kills a wolf; the bear takes two. Skin them (knife) for a wolf pelt or bear hide.
 
 **Torch, spear, snares:** at a lit fire, E offers *Light a torch* (uses a stick): it lights the dark for about three hours (less in rain), keeps you out of reach of anything wild, and click waves it to drive them off. It can't go in the pack; putting it away snuffs it. The *spear* (bench, 3 sticks) thrusts at arm's length and a half: it hurts a wolf or the bear, takes a rabbit or an unaware deer, and held toward a predator keeps it at bay. *Snares* (cord and a stick make two) are set from the build menu; rabbits run into them mostly at dawn and dusk. A rabbit left hanging out past camp often gets taken. Rabbits also hop about at dawn and dusk; an arrow takes one.
+
+**Health:** unboiled water, raw or spoiled food can make you sick a few hours later (hunger and thirst drain faster, you tire). An open cut left unbandaged festers into infection and fever; bite wounds especially. Bare hands (and bare legs in deep snow) frostbite while you're freezing; a fire brings them back. All of it comes on slowly with warnings, is treatable, and left alone for a couple of days can kill.
+
+**Wild plants:** yarrow (wounds, infection), wild mint (a sick stomach), willow bark (fever), rose hips (a little food; they last into winter), arnica (sprains), and water hemlock, which looks like yarrow and is deadly. Until you've picked a kind it's "an unknown plant" with a description; after that it's named before you gather, so you can leave what you don't want. Most die back in winter.
+
+**Cooking and camp supply:** with the pot hanging over a lit fire, E offers stews (2 meat or fish and 1 berries, rose hips or beans: three hot bowls that warm you and wet your throat) and herb teas (stronger than chewing the herb). Crafting, cooking and blueprints at camp use what's in the pack first, then any storage chest (or the sled's load) nearby: you walk over, rummage, and walk back before the work starts.
+
+**Winter travel:** snowshoes (bench: sticks, a tanned hide, cord; worn on the Feet slot) keep you on top of deep snow. A *sled* (build menu) carries up to four logs, a whole carcass, and a pack-sized load: over snow it runs nearly at a walk, on bare ground it drags. On frozen water chop a hole (E) and fish through it: fish gather under the ice. A blizzard (heavy snow in a hard wind) whites out the valley and its wind cuts through your clothes.
+
+**Settings (Esc, Settings):** volume for everything, music, sounds, ambience, and rain and wind; hints on or off; rebind any key (click, press). Music is rare and quiet: some nightfalls and dawns, a storm building, and the lights.
+
+**First days:** a small checklist top-left (sticks, a fire, a lean-to, boiled water, food, a workbench) ticks off as you go and goes away when it's done.
 
 **Build menu (B):** each entry says what it's for and what you have toward it (pack items, and logs lying nearby).
 
@@ -85,6 +99,8 @@ godot --headless --fixed-fps 60 -- --scenario=wild                # deer senses,
 godot --headless --fixed-fps 60 -- --scenario=winter              # woodpile, seasons, snow, tracks in snow, frozen creek, camp builds
 godot --headless --fixed-fps 60 -- --scenario=world               # foothills, rock shelter, lookout, map, journal, the herd
 godot --headless --fixed-fps 60 -- --scenario=predators           # choices, torch, wolves, bear, spear, butchering, snares, clothing
+godot --headless --fixed-fps 60 -- --scenario=frontier            # the wider world: waters, sites, bridge, flares, the lights
+godot --headless --fixed-fps 60 -- --scenario=health              # sickness, infection, frostbite, plants, stews, chests, winter travel, settings
 godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```

@@ -564,7 +564,7 @@ func _hunt() -> void:
 	check(player.backpack.count_of("venison_raw") == int(Carcass.MEAT) and _carcasses().is_empty(), "butchered: %d venison straight into the pack" % player.backpack.count_of("venison_raw"))
 	check(get_tree().get_nodes_in_group("food_scent").any(func(n): return n is GutPile), "butchering in the field leaves a gut pile")
 	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
-	player.backpack.take("#meat", player.backpack.count_of("#meat")) # (jerky counts as meat too) # make room for what follows
+	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw")) # make room for what follows
 	player.backpack.take("deer_hide", player.backpack.count_of("deer_hide"))
 
 	# Scent: the same still, standing player, 700 px off: smelled downwind, not upwind.
@@ -1243,7 +1243,7 @@ func _predators() -> void:
 		check(Player.first_label(deer.interact_options(player)).begins_with("Take the rest of the meat"), "come back for the rest")
 		deer.interact(player)
 		check(not is_instance_valid(deer) or deer.is_queued_for_deletion(), "took the rest; nothing left")
-	player.backpack.take("#meat", player.backpack.count_of("#meat")) # (jerky counts as meat too)
+	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw"))
 	player.backpack.take("deer_hide", 1)
 	var whole := world.spawn({"kind": "carcass", "x": x + 80.0, "facing": 1, "species": "mule_deer", "hour": GameClock.clock.hours}) as Carcass
 	await frames(2)
@@ -1750,6 +1750,7 @@ func _health() -> void:
 	check(got > 4 and got < 25, "unboiled water makes you sick some of the time (%d of 40)" % got)
 
 	await _health_cooking()
+	await _polish()
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)
 
@@ -1865,3 +1866,34 @@ func _health_cooking() -> void:
 	GameClock.weather.snow_frac = 1.0
 	GameClock.weather.wind = 0.9
 	check(GameClock.weather.blizzard() > 0.8, "cold, snow and a gale: a blizzard")
+
+
+## Settings (keys, volumes, kept apart from saves), the first-days checklist, music cues.
+func _polish() -> void:
+	var before := Keys.label("interact")
+	Settings.bind("interact", KEY_G)
+	check(Keys.label("interact") == "G" and InputMap.action_get_events("interact").any(func(e): return e is InputEventKey and e.physical_keycode == KEY_G), "rebound Interact to G")
+	Settings.volume.Music = 0.3
+	Settings.save()
+	check(Settings.path().begins_with("user://test_saves"), "a test run keeps its settings apart from the player's")
+	Settings.volume.Music = 1.0
+	Settings.keys.clear()
+	Settings.load_and_apply()
+	check(absf(Settings.volume.Music - 0.3) < 0.01 and Keys.label("interact") == "G", "settings come back from disk")
+	check(absf(db_to_linear(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music"))) - 0.3) < 0.01, "the music bus follows the slider")
+	Settings.reset_keys()
+	Settings.volume.Music = 0.8
+	Settings.save()
+	check(Keys.label("interact") == before, "keys back to defaults")
+	var hud: Hud = get_tree().get_root().find_children("*", "Hud", true, false)[0]
+	var tips: Tips = get_tree().get_root().find_children("*", "Tips", true, false)[0]
+	tips._update_goals()
+	check(hud.goals.size() == 6 or tips.seen.has("goals_done"), "the first-days checklist is up")
+	var amb: Ambience = get_tree().get_root().find_children("*", "Ambience", true, false)[0]
+	amb._music_cooldown = 0.0
+	amb.music.stop()
+	amb._cue("night", -3.0)
+	check(amb.music.playing and amb.music.stream == amb._cues.night, "the night music plays")
+	amb._cue("dawn", -6.0)
+	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
+	amb.music.stop()

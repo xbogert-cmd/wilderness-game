@@ -27,6 +27,7 @@ var camera: FollowCamera
 var backdrop: Backdrop
 
 func _ready() -> void:
+	Settings.load_and_apply()
 	var args := _args()
 	if args.has("load"):
 		SaveGame.pending = SaveGame.read(args.load)
@@ -303,6 +304,8 @@ func _ready() -> void:
 		build_menu.visible = true
 	if args.has("menu"):
 		pause.toggle.call_deferred()
+		if args.menu == "settings":
+			pause._settings.call_deferred()
 	if args.has("top"): # preview: up on the lookout catwalk
 		player.global_position = Vector2(Terrain.LOOKOUT_X - 40.0, world.terrain.summit_y + Lookout.FLOOR - 6.0)
 	if args.has("reveal"): # preview: the whole map explored

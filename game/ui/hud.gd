@@ -30,6 +30,7 @@ func fade_to(target: float, seconds: float) -> Tween:
 	return tw
 
 var _flash := 0.0 ## red at the edges after a hit
+var goals: Array = [] ## the first-days checklist: [text, done] (set by Tips)
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -144,8 +145,30 @@ func _draw() -> void:
 		box.border_color = Color(0.93, 0.85, 0.6, 0.5 * a)
 		draw_style_box(box, r)
 		draw_string(_font, r.position + Vector2(18, 25), _tip, HORIZONTAL_ALIGNMENT_LEFT, w - 36.0, 16, Color(TEXT, a))
+	_draw_goals()
 	_draw_hit()
 	_draw_fade()
+
+## Top left, small and quiet: what to do in the first days, ticked off as you go.
+func _draw_goals() -> void:
+	if goals.is_empty() or player.sleeping or get_tree().get_nodes_in_group("build_mode").any(func(b): return b.menu.visible):
+		return
+	var at := Vector2(24, 96)
+	var w := 380.0
+	var r := Rect2(at - Vector2(12, 26), Vector2(w, 34 + goals.size() * 22.0))
+	var box := _panel.duplicate()
+	box.bg_color.a = 0.45
+	draw_style_box(box, r)
+	_text(at, "First days", 15, Color(TEXT, 0.9))
+	for i in goals.size():
+		var g: Array = goals[i]
+		var y := at.y + 24.0 + i * 22.0
+		var c := Color(TEXT, 0.45) if g[1] else Color(TEXT, 0.9)
+		if g[1]:
+			draw_rect(Rect2(at.x, y - 11, 11, 11), c)
+		else:
+			draw_rect(Rect2(at.x, y - 11, 11, 11), c, false, 1.5)
+		_text(Vector2(at.x + 20, y), g[0], 14, c)
 
 ## A red vignette that fades after being struck.
 func _draw_hit() -> void:

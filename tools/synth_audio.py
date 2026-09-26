@@ -19,6 +19,12 @@
 - sfx/growl.wav: a low, rough rumble with a rattling flutter, for a wolf closing in.
 - sfx/roar.wav: a black bear's warning: two hard huffs, a jaw pop, then a short bellow.
 - sfx/caw_1.wav, caw_2.wav: a raven's croak, harsh and nasal, over something dead.
+- music/night.wav: a slow, quiet night piece: soft string chords (D minor, B flat, F, C)
+  swelling and fading, with a few sparse plucked notes like a guitar across the fire.
+- music/dawn.wav: brighter, for the first light: open chords (G, C, D) and a slow, breathy
+  flute-like line.
+- music/lights.wav: for the lights: a low drone, and high glassy tones a tritone apart
+  that beat slowly against each other. Uneasy, not a jump-scare.
 Pure stdlib so it runs anywhere.
 """
 import math
@@ -325,6 +331,90 @@ def caw(seed: int) -> list[float]:
     return reverb(reverb(out, 0.35), 0.2)
 
 
+def _pad(freqs: list[float], t: float, seed: float) -> float:
+    """A soft chord: a few string-like partials per note (lighter than bowed())."""
+    out = 0.0
+    vib = 1.0 + 0.002 * math.sin(2 * math.pi * 4.2 * t + seed)
+    for k, f in enumerate(freqs):
+        for n, amp in ((1, 1.0), (2, 0.35), (3, 0.15)):
+            out += amp * math.sin(2 * math.pi * f * n * vib * t + seed * (k + n))
+    return out / len(freqs)
+
+
+def _pluck(f: float, t: float) -> float:
+    if t < 0.0 or t > 3.0:
+        return 0.0
+    return (math.sin(2 * math.pi * f * t) + 0.4 * math.sin(4 * math.pi * f * t)) * math.exp(-t * 2.2) * min(1.0, t / 0.004)
+
+
+def night() -> list[float]:
+    rng = random.Random(81)
+    chords = [[146.8, 174.6, 220.0], [116.5, 146.8, 174.6], [174.6, 220.0, 261.6], [130.8, 164.8, 196.0]]  # Dm Bb F C
+    seg = 14.0
+    length = seg * len(chords) + 6.0
+    notes = [293.7, 349.2, 392.0, 440.0, 523.3, 587.3]  # D minor pentatonic-ish
+    plucks = [(rng.uniform(2.0, length - 8.0), rng.choice(notes)) for _ in range(14)]
+    lp = OnePole(1800.0)
+    out = []
+    for i in range(int(length * SR)):
+        t = i / SR
+        s = 0.0
+        for c, ch in enumerate(chords):
+            e = env(t, c * seg - 2.0, 5.0, c * seg + seg - 3.0, 5.0)
+            if e > 0.0:
+                s += _pad(ch, t, c * 1.3) * e * 0.5
+        for st, f in plucks:
+            s += _pluck(f, t - st) * 0.35
+        s *= env(t, 0.0, 4.0, length - 6.0, 6.0)
+        out.append(lp(s))
+    return reverb(reverb(out, 0.4), 0.3)
+
+
+def dawn() -> list[float]:
+    chords = [[196.0, 246.9, 293.7], [130.8, 196.0, 261.6], [146.8, 220.0, 293.7], [196.0, 246.9, 293.7]]  # G C D G
+    seg = 10.0
+    length = seg * len(chords) + 5.0
+    melody = [(3.0, 587.3, 2.5), (6.0, 659.3, 1.5), (8.0, 587.3, 3.0), (13.0, 493.9, 2.5), (16.0, 523.3, 3.5), (22.0, 587.3, 2.0),
+              (24.5, 659.3, 2.0), (27.0, 740.0, 3.5), (33.0, 587.3, 4.5)]
+    rng = random.Random(9)
+    breath = OnePole(3000.0)
+    lp = OnePole(2600.0)
+    out = []
+    for i in range(int(length * SR)):
+        t = i / SR
+        s = 0.0
+        for c, ch in enumerate(chords):
+            e = env(t, c * seg - 1.5, 3.5, c * seg + seg - 2.0, 3.5)
+            if e > 0.0:
+                s += _pad(ch, t, c * 0.7) * e * 0.45
+        for st, f, d in melody:  # a breathy flute: a sine with a little noise and vibrato
+            u = t - st
+            if 0.0 <= u < d + 0.6:
+                vib = 1.0 + 0.006 * math.sin(2 * math.pi * 5.0 * u) * min(1.0, u / 0.6)
+                s += (math.sin(2 * math.pi * f * vib * u) * 0.8 + breath(rng.uniform(-1, 1)) * 0.25) * env(u, 0.0, 0.25, d, 0.6) * 0.35
+        s *= env(t, 0.0, 3.0, length - 5.0, 5.0)
+        out.append(lp(s))
+    return reverb(reverb(out, 0.35), 0.25)
+
+
+def lights() -> list[float]:
+    length = 26.0
+    lp = OnePole(900.0)
+    out = []
+    for i in range(int(length * SR)):
+        t = i / SR
+        drone = _pad([73.4, 110.0], t, 0.3) * 0.6
+        glass = 0.0
+        for f, st in ((880.0, 2.0), (1244.5, 5.0), (932.3, 9.0), (1318.5, 12.0)):  # tritones, drifting
+            u = t - st
+            if u >= 0.0:
+                beat = 0.6 + 0.4 * math.sin(2 * math.pi * 0.23 * u + f)
+                glass += math.sin(2 * math.pi * f * u) * beat * env(u, 0.0, 3.5, 9.0, 4.0) * 0.18
+        s = (lp(drone) + glass) * env(t, 0.0, 4.0, length - 6.0, 6.0)
+        out.append(s)
+    return reverb(reverb(out, 0.5), 0.35)
+
+
 if __name__ == "__main__":
     write(OUT / "music" / "storm_cue.wav", storm_cue())
     write(OUT / "sfx" / "snort_1.wav", snort(1))
@@ -338,4 +428,7 @@ if __name__ == "__main__":
         write(OUT / "sfx" / f"howl_{k}.wav", howl(k))
         write(OUT / "sfx" / f"caw_{k}.wav", caw(k))
     write(OUT / "sfx" / "growl.wav", growl())
+    write(OUT / "music" / "night.wav", night())
+    write(OUT / "music" / "dawn.wav", dawn())
+    write(OUT / "music" / "lights.wav", lights())
     write(OUT / "sfx" / "roar.wav", roar())

@@ -13,6 +13,9 @@ var owl: AudioStreamPlayer2D
 var _owl_timer := 30.0
 var music: AudioStreamPlayer
 var _was_warning := false
+var _cues := {} ## name -> AudioStream
+var _was_night := -1 ## -1 until the first frame, so loading at night doesn't start a cue
+var _heard := {} ## one-off cues already played this session
 var _music_cooldown := 0.0
 const MUSIC_COOLDOWN := 600.0 ## real seconds between cues: music stays rare so it means something
 var _rng := RandomNumberGenerator.new()
@@ -33,6 +36,8 @@ func _ready() -> void:
 	music.stream = load("res://assets/audio/music/storm_cue.wav")
 	music.bus = &"Music"
 	add_child(music)
+	for n in ["storm_cue", "night", "dawn", "lights"]:
+		_cues[n] = load("res://assets/audio/music/%s.wav" % n)
 	owl = AudioStreamPlayer2D.new()
 	owl.stream = load("res://assets/audio/owl.wav")
 	owl.bus = &"Ambience"
@@ -78,13 +83,23 @@ func _process(delta: float) -> void:
 	_gain("wind_trees", clampf(w.wind * 1.1, 0.05, 1.0), delta)
 	_gain("rain", w.rain(), delta)
 
-	# A storm building is one of the few moments that earns music.
+	# Music is rare so it means something: a storm building, some nightfalls and dawns, and
+	# the first time the lights are seen (or the wreck found).
 	_music_cooldown = maxf(_music_cooldown - delta, 0.0)
 	var warning := w.storm_warning()
-	if warning and not _was_warning and _music_cooldown == 0.0 and not player.sleeping and not music.playing:
-		music.play()
-		_music_cooldown = MUSIC_COOLDOWN
+	if warning and not _was_warning:
+		_cue("storm_cue", 0.0)
 	_was_warning = warning
+	var is_night := 1 if day < 0.05 else 0
+	var first := _was_night < 0
+	if not first and is_night != _was_night and _rng.randf() < 0.45:
+		_cue("night" if is_night == 1 else "dawn", -3.0 if is_night == 1 else -6.0)
+	_was_night = is_night
+	for k in ["lights_seen", "crash"]:
+		if Journal.has(k) and not _heard.has(k):
+			_heard[k] = true
+			if not first: # (already known when the game loaded: no cue)
+				_cue("lights", -2.0, true)
 
 	_owl_timer -= delta
 	if _owl_timer <= 0.0:
@@ -93,6 +108,14 @@ func _process(delta: float) -> void:
 			owl.global_position = player.global_position + Vector2(_rng.randf_range(-2200, 2200), -500)
 			owl.pitch_scale = _rng.randf_range(0.95, 1.05)
 			owl.play()
+
+func _cue(n: String, db: float, urgent := false) -> void:
+	if player.sleeping or music.playing or (_music_cooldown > 0.0 and not urgent):
+		return
+	music.stream = _cues[n]
+	music.volume_db = db
+	music.play()
+	_music_cooldown = MUSIC_COOLDOWN
 
 func _gain(n: String, target: float, delta: float) -> void:
 	var p: AudioStreamPlayer = beds[n]
