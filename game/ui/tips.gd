@@ -76,7 +76,7 @@ func _rules() -> Array:
 		["lantern", p.backpack.count_of("lantern") > 0 or p.holding("light"), "A lantern: hold it for steady light that rain can't put out. Refill it from lamp oil in the pack."],
 		["flint", p.backpack.count_of("flint") > 0, "Flint: when the lighter runs dry, strike it on your knife to light a fire. Slower, but it lasts."],
 		["spring", f is Creek and f.clean(), "A spring: water straight out of the ground. Safe to drink without boiling."],
-		["regrow", p.chop_target is ChoppableTree and p.world.chunk_state(p.chop_target.chunk.index).felled.size() > 3, "Cut trees come back: a sapling from the stump, full grown in about three seasons. Berries and plants take a season (not counting winter)."],
+		["regrow", p.chop_target is ChoppableTree and p.world.chunk_state(p.chop_target.chunk.index).felled.size() > 3, "Cut trees come back: a sapling from the stump, full grown in about three seasons. Wild plants and vines take a season (not counting winter); berries a few days."],
 		["snare", p.backpack.count_of("snare") > 0, "Set a snare from the build menu ({build}) and check it at dawn. A rabbit left hanging too long gets taken."],
 	]
 

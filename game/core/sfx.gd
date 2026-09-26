@@ -36,23 +36,35 @@ static func splash() -> AudioStream:
 static func snort() -> AudioStream:
 	return pool("snort", ["res://assets/audio/sfx/snort_1.wav", "res://assets/audio/sfx/snort_2.wav"], 1.08)
 
+## Takes of one sound: sfx/<name>_1.wav .. <name>_<n>.wav.
+static func takes(name: String, n: int) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for i in range(1, n + 1):
+		out.append("res://assets/audio/sfx/%s_%d.wav" % [name, i])
+	return out
+
+## An axe biting into a trunk (real strikes: close ones and a few out in the forest).
 static func chop() -> AudioStream:
-	return pool("chop", ["res://assets/audio/sfx/chop_1.wav", "res://assets/audio/sfx/chop_2.wav", "res://assets/audio/sfx/chop_3.wav", "res://assets/audio/sfx/chop_4.wav"], 1.08, 2.5)
+	return pool("chop", takes("axe", 6) + takes("axe_far", 6), 1.06, 2.0)
+
+## Bucking a felled trunk into lengths, splitting wood.
+static func split() -> AudioStream:
+	return pool("split", takes("split", 3) + takes("axe", 6), 1.06, 2.0)
 
 static func bleat() -> AudioStream:
 	return pool("bleat", ["res://assets/audio/sfx/bleat_1.wav", "res://assets/audio/sfx/bleat_2.wav"], 1.05, 1.5)
 
 static func howl() -> AudioStream:
-	return pool("howl", ["res://assets/audio/sfx/howl_1.wav", "res://assets/audio/sfx/howl_2.wav"], 1.06, 2.0)
+	return pool("howl", takes("wolves", 2), 1.04, 2.0) # Yellowstone wolves
 
 static func growl() -> AudioStream:
 	return pool("growl", ["res://assets/audio/sfx/growl.wav"], 1.1, 2.0)
 
 static func roar() -> AudioStream:
-	return pool("roar", ["res://assets/audio/sfx/roar.wav"], 1.05, 1.0)
+	return pool("roar", takes("grizzly", 3), 1.05, 1.0)
 
 static func caw() -> AudioStream:
-	return pool("caw", ["res://assets/audio/sfx/caw_1.wav", "res://assets/audio/sfx/caw_2.wav"], 1.1, 2.0)
+	return pool("caw", takes("raven", 3), 1.06, 2.0)
 
 ## Hooves: grass footsteps pitched up and lighter.
 static func hoof() -> AudioStream:

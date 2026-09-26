@@ -76,6 +76,8 @@ godot
 
 **Winter travel:** snowshoes (bench: sticks, a tanned hide, cord; worn on the Feet slot) keep you on top of deep snow. A *sled* (build menu) carries up to four logs, a whole carcass, and a pack-sized load: over snow it runs nearly at a walk, on bare ground it drags. On frozen water chop a hole (E) and fish through it: fish gather under the ice. A blizzard (heavy snow in a hard wind) whites out the valley and its wind cuts through your clothes.
 
+**Sound of the country:** every biome sounds like itself, from real recordings: woodland birds and woodpeckers in the valley, ducks and cottonwoods on the river, frogs in the marsh at night, meadowlarks and coyotes on the sage, heat, cicadas and a hawk's scream in the desert, a canyon wren and bats off the canyon walls, jays and squirrels in the foothills, wind roaring on the ridge and alpine (marmots and pikas in summer, ice cracking on the tarn in winter), rockfall in the boulders, a hushed old-growth of drips, creaking giants and varied thrushes, flickers, quaking aspens and (in autumn) bugling elk in the grove. Walking between them the sounds blend. Seasons change it all: birds loudest in spring and sparse in winter, insects and frogs only when it's warm, geese going over in spring and autumn. The falls drown everything near them, and canyons and caves echo (your own sounds too). Chopping, the tree falling, the wolves and the bear are real recordings.
+
 **Settings (Esc, Settings):** volume for everything, music, sounds, ambience, and rain and wind; hints on or off; rebind any key (click, press). Music is rare and quiet: some nightfalls and dawns, a storm building, and the lights.
 
 **First days:** a small checklist top-left (sticks, a fire, a lean-to, boiled water, food, a workbench) ticks off as you go and goes away when it's done.
@@ -112,6 +114,7 @@ godot --headless --fixed-fps 60 -- --scenario=predators           # choices, tor
 godot --headless --fixed-fps 60 -- --scenario=frontier            # the wider world: waters, sites, bridge, flares, the lights
 godot --headless --fixed-fps 60 -- --scenario=health              # sickness, infection, frostbite, plants, stews, chests, winter travel, settings
 godot --headless --fixed-fps 60 -- --scenario=under               # cellar, cave, mine, drop-through, the dark, flint, finds, springs, falls, regrowth
+godot --headless --fixed-fps 60 -- --scenario=sounds              # every biome sounds like itself; blending, seasons, echo, calls
 godot --fixed-fps 60 -- --scenario=icons                          # (windowed) re-render the build book's pictures into assets/builds/ after changing a build's art
 godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id]
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
@@ -133,5 +136,5 @@ Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `
 - **New tuning value:** add an `@export` to `game/core/tuning.gd`, then read it via `GameClock.tuning`.
 - **New animal:** add a `SpeciesDef` .tres (senses, speeds, flee distance, herd size, active hours), add it to `Wildlife.SPECIES`, and give it a rig. No behaviour code changes needed.
 - **New fish:** add an entry to `FishFight.SPECIES` (sweep speed, zone, strikes, drift, runs) plus raw and cooked items.
-- **New ambience bed:** add a WAV loop (set `edit/loop_mode=2` in its `.import`), then add a gain rule in `Ambience._process`.
+- **New ambience sound:** add the recording to `assets/audio/src/`, a line in `tools/process_audio.py` (LOOPS or SHOTS) and run it; a loop needs `edit/loop_mode=2` in its `.import`. Then use it in a biome's entry in `Ambience.PROFILES` (a bed under day/dusk/night/wind, or a call).
 - **World scale:** 100 px = 1 m; chunks are 60 m wide. Only the current chunk and its neighbours exist at a time.

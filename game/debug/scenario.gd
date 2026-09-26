@@ -39,6 +39,7 @@ func _ready() -> void:
 		"health": _health.call_deferred()
 		"under": _under.call_deferred()
 		"icons": _icons.call_deferred()
+		"sounds": _sounds.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -2049,6 +2050,87 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "sounds": every biome sounds like itself; seasons, blending, echo, calls -----
+
+func _amb() -> Ambience:
+	return get_tree().get_root().find_children("*", "Ambience", true, false)[0]
+
+## Lets the beds settle at x and returns their linear gains.
+func _listen(x: float, secs := 6.0) -> Dictionary:
+	await teleport(x)
+	await frames(int(secs * 60.0))
+	var out := {}
+	var amb := _amb()
+	for n in amb.beds:
+		out[n] = db_to_linear(amb.beds[n].volume_db)
+	return out
+
+func _loudest(g: Dictionary) -> String:
+	var best := ""
+	for n in g:
+		if n not in ["rain", "wind_storm"] and Ambience.KIND.get(n) != "wind" and (best == "" or g[n] > g[best]):
+			best = n
+	return best
+
+func _sounds() -> void:
+	await frames(10)
+	var amb := _amb()
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	var year := GameClock.clock.season_hours() * 4.0
+	var summer := ceilf(GameClock.clock.hours / year) * year + year * 0.85 # year_pos 0.35: summer
+	GameClock.clock.hours = floorf(summer / 24.0) * 24.0 + 12.0
+	check(GameClock.clock.season() == 1, "summer noon (%s)" % GameClock.clock.season_name())
+	for b in Ambience.PROFILES:
+		check(Ambience.PROFILES[b].day.keys().all(func(n): return amb.beds.has(n)), "%s: its beds are loaded" % b)
+	var spots := {"valley": 6000.0, "desert": -30000.0, "marsh": -12500.0, "sage": -18000.0, "oldgrowth": 83000.0, "foothills": 30000.0}
+	var heard := {}
+	var valley_birds := 0.0
+	for b in spots:
+		check(Terrain.biome(spots[b]) == b, "%.0f is %s" % [spots[b], b])
+		var g := await _listen(spots[b])
+		heard[b] = _loudest(g)
+		if b == "valley":
+			valley_birds = g.forest_day
+		print("  %s: loudest %s (%s)" % [b, heard[b], ", ".join(g.keys().filter(func(n): return g[n] > 0.05).map(func(n): return "%s %.2f" % [n, g[n]]))])
+	check(heard.valley == "forest_day", "the valley by day: woodland birds")
+	check(heard.desert in ["desert_day", "cicadas"], "the desert: heat and cicadas, not woodland birds (%s)" % heard.desert)
+	check(heard.marsh == "marsh_day", "the marsh: marsh birds (%s)" % heard.marsh)
+	check(heard.sage == "sage_day", "the sage: meadowlarks (%s)" % heard.sage)
+	check(heard.foothills == "foothills_day", "the foothills (%s)" % heard.foothills)
+	check(heard.values().size() > 3 and heard.values().filter(func(v): return v == "forest_day").size() <= 2, "the country doesn't all sound the same")
+	# Walking from the valley into the next country: both are heard, blending.
+	var edge := 6000.0
+	while Terrain.biome(edge) == "valley" and edge < 30000.0:
+		edge += 200.0
+	var mix := amb.blend_at(edge - 100.0)
+	check(mix.size() >= 2 and mix.get("valley", 0.0) > 0.1, "at the edge of the valley the two blend (%s)" % mix)
+	# Night: crickets, frogs in the marsh; the sage has coyotes among its calls.
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 24.0 + 1.0
+	var gn := await _listen(-12500.0, 8.0)
+	check(gn.marsh_night > 0.3 and gn.forest_day < 0.05, "a summer night in the marsh: the frog chorus, no daytime birds")
+	# Winter: no insects or frogs, fewer birds.
+	GameClock.clock.hours = floorf((ceilf(GameClock.clock.hours / year) * year + year * 0.4) / 24.0) * 24.0 + 12.0 # year_pos 0.9, noon
+	check(GameClock.clock.season() == 3, "winter (%s)" % GameClock.clock.season_name())
+	var gw := await _listen(-30000.0, 10.0)
+	check(gw.cicadas < 0.03 and gw.desert_day < 0.03, "winter in the desert: no cicadas (%.2f)" % gw.cicadas)
+	var gv := await _listen(6000.0, 10.0)
+	check(gv.forest_day < valley_birds * 0.6, "winter in the valley: fewer birds (%.2f)" % gv.forest_day)
+	# Echo: the canyon rings, the valley doesn't.
+	GameClock.clock.hours = summer + 24.0 * 2.0
+	await _listen(-35000.0, 12.0)
+	var canyon_wet: float = amb._reverbs[0].wet
+	await _listen(6000.0, 12.0)
+	check(canyon_wet > 0.2 and amb._reverbs[0].wet < 0.1, "the canyon echoes (%.2f), the valley barely (%.2f)" % [canyon_wet, amb._reverbs[0].wet])
+	# Calls: one plays on the Calls bus through the echo.
+	amb.call_out("canyon_wren", 1)
+	var players := amb.find_children("*", "AudioStreamPlayer2D", false, false).filter(func(n): return n.bus == &"Calls")
+	check(players.size() >= 1 and players.all(func(pl): return pl.playing), "calls play out around you on the Calls bus (%d now)" % players.size())
+	check(ResourceLoader.exists("res://assets/audio/sfx/axe_1.wav") and Sfx.chop().streams_count == 12, "chopping: real axe strikes (%d takes)" % Sfx.chop().streams_count)
+	for pool in ["woodpecker", "coyotes", "marmot", "pika", "thrush", "elk", "wolves", "grizzly", "raven"]:
+		check(ResourceLoader.exists("res://assets/audio/sfx/%s_1.wav" % pool), "has %s" % pool)
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
 
 # --- Mode "icons": pictures of every build for the build book (run windowed, not headless) --
 

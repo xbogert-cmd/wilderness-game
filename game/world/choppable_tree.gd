@@ -4,9 +4,9 @@ class_name ChoppableTree extends Node2D
 ## leaving a stump plus a FelledTrunk to strip and buck into logs. The stump rots away as a
 ## sapling comes up in its place: a full tree again after about three seasons.
 
-const FALL_TIME := 1.7 ## matches the crash in sfx/tree_fall.wav
+const FALL_TIME := 1.7 ## matches the crash in sfx/treefall_1.wav
 const NOTCH_Y := -46.0 ## notch height above the ground
-const TREE_FALL := preload("res://assets/audio/sfx/tree_fall.wav")
+const TREE_FALL := preload("res://assets/audio/sfx/treefall_1.wav")
 const REGROW_SEASONS := 3.0
 const SPROUT := 0.1 ## growth at which the sapling shows
 

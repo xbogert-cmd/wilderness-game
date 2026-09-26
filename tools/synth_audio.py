@@ -8,24 +8,24 @@
   valley holding its breath, not a score.
 - sfx/snort_1.wav, snort_2.wav: a mule deer's alarm snort (nasal noise burst through two
   resonances, with a second smaller puff).
-- sfx/chop_1..4.wav: an axe biting wood: a sharp impact, a few damped wood resonances and
-  a short splintery crunch, in a little forest space.
 - sfx/bleat_1.wav, bleat_2.wav: a doe bleat for the deer call (a nasal, falling tone with
   a little tremble), what curious deer come to investigate.
-- sfx/tree_fall.wav: the trunk giving (stick-slip creak), branches rushing through the air,
-  then the crash at 1.7 s, when the falling tree meets the ground (ChoppableTree.FALL_TIME).
-- sfx/howl_1.wav, howl_2.wav: a wolf howl: a breathy rise into a long wavering tone that
-  sags away at the end, in a lot of valley space (the second has another wolf joining).
 - sfx/growl.wav: a low, rough rumble with a rattling flutter, for a wolf closing in.
-- sfx/roar.wav: a black bear's warning: two hard huffs, a jaw pop, then a short bellow.
-- sfx/caw_1.wav, caw_2.wav: a raven's croak, harsh and nasal, over something dead.
 - music/night.wav: a slow, quiet night piece: soft string chords (D minor, B flat, F, C)
   swelling and fading, with a few sparse plucked notes like a guitar across the fire.
 - music/dawn.wav: brighter, for the first light: open chords (G, C, D) and a slow, breathy
   flute-like line.
 - music/lights.wav: for the lights: a low drone, and high glassy tones a tritone apart
   that beat slowly against each other. Uneasy, not a jump-scare.
+- sfx/pika_1..3.wav: a pika's call from the talus: a short, nasal, falling "eeep", one to
+  three at a time.
+- sfx/thrush_1..3.wav: a varied thrush in the big timber: one long, buzzy whistle on a single
+  pitch, fading in and out, as if from far off in the fog.
+(Chopping, the tree falling, wolves, the bear's roar and ravens are real recordings now:
+tools/process_audio.py.)
 Pure stdlib so it runs anywhere.
+
+  python3 tools/synth_audio.py pika thrush    # just those
 """
 import math
 import random
@@ -158,62 +158,6 @@ def snort(seed: int) -> list[float]:
     return out
 
 
-def chop(seed: int) -> list[float]:
-    rng = random.Random(100 + seed)
-    length = 0.45
-    modes = [(f * rng.uniform(0.92, 1.08), d, a) for f, d, a in ((190.0, 0.07, 1.0), (520.0, 0.045, 0.7), (960.0, 0.03, 0.45), (1700.0, 0.018, 0.3))]
-    crunch = Biquad(900.0 + seed * 60.0, 1.1)
-    snap = Biquad(3200.0, 1.5)
-    out = []
-    for i in range(int(length * SR)):
-        t = i / SR
-        s = 0.0
-        for f, d, a in modes:
-            s += a * math.sin(2 * math.pi * f * t) * math.exp(-t / d)
-        n = rng.uniform(-1.0, 1.0)
-        s += crunch(n) * 2.2 * math.exp(-t / 0.05) * min(1.0, t / 0.002)
-        s += snap(n) * 1.5 * math.exp(-t / 0.004)
-        out.append(s * min(1.0, t / 0.0008))
-    return reverb(out, 0.18)
-
-
-def tree_fall() -> list[float]:
-    rng = random.Random(55)
-    length = 3.6
-    creak_bp = Biquad(420.0, 4.0)
-    creak_bp2 = Biquad(950.0, 5.0)
-    rush = Biquad(1400.0, 0.8)
-    thump = Biquad(70.0, 0.9)
-    body = Biquad(260.0, 1.0)
-    crackle = Biquad(2200.0, 1.2)
-    hp = OnePole(35.0)
-    out = []
-    phase = 0.0
-    impact = 1.7
-    for i in range(int(length * SR)):
-        t = i / SR
-        s = 0.0
-        # Creak: irregular stick-slip pulses, slowing and swelling as the hinge tears.
-        rate = 38.0 - 14.0 * min(1.0, t / 1.4) + 6.0 * math.sin(t * 7.3)
-        phase += rate / SR
-        pulse = 1.0 if phase % 1.0 < 0.08 else 0.0
-        ce = env(t, 0.0, 0.25, 1.1, 0.5)
-        s += (creak_bp(pulse) * 3.0 + creak_bp2(pulse) * 1.5) * ce
-        # Branches rushing through the air in the last half second of the fall.
-        n = rng.uniform(-1.0, 1.0)
-        s += rush(n) * 0.9 * env(t, 1.05, 0.5, impact, 0.08)
-        # The crash: a heavy thump, the trunk's body, and branches snapping.
-        if t >= impact:
-            k = t - impact
-            s += thump(n) * 9.0 * math.exp(-k / 0.28) * min(1.0, k / 0.004)
-            s += body(n) * 3.0 * math.exp(-k / 0.18)
-            if rng.random() < 0.004 * math.exp(-k / 0.5):
-                s += rng.uniform(-6.0, 6.0)
-            s += crackle(n) * 1.2 * math.exp(-k / 0.35)
-        out.append(s - hp(s))
-    return reverb(out, 0.32)
-
-
 def bleat(seed: int) -> list[float]:
     rng = random.Random(200 + seed)
     length = 0.7
@@ -230,35 +174,6 @@ def bleat(seed: int) -> list[float]:
         e = min(1.0, t / 0.03) * math.exp(-max(0.0, t - 0.35) / 0.12)
         out.append((nose(saw) * 1.4 + mouth(saw) * 0.6) * e)
     return reverb(out, 0.25)
-
-
-def howl(seed: int) -> list[float]:
-    rng = random.Random(300 + seed)
-    length = 4.2
-    out = []
-    phases = [0.0, 0.0]
-    voices = [(0.0, 1.0)] + ([(1.3, 1.335)] if seed == 2 else [])  # (start, pitch ratio)
-    formant = Biquad(700.0, 1.2)
-    formant2 = Biquad(1250.0, 2.0)
-    lp = OnePole(2500.0)
-    for i in range(int(length * SR)):
-        t = i / SR
-        s = 0.0
-        for k, (start, ratio) in enumerate(voices):
-            u = t - start
-            if u < 0.0 or u > 3.0:
-                continue
-            rise = min(1.0, u / 0.7)
-            f = (330.0 + 230.0 * (1 - (1 - rise) ** 2)) * ratio  # breaks upward into the note
-            f -= 110.0 * max(0.0, u - 2.2) / 0.8 * ratio  # and sags away at the end
-            f *= 1.0 + 0.012 * math.sin(2 * math.pi * 5.2 * u + seed) * min(1.0, u / 1.0)
-            phases[k] += f / SR
-            ph = 2 * math.pi * phases[k]
-            tone = math.sin(ph) + 0.35 * math.sin(2 * ph) + 0.12 * math.sin(3 * ph)
-            e = env(u, 0.0, 0.25, 2.3, 0.7) * (0.8 if k else 1.0)
-            s += (tone + rng.uniform(-0.25, 0.25) * (1.0 - rise * 0.6)) * e
-        out.append(lp(formant(s) * 1.6 + formant2(s) * 0.5 + s * 0.35))
-    return reverb(reverb(out, 0.4), 0.3)
 
 
 def growl() -> list[float]:
@@ -278,57 +193,6 @@ def growl() -> list[float]:
         e = env(t, 0.0, 0.15, 1.0, 0.35)
         out.append((body(x) * 1.2 + chest(x) * 0.8) * e)
     return reverb(out, 0.2)
-
-
-def roar() -> list[float]:
-    rng = random.Random(57)
-    length = 2.0
-    huff = Biquad(320.0, 1.1)
-    bellow = Biquad(260.0, 1.3)
-    low = OnePole(700.0)
-    out = []
-    phase = 0.0
-    for i in range(int(length * SR)):
-        t = i / SR
-        s = 0.0
-        for start in (0.0, 0.32):  # two hard huffs of breath
-            u = t - start
-            if 0.0 <= u < 0.3:
-                s += huff(rng.uniform(-1, 1)) * 3.0 * math.exp(-u / 0.08)
-        if 0.7 <= t < 0.715:  # jaw pop
-            s += math.sin(2 * math.pi * 900 * (t - 0.7)) * 1.4 * (1 - (t - 0.7) / 0.015)
-        u = t - 0.85
-        if u >= 0.0:
-            f = 78.0 + 22.0 * math.sin(math.pi * min(1.0, u / 1.0))
-            phase += f / SR
-            saw = 2.0 * (phase % 1.0) - 1.0
-            rough = 0.6 + 0.4 * math.sin(2 * math.pi * 31.0 * t)
-            s += (bellow(saw + rng.uniform(-0.6, 0.6)) * 2.2 + low(saw) * 0.6) * rough * env(u, 0.0, 0.1, 0.75, 0.35)
-        out.append(s)
-    return reverb(out, 0.25)
-
-
-def caw(seed: int) -> list[float]:
-    rng = random.Random(70 + seed)
-    out = []
-    nose = Biquad(1300.0, 2.5)
-    beak = Biquad(2600.0, 3.0)
-    phase = 0.0
-    starts = (0.0, 0.42) if seed == 2 else (0.0,)
-    length = 0.45 + 0.42 * (len(starts) - 1)
-    for i in range(int(length * SR)):
-        t = i / SR
-        s = 0.0
-        for st in starts:
-            u = t - st
-            if 0.0 <= u < 0.4:
-                f = 540.0 - 120.0 * u / 0.4 + seed * 15.0
-                phase += f / SR
-                saw = 2.0 * (phase % 1.0) - 1.0
-                rasp = 1.0 + rng.uniform(-0.8, 0.8)  # the harsh croak
-                s += (saw * rasp) * env(u, 0.0, 0.02, 0.25, 0.13)
-        out.append(nose(s) * 1.3 + beak(s) * 0.8)
-    return reverb(reverb(out, 0.35), 0.2)
 
 
 def _pad(freqs: list[float], t: float, seed: float) -> float:
@@ -415,20 +279,55 @@ def lights() -> list[float]:
     return reverb(reverb(out, 0.5), 0.35)
 
 
+def pika(seed: int) -> list[float]:
+    rng = random.Random(seed)
+    out = [0.0] * int(SR * 1.2)
+    t0 = 0.05
+    for k in range(rng.randint(1, 3)):
+        f0 = rng.uniform(2300, 2800)
+        dur = rng.uniform(0.12, 0.18)
+        ph = 0.0
+        for i in range(int(dur * SR)):
+            t = i / SR
+            f = f0 * (1.0 - 0.18 * t / dur) # falls a little
+            ph += 2 * math.pi * f / SR
+            a = math.sin(math.pi * t / dur) ** 0.6
+            v = math.sin(ph) + 0.45 * math.sin(2 * ph) + 0.2 * math.sin(3 * ph) # nasal
+            j = int((t0 + t) * SR)
+            if j < len(out):
+                out[j] += v * a
+        t0 += dur + rng.uniform(0.12, 0.25)
+    return reverb(out, 0.2)
+
+
+def thrush(seed: int) -> list[float]:
+    rng = random.Random(seed)
+    dur = rng.uniform(1.3, 1.9)
+    f0 = rng.uniform(2600, 4200)
+    out = []
+    ph = 0.0
+    for i in range(int((dur + 1.2) * SR)):
+        t = i / SR
+        a = env(t, 0.0, 0.35, dur - 0.5, 0.5)
+        ph += 2 * math.pi * f0 * (1.0 + 0.004 * math.sin(2 * math.pi * 5 * t)) / SR
+        buzz = 0.55 + 0.45 * math.sin(2 * math.pi * 72 * t) # the burr in it
+        out.append(math.sin(ph) * a * buzz + 0.15 * math.sin(2 * ph) * a)
+    return reverb(out, 0.5)
+
+
+JOBS = {
+    "storm_cue": lambda: write(OUT / "music" / "storm_cue.wav", storm_cue()),
+    "snort": lambda: [write(OUT / "sfx" / f"snort_{k}.wav", snort(k)) for k in (1, 2)],
+    "bleat": lambda: [write(OUT / "sfx" / f"bleat_{k}.wav", bleat(k)) for k in (1, 2)],
+    "growl": lambda: write(OUT / "sfx" / "growl.wav", growl()),
+    "night": lambda: write(OUT / "music" / "night.wav", night()),
+    "dawn": lambda: write(OUT / "music" / "dawn.wav", dawn()),
+    "lights": lambda: write(OUT / "music" / "lights.wav", lights()),
+    "pika": lambda: [write(OUT / "sfx" / f"pika_{k}.wav", pika(k)) for k in (1, 2, 3)],
+    "thrush": lambda: [write(OUT / "sfx" / f"thrush_{k}.wav", thrush(k)) for k in (1, 2, 3)],
+}
+
 if __name__ == "__main__":
-    write(OUT / "music" / "storm_cue.wav", storm_cue())
-    write(OUT / "sfx" / "snort_1.wav", snort(1))
-    write(OUT / "sfx" / "snort_2.wav", snort(2))
-    for k in range(1, 5):
-        write(OUT / "sfx" / f"chop_{k}.wav", chop(k))
-    write(OUT / "sfx" / "tree_fall.wav", tree_fall())
-    for k in (1, 2):
-        write(OUT / "sfx" / f"bleat_{k}.wav", bleat(k))
-    for k in (1, 2):
-        write(OUT / "sfx" / f"howl_{k}.wav", howl(k))
-        write(OUT / "sfx" / f"caw_{k}.wav", caw(k))
-    write(OUT / "sfx" / "growl.wav", growl())
-    write(OUT / "music" / "night.wav", night())
-    write(OUT / "music" / "dawn.wav", dawn())
-    write(OUT / "music" / "lights.wav", lights())
-    write(OUT / "sfx" / "roar.wav", roar())
+    import sys
+    for name in sys.argv[1:] or JOBS:
+        JOBS[name]()

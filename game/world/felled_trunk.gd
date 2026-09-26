@@ -103,7 +103,7 @@ func _mark_in_reach(p: Player) -> bool:
 	return absf(_mark_x() - p.global_position.x) < CUT_REACH
 
 func hit(p: Player, _power: float, aim: Vector2) -> void:
-	Sfx.play_at(self, p.global_position + Vector2(p.facing * 60.0, -30.0), Sfx.chop(), -3.0, 1.1 if branches > 0 else 1.0)
+	Sfx.play_at(self, p.global_position + Vector2(p.facing * 60.0, -30.0), Sfx.split(), -3.0, 1.1 if branches > 0 else 1.0)
 	if branches > 0:
 		branches -= 1
 		world.spawn({"kind": "item", "x": p.global_position.x + p.facing * 40.0, "stack": ItemStack.make("sticks", 0.0, 2).to_dict()})
