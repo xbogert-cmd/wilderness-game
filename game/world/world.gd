@@ -24,6 +24,9 @@ const KINDS := {
 	"blind": preload("res://game/camp/hunting_blind.gd"),
 	"workbench": preload("res://game/camp/workbench.gd"),
 	"chest": preload("res://game/camp/storage_chest.gd"),
+	"smokehouse": preload("res://game/camp/smokehouse.gd"),
+	"cache": preload("res://game/camp/raised_cache.gd"),
+	"bear_bag": preload("res://game/camp/bear_bag.gd"),
 	"bait": preload("res://game/hunting/bait_pile.gd"),
 	"gut_pile": preload("res://game/hunting/gut_pile.gd"),
 	"snare": preload("res://game/hunting/snare.gd"),
@@ -230,8 +233,13 @@ func under_at(pos: Vector2) -> Underground:
 			return u
 	return null
 
-## The floor under a point: down in a cave or cellar, the floor there (not the ground up top).
+## The floor under a point: down in a cave or cellar, the floor there (not the ground up top);
+## up on a deck, the deck.
 func floor_y(x: float, near_y: float) -> float:
+	for d in get_tree().get_nodes_in_group("deck"): # up on a raised cache
+		var y: float = d.deck_at(x, near_y)
+		if not is_nan(y):
+			return y
 	if under_at(Vector2(x, near_y)) == null:
 		return ground_y(x)
 	var q := PhysicsRayQueryParameters2D.create(Vector2(x, near_y - 40.0), Vector2(x, near_y + 300.0), 1)

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "smoked_meat"
+name = "Smoked Meat"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.1
+color = Color(0.36, 0.2, 0.13, 1)
+tags = PackedStringArray("food", "meat")
+max_stack = 4
+food = 22.0
+spoil_hours = 900.0
+description = "Venison smoked dark and dry in the smokehouse. Keeps well over a month."

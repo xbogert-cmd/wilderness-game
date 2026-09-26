@@ -109,6 +109,9 @@ func _fell(dir: float) -> void:
 		seedling.get_child(_notch.get_index()).free()
 	Sfx.play_at(self, global_position + Vector2(0, -200), TREE_FALL, 2.0)
 	chunk.world.mark(chunk.index, "felled", n)
+	for b in get_tree().get_nodes_in_group("bear_bag"): # a bag hung from this tree comes down with it
+		if absf(b.global_position.x - global_position.x) < 20.0:
+			b.tree_felled()
 	var tw := create_tween()
 	tw.tween_property(art, "rotation", dir * PI * 0.5, FALL_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func():

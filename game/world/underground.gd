@@ -348,7 +348,8 @@ func _options(id: String, p: Player) -> Array:
 			if not _done(id):
 				out.append(["Search the shelves", _search.bind(p, id)])
 			else:
-				out.append(["Empty shelves and broken jars", Callable()])
+				var n := _shelf_store().store.entries.size()
+				out.append(["Keep things on the shelves (cool: food lasts about three times as long)%s" % ("" if n == 0 else "  · %d there" % n), _open_shelves.bind(p)])
 		"barrel":
 			out.append(["Look in the barrel", _look.bind(p, id)])
 		"den":
@@ -372,6 +373,19 @@ func _options(id: String, p: Player) -> Array:
 			if not _done(id):
 				out.append(["Search the cache", _search.bind(p, id)])
 	return out
+
+## The cellar's shelves as a store (a hidden chest that saves with the chunk), made the first
+## time it's wanted.
+func _shelf_store() -> StorageChest:
+	var at := _w(690.0, 330.0)
+	for c in get_tree().get_nodes_in_group("chest"):
+		if c.variety == "shelves" and c.global_position.distance_to(at) < 300.0 and not c.is_queued_for_deletion():
+			return c
+	return world.spawn({"kind": "chest", "variety": "shelves", "x": at.x, "y": at.y}) as StorageChest
+
+func _open_shelves(p: Player) -> void:
+	StorageChest.open_store(self, _shelf_store().store, p)
+	Journal.note("cellar_store", "The root cellar keeps cool all year, about eight degrees. Meat and fish left on its shelves last about three times as long as up top, and nothing gets at them.")
 
 func _give(p: Player, items: Array) -> void:
 	var h := GameClock.clock.hours

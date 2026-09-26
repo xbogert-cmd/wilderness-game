@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "smoked_fish"
+name = "Smoked Fish"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.1
+color = Color(0.62, 0.45, 0.25, 1)
+tags = PackedStringArray("food", "meat")
+max_stack = 4
+food = 20.0
+spoil_hours = 800.0
+description = "Trout or whitefish smoked golden in the smokehouse. Keeps about a month."

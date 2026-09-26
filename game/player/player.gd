@@ -270,6 +270,10 @@ func go_down() -> void:
 		if c is CollisionObject2D and c.get_collision_layer_value(Underground.PLATFORM_LAYER):
 			drop_through()
 			return
+	for d in get_tree().get_nodes_in_group("deck"): # up on a raised cache: hop off
+		if not is_nan(d.deck_at(global_position.x, global_position.y)):
+			drop_through()
+			return
 
 ## Falls through ledges and hatches for a moment (Terraria-style), onto whatever's below.
 func drop_through() -> void:

@@ -18,6 +18,9 @@ const STRUCTURES := {
 	"sled": {"name": "Sled", "width": 190.0, "h": 60.0, "needs": {"medium": 1, "sticks": 6}, "hours": 1.0, "seconds": 3.5, "loose": true},
 	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": true},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
+	"smokehouse": {"name": "Smokehouse", "width": 170.0, "h": 245.0, "needs": {"medium": 3, "short": 4, "sticks": 4}, "hours": 3.0, "seconds": 5.0},
+	"cache": {"name": "Raised cache", "width": 230.0, "h": 430.0, "needs": {"long": 2, "medium": 3, "short": 2, "sticks": 6}, "hours": 4.0, "seconds": 6.0},
+	"bear_bag": {"name": "Bear bag", "width": 60.0, "h": 420.0, "needs": {"hide": 1, "#cord": 1}, "hours": 0.3, "seconds": 3.0, "on": "tree"},
 }
 
 const RECIPES := {
@@ -49,7 +52,8 @@ const GROUPS := {
 ## Build book chapters, in order.
 const BUILD_GROUPS := {
 	"Camp": ["campfire", "tripod", "lean_to", "woodpile", "chest", "cabin"],
-	"Work": ["workbench", "hide_frame", "drying_rack", "sled", "bridge"],
+	"Work": ["workbench", "hide_frame", "drying_rack", "smokehouse", "sled", "bridge"],
+	"Food storage": ["cache", "bear_bag"],
 	"Hunting": ["blind", "bait", "snare"],
 }
 
@@ -104,6 +108,9 @@ const WHAT := {
 	"sled": "pull logs, a deer, or gear over snow",
 	"bridge": "across a creek or the river: walk over dry",
 	"cabin": "the warmest shelter: a real home",
+	"smokehouse": "smokes meat and fish that keep over a month, in any weather",
+	"cache": "a food store up on posts: nothing raids it; food freezes and keeps",
+	"bear_bag": "food hung high from a tree branch, out of reach",
 }
 
 ## Cooked in the pot hanging over a lit fire, from the pot's water and ingredients gathered

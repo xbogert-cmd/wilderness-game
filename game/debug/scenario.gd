@@ -40,6 +40,7 @@ func _ready() -> void:
 		"under": _under.call_deferred()
 		"icons": _icons.call_deferred()
 		"sounds": _sounds.call_deferred()
+		"stores": _stores.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -2050,6 +2051,145 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "stores": the cellar, raids, the raised cache, the bear bag, the smokehouse -----
+
+func _stores() -> void:
+	await frames(10)
+	var year := GameClock.clock.season_hours() * 4.0
+	GameClock.clock.hours = floorf((ceilf(GameClock.clock.hours / year) * year + year * 0.85) / 24.0) * 24.0 + 12.0 # summer noon
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	check(StorageChest.keep_rate(world, 9000.0) == 1.0 and StorageChest.keep_rate(world, 9000.0, true) <= 0.35, "summer: food keeps as usual up top, about three times as long in the cellar")
+
+	# The root cellar's shelves: cool storage.
+	var cellar := _under_place("cellar")
+	if cellar == null:
+		await teleport(Terrain.HOMESTEAD_X)
+		await frames(10)
+		cellar = _under_place("cellar")
+	var shelves := _pick(cellar, "shelves")
+	await teleport_under(shelves.global_position.x, shelves.global_position.y)
+	cellar._mark("shelves") # (searched)
+	check(Player.choices_of(shelves, player).any(func(o): return o[0].begins_with("Keep things on the shelves")), "the searched shelves keep things")
+	var store: StorageChest = cellar._shelf_store()
+	var meat := ItemStack.make("venison_raw", GameClock.clock.hours)
+	store.store.add(meat)
+	var made := meat.made_hour
+	store._on_tick(24.0)
+	check(absf(meat.made_hour - made - 24.0 * 0.65) < 0.5, "a day on the cellar shelves ages raw meat about a third as much (%.1f h credit)" % (meat.made_hour - made))
+	check(cellar._shelf_store() == store and store.to_state().has("y"), "one store, saved down in the cellar")
+
+	# A chest of food left out in bear country: raided. By a fire: safe.
+	var bx := 30000.0
+	await teleport(bx + 2600.0)
+	var chest := world.spawn({"kind": "chest", "x": bx}) as StorageChest
+	chest.store.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+	chest.store.add(ItemStack.make("snare"))
+	chest._on_tick(200.0)
+	check(chest.store.count_of("venison_raw") == 0 and chest.store.count_of("snare") == 1 and chest.raided.begins_with("The lid"), "a chest of food left in bear country: the bear takes the food")
+	var fire := world.spawn({"kind": "campfire", "x": bx + 300.0}) as Campfire
+	chest.store.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+	chest._on_tick(300.0)
+	check(chest.store.count_of("venison_raw") == 2, "by a campfire nothing comes for it")
+	fire.queue_free()
+	chest.queue_free()
+	await teleport(9000.0 + 2600.0)
+	var chest2 := world.spawn({"kind": "chest", "x": 9000.0}) as StorageChest
+	chest2.store.add(ItemStack.make("berries", GameClock.clock.hours, 4))
+	seed(7) # (raids are chance: fix the dice)
+	for k in 4:
+		chest2._on_tick(100.0)
+	check(chest2.store.count_of("berries") < 4 and chest2.raided.begins_with("Droppings"), "in the valley, mice get into some of it")
+	chest2.queue_free()
+
+	# The raised cache: climb up, stand on the deck, open it, hop off.
+	var cx := 9600.0
+	await teleport(cx - 400.0)
+	var cache := world.spawn({"kind": "cache", "x": cx}) as RaisedCache
+	cache.store.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+	await teleport(cx + RaisedCache.LADDER_X)
+	check(player.focus == cache and Player.first_label(Player.choices_of(cache, player)) == "Climb up to the cache", "at the ladder: climb up")
+	cache.interact(player)
+	await _finish_work()
+	await frames(20)
+	check(cache.up_top(player) and absf(player.global_position.y - (cache.global_position.y + RaisedCache.DECK_Y)) < 12.0, "standing on the deck (%.0f px up)" % (cache.global_position.y - player.global_position.y))
+	await frames(4)
+	check(player.focus == cache and Player.first_label(Player.choices_of(cache, player)).begins_with("Open the cache"), "up top: open the cache")
+	player.go_down()
+	await frames(60)
+	check(not cache.up_top(player) and absf(player.global_position.y - world.ground_y(player.global_position.x)) < 12.0, "S hops off the deck to the ground")
+	cache._on_tick(500.0)
+	check(cache.store.count_of("venison_raw") == 2, "nothing raids the cache")
+	cache.queue_free()
+
+	# The bear bag: hung from a tall tree, it dangles, sways in the wind, comes down and goes up.
+	await teleport(12000.0)
+	var tree: ChoppableTree = null
+	for t in get_tree().get_nodes_in_group("choppable"):
+		if t is ChoppableTree and t.height >= 1000.0 and absf(t.global_position.x - 12000.0) < 3000.0:
+			tree = t
+			break
+	check(tree != null, "a tall tree to hang a bag from")
+	if tree:
+		var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
+		check(Blueprint.host_at(get_tree(), "tree", tree.global_position.x + 50.0, 400.0) == tree, "the bear bag's blueprint snaps to the tree")
+		GameClock.weather.wind = 0.05
+		var bag := world.spawn({"kind": "bear_bag", "x": tree.global_position.x, "height": tree.height}) as BearBag
+		await teleport(tree.global_position.x - 40.0)
+		await frames(120)
+		var hang := bag.bag_pos()
+		check(-hang.y - BearBag.BAG.y >= BearBag.RAISED - 20.0, "hauled up, the bag hangs high (%.0f px off the ground)" % (-hang.y - BearBag.BAG.y))
+		check(absf(hang.x - bag.anchor.x) < 12.0, "on a still day it hangs straight down under the branch")
+		GameClock.weather.wind = 1.0
+		GameClock.weather.wind_dir = 1
+		var most := 0.0
+		for k in 240:
+			await frames(1)
+			most = maxf(most, bag.bag_pos().x - bag.anchor.x)
+		check(most > 25.0, "in a gale it swings out downwind (%.0f px)" % most)
+		GameClock.weather.wind = 0.1
+		check(Player.first_label(Player.choices_of(bag, player)).begins_with("Lower the bear bag"), "at the trunk: lower it")
+		bag.interact(player)
+		await _finish_work()
+		await frames(120)
+		check(bag.on_ground() and -bag.bag_pos().y - BearBag.BAG.y < 20.0, "let down, it rests on the ground")
+		bag.store.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+		Player.choices_of(bag, player).filter(func(o): return o[0].begins_with("Haul"))[0][1].call()
+		await _finish_work()
+		await frames(120)
+		check(not bag.on_ground() and -bag.bag_pos().y - BearBag.BAG.y >= BearBag.RAISED - 20.0, "hauled back up and tied off")
+		await teleport(tree.global_position.x + 2600.0)
+		bag._on_tick(300.0)
+		check(bag.store.count_of("venison_raw") == 2, "up high, nothing gets it")
+		await teleport(tree.global_position.x - 300.0)
+		tree._fell(1.0)
+		await frames(120)
+		check(bag.fallen and bag.on_ground(), "fell the tree and the bag comes down with it")
+		bag.queue_free()
+
+	# The smokehouse: hang meat, feed the smudge, ten hours later it's smoked.
+	await teleport(9000.0)
+	var sh := world.spawn({"kind": "smokehouse", "x": 9300.0}) as Smokehouse
+	await teleport(9300.0)
+	player.backpack.add(ItemStack.make("venison_raw", GameClock.clock.hours, 2))
+	player.backpack.add(ItemStack.make("trout_raw", GameClock.clock.hours, 1))
+	player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 4))
+	check(Player.first_label(Player.choices_of(sh, player)).begins_with("Hang 2 "), "bring raw meat: hang it in the smoke (%s)" % Player.first_label(Player.choices_of(sh, player)))
+	sh.interact(player)
+	sh.interact(player)
+	check(sh.pieces.size() == 3, "meat and a fish hanging")
+	Player.choices_of(sh, player).filter(func(o): return o[0].begins_with("Feed"))[0][1].call()
+	check(sh.fuel >= 9.0 and sh.smoking(), "the smudge is going (%.0f h of smoke)" % sh.fuel)
+	sh._on_tick(11.0)
+	check(sh.smoked() == 3, "ten hours of smoke: done")
+	sh.interact(player)
+	check(player.backpack.count_of("smoked_meat") == 2 and player.backpack.count_of("smoked_fish") == 1, "two smoked venison and a smoked trout")
+	check(Items.get_def("smoked_meat").spoil_hours > Items.get_def("jerky").spoil_hours, "smoked meat keeps longer than jerky")
+	check(Builds.BUILD_GROUPS.values().reduce(func(a, g): return a + g.size(), 0) == Builds.STRUCTURES.size(), "every build is in the build book")
+	for id in ["smokehouse", "cache", "bear_bag"]:
+		check(ResourceLoader.exists("res://assets/builds/%s.png" % id), "the build book has a picture of the %s" % id)
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
 
 # --- Mode "sounds": every biome sounds like itself; seasons, blending, echo, calls -----
 

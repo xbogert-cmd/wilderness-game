@@ -255,6 +255,14 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 					ci.draw_line(Vector2(w * 0.22, h * y), Vector2(w * 0.78, h * y), a.call(c.darkened(0.15)), 1.0)
 		"trout_raw", "trout_cooked", "whitefish_raw", "whitefish_cooked":
 			_fish(ci, a, w, h, c, d.id.begins_with("trout"), d.id.ends_with("cooked"))
+		"smoked_fish":
+			_fish(ci, a, w, h, c, false, true)
+			ci.draw_line(Vector2(w * 0.3, h * 0.5), Vector2(w * 0.7, h * 0.5), a.call(c.darkened(0.35)), 1.5) # split and spread
+		"smoked_meat":
+			for i in 2: # dark slabs, tied with string
+				var r := Rect2(w * 0.14, h * (0.2 + i * 0.34), w * 0.72, h * 0.28)
+				ci.draw_rect(r, a.call(c.darkened(i * 0.12)))
+				ci.draw_line(r.position + Vector2(r.size.x * 0.5, 0), r.position + Vector2(r.size.x * 0.5, r.size.y), a.call(Color(0.8, 0.75, 0.6)), 1.2)
 		"flint":
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.2, h * 0.7), Vector2(w * 0.35, h * 0.25), Vector2(w * 0.7, h * 0.18), Vector2(w * 0.85, h * 0.55), Vector2(w * 0.55, h * 0.85)]), a.call(c))
 			ci.draw_line(Vector2(w * 0.4, h * 0.35), Vector2(w * 0.65, h * 0.3), a.call(c.lightened(0.5)), 2.0)

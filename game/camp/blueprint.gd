@@ -111,7 +111,10 @@ func interact(p: Player) -> void:
 	p.message.emit("You don't have what this needs: " + Builds.needs_text(def().needs, delivered))
 
 func _finish() -> void:
-	if def().has("on"): # an add-on to something already built (the tripod over a fire)
+	if def().get("on") == "tree": # the bear bag, hung from the tree it was placed at
+		var t := Blueprint.host_at(get_tree(), "tree", global_position.x)
+		world.spawn({"kind": build_id, "x": global_position.x, "height": t.height if t else 1200.0})
+	elif def().has("on"): # an add-on to something already built (the tripod over a fire)
 		var host := Blueprint.host_at(get_tree(), def().on, global_position.x)
 		if host:
 			host.set(build_id, true)
@@ -121,10 +124,14 @@ func _finish() -> void:
 	queue_free()
 
 ## The built structure an add-on attaches to: a campfire for "campfire".
+## For "tree": a standing tree tall enough to hang a bag from, without one already.
 static func host_at(tree: SceneTree, kind: String, x: float, reach := 40.0) -> Node2D:
 	var best: Node2D = null
-	for s in tree.get_nodes_in_group("structure"):
-		if kind == "campfire" and s is Campfire and absf(s.global_position.x - x) < reach:
+	var pool := tree.get_nodes_in_group("choppable") if kind == "tree" else tree.get_nodes_in_group("structure")
+	for s in pool:
+		var ok: bool = s is Campfire if kind == "campfire" else (s is ChoppableTree and s.height >= 1000.0 and not s.felled \
+			and not tree.get_nodes_in_group("bear_bag").any(func(b): return absf(b.global_position.x - s.global_position.x) < 20.0))
+		if ok and absf(s.global_position.x - x) < reach:
 			if best == null or absf(s.global_position.x - x) < absf(best.global_position.x - x):
 				best = s
 	return best

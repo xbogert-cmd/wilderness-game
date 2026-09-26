@@ -30,7 +30,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_cancel()
 			else:
 				var bd: Dictionary = Builds.STRUCTURES[build_id]
-				player.message.emit("A pot tripod goes over a campfire that doesn't have one." if bd.has("on") \
+				player.message.emit(("A bear bag hangs from a tall standing tree (one without a bag)." if bd.on == "tree" else "A pot tripod goes over a campfire that doesn't have one.") if bd.has("on") \
 					else ("A bridge goes over a creek or the river: stand by the bank." if bd.has("water") else "Can't build there: needs level, dry ground with space."))
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("aim") or event.is_action_pressed("menu"):
@@ -61,7 +61,7 @@ func _process(_delta: float) -> void:
 		var host := Blueprint.host_at(get_tree(), d.on, x, RANGE)
 		if host:
 			x = host.global_position.x
-		_ok = host != null and not host.get(build_id) and not _blueprint_at(x)
+		_ok = host != null and (d.on == "tree" or not host.get(build_id)) and not _blueprint_at(x)
 	else:
 		_ok = fits(x, d.width)
 	global_position = Vector2(x, world.terrain.height_at(x))

@@ -246,6 +246,15 @@ func _ready() -> void:
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
 		player.bow_draw = 0.0
+	if args.has("stores"): # preview: a smokehouse going, a raised cache, a bear bag on the nearest tall tree, windy
+		var sh: Smokehouse = world.spawn({"kind": "smokehouse", "x": x + 380.0, "fuel": 10.0, "pieces": [["venison_raw", 3.0], ["trout_raw", 6.0], ["venison_raw", 9.0]]})
+		sh.queue_redraw()
+		world.spawn({"kind": "cache", "x": x - 420.0})
+		for t in get_tree().get_nodes_in_group("choppable"):
+			if t.height >= 1000.0 and absf(t.global_position.x - (x + 900.0)) < 700.0:
+				world.spawn({"kind": "bear_bag", "x": t.global_position.x, "height": t.height})
+				break
+		GameClock.weather.wind = float(args.stores) if args.stores != "" else 0.6
 	if args.has("throw"): # preview: the spear drawn back to throw at a deer, its path showing
 		var a := wildlife.spawn(Wildlife.SPECIES[0], x + 900.0, 1)
 		a.def = a.def.duplicate()
