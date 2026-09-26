@@ -86,7 +86,7 @@ func _draw() -> void:
 	var notes: PackedStringArray = []
 	if cond.warmth < 35.0: notes.append("Cold" if cond.warmth > 15.0 else "Freezing")
 	elif cond.warmth > 80.0: notes.append("Overheated")
-	if player.world.heat_at(player.global_position + Vector2(0, -60)) > 0.1: notes.append("By the fire")
+	if player.world.heat_at(player.global_position + Vector2(0, -60)) > 0.1: notes.append("Out of the cold" if player.underground else "By the fire")
 	if cond.wetness > 0.15: notes.append("Soaked" if cond.wetness > 0.6 else "Damp")
 	if cond.fatigue > 60.0: notes.append("Exhausted" if cond.fatigue > 85.0 else "Tired")
 	if GameClock.weather.blizzard() > 0.3: notes.append("Blizzard")

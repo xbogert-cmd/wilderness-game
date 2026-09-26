@@ -322,6 +322,10 @@ func _ready() -> void:
 			player.hold(ItemStack.make("lantern", GameClock.clock.hours))
 		else:
 			player.hold(ItemStack.make("torch", GameClock.clock.hours))
+	if args.has("den"): # preview: the bear asleep in the cave den (with --under=cave and a winter --day)
+		for u in get_tree().get_nodes_in_group("underground"):
+			if u.kind == "cave":
+				wildlife.bed_bear(u)
 	if args.has("top"): # preview: up on the lookout catwalk
 		player.global_position = Vector2(Terrain.LOOKOUT_X - 40.0, world.terrain.summit_y + Lookout.FLOOR - 6.0)
 	if args.has("reveal"): # preview: the whole map explored

@@ -3,9 +3,11 @@ class_name Wildlife extends Node2D
 ## appears out of sight on either side, on that stretch's game trail; deer that wander far
 ## off and out of view leave (wounded ones never do, so a blood trail always ends somewhere).
 ## Animals are ephemeral: they don't persist, they simply live where they're found.
-## Predators come the same way, out of sight: a wolf pack after dark (any time in winter) when
-## there's food lying out or the player smells of meat, now and then just passing through;
-## the bear only in the foothills, and not in winter. They leave by day or when far off.
+## Predators come the same way, out of sight: a wolf pack after dark when there's food lying
+## out or the player smells of meat, now and then just passing through. In winter wolves are
+## about all day, oftener and in bigger packs, and most packs are travelling, crossing the
+## country. The bear only in the foothills, likelier in spring and autumn; in winter it's
+## asleep in the cave den. They leave by day or when far off.
 ## Also spawns small bird flocks by day, and rabbits near the player at dawn and dusk.
 
 const SPAWN_CLEARANCE := 1400.0 ## never pop into existence near the player
@@ -103,7 +105,7 @@ func _manage_predators() -> void:
 		if n.is_wolf():
 			leave = leave or (not wolf_hours and not busy)
 		else:
-			leave = leave or winter
+			leave = leave or winter != (n.den != null) # the den bear is only there in winter
 		if leave and not seen:
 			n.queue_free()
 		elif n.is_wolf():
@@ -113,23 +115,51 @@ func _manage_predators() -> void:
 	if wolves == 0 and wolf_hours:
 		var food := _food_near(px, 7000.0, "wolf")
 		var chance := 0.35 if food or player.smells_of_meat() else (0.1 if px > Terrain.CREEK_X else 0.05)
+		if winter:
+			chance = maxf(chance, 0.2)
 		if _rng.randf() < chance:
 			var side := signf(food.global_position.x - px) if food and food.global_position.x != px else (1.0 if _rng.randf() < 0.5 else -1.0)
 			var x := _out_of_sight(px, side, view)
 			if not is_nan(x):
 				var pack := []
-				for k in _rng.randi_range(WOLF.group_min, WOLF.group_max):
+				var travel := -side if winter and not food and _rng.randf() < 0.6 else 0.0 # passing through, toward and past you
+				for k in _rng.randi_range(WOLF.group_min, WOLF.group_max + (1 if winter else 0)):
 					var w := spawn_predator(WOLF, x + side * k * _rng.randf_range(60.0, 140.0), _rng.randi())
+					w.travel = travel
 					w.pack = pack
 					pack.append(w)
+	if winter and bears == 0:
+		_den_bear()
 	var in_range := px > BEAR_RANGE.x - 2500.0 and px < BEAR_RANGE.y + 2500.0
-	if bears == 0 and not winter and in_range and _rng.randf() < (0.3 if _food_near(px, 7000.0, "black_bear") else 0.12):
+	var y := clock.year_pos()
+	var roaming := 0.2 if y < 0.125 or (y >= 0.5 and y < 0.75) else 0.12 # hungry in spring, fattening in autumn
+	if bears == 0 and not winter and in_range and _rng.randf() < (0.3 if _food_near(px, 7000.0, "black_bear") else roaming):
 		var side := 1.0 if _rng.randf() < 0.5 else -1.0
 		var x := _out_of_sight(px, side, view)
 		if is_nan(x):
 			x = _out_of_sight(px, -side, view)
 		if not is_nan(x) and x > BEAR_RANGE.x - 1500.0 and x < BEAR_RANGE.y + 1500.0:
 			spawn_predator(BEAR, x, _rng.randi())
+
+## In winter the bear is asleep in the cave den (unless it was killed there this winter).
+## It beds down while you're elsewhere, never with you down in the cave.
+func _den_bear() -> void:
+	for u in get_tree().get_nodes_in_group("underground"):
+		if u.kind != "cave" or player.underground == u or absf(u.global_position.x - player.global_position.x) > DESPAWN_AT:
+			continue
+		if GameClock.clock.hours - float(world.chunk_state(u.chunk_index).get("den_bear_killed", -INF)) < GameClock.clock.season_hours():
+			return
+		bed_bear(u)
+
+func bed_bear(u: Underground) -> Predator:
+	var b := Predator.new()
+	b.world = world
+	b.player = player
+	b.tracks = tracks
+	b.setup(BEAR, u.global_position.x, _rng.randi())
+	b.bed_down(u)
+	add_child(b)
+	return b
 
 ## Deer were scared off: the area stays quiet for a while before any more wander in.
 func spooked() -> void:
@@ -175,7 +205,8 @@ func _manage_rabbits() -> void:
 
 ## Now and then after dark, wolves somewhere off in the valley.
 func _distant_howl() -> void:
-	if GameClock.clock.daylight() > 0.15 or get_tree().get_nodes_in_group("predators").any(func(p): return p.is_wolf()):
+	var winter := GameClock.clock.season() == 3 # wolves are loudest in winter, and not only at night
+	if GameClock.clock.daylight() > (0.35 if winter else 0.15) or get_tree().get_nodes_in_group("predators").any(func(p): return p.is_wolf()):
 		return
 	if _rng.randf() < 0.4:
 		var at := player.global_position + Vector2((1.0 if _rng.randf() < 0.5 else -1.0) * 2300.0, -300.0)

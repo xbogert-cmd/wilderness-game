@@ -22,6 +22,7 @@ var dressed := false ## butchered: meat and hide taken, gut pile left
 var torn := false ## scavengers got into it: the hide is ruined
 var skinned := false
 var hauler: Player ## dragging it
+var _below := NAN ## lies underground at about this y (NAN: on the ground up top)
 var _ravens: Ravens
 
 func _ready() -> void:
@@ -54,9 +55,11 @@ func load_state(d: Dictionary, elapsed: float) -> void:
 	dressed = bool(d.get("dressed", false))
 	torn = bool(d.get("torn", false))
 	skinned = bool(d.get("skinned", false))
-	global_position = Vector2(float(d.x), world.ground_y(float(d.x)))
+	_below = float(d.get("y", NAN))
+	global_position = Vector2(float(d.x), _floor(float(d.x)))
 	if _ravens:
 		_ravens.since = hour
+		_ravens.active = is_nan(_below) # no sky to wheel in, down in a cave
 	if GameClock.clock.hours - hour > GONE_AFTER:
 		queue_free()
 	elif elapsed > 1.0:
@@ -72,8 +75,11 @@ func _scavenge(elapsed: float) -> void:
 		world.tracks.add(global_position.x + (k - 3) * 55.0, "wolf", 1 if k % 2 == 0 else -1)
 
 func to_state() -> Dictionary:
-	return {"kind": "carcass", "x": global_position.x, "facing": facing, "species": species, "hour": hour,
+	var d := {"kind": "carcass", "x": global_position.x, "facing": facing, "species": species, "hour": hour,
 		"arrows": arrows, "meat": meat, "dressed": dressed, "torn": torn, "skinned": skinned}
+	if not is_nan(_below):
+		d.y = global_position.y
+	return d
 
 func can_unload() -> bool:
 	return hauler == null
@@ -187,7 +193,13 @@ func _physics_process(_delta: float) -> void:
 		return
 	facing = hauler.facing
 	var x := hauler.global_position.x - facing * DRAG_OFFSET
-	global_position = Vector2(x, world.ground_y(x))
+	global_position = Vector2(x, _floor(x))
+
+func _floor(x: float) -> float:
+	if is_nan(_below):
+		return world.ground_y(x)
+	_below = world.floor_y(x, _below)
+	return _below
 
 func _def() -> SpeciesDef:
 	for d: SpeciesDef in Wildlife.SPECIES + Wildlife.PREDATORS:

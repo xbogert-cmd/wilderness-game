@@ -1,6 +1,7 @@
 class_name BerryBush extends Node2D
-## A bush; some carry serviceberries that grow back a season after picking.
+## A bush; some carry serviceberries that regrow a few days after picking.
 
+const REGROW_HOURS := 72.0
 
 var chunk: Chunk
 var n := 0
@@ -32,9 +33,8 @@ func _process(_delta: float) -> void:
 	if _berries:
 		_berries.visible = ripe()
 
-## Grows back over one season of growing weather (winter doesn't count).
 func ripe() -> bool:
-	return GameClock.clock.growing_hours(picked_hour) >= GameClock.clock.season_hours()
+	return GameClock.clock.hours - picked_hour >= REGROW_HOURS
 
 func interact_pos() -> Vector2:
 	return global_position

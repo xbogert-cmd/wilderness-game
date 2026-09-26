@@ -1082,6 +1082,92 @@ func _wait_until(cond: Callable, max_frames: int) -> int:
 		n += 1
 	return n
 
+func _den_and_winter_wolves() -> void:
+	var saved := GameClock.clock.hours
+	var year := GameClock.clock.season_hours() * 4.0
+	GameClock.clock.hours = ceilf(saved / year) * year + GameClock.clock.season_hours() * 1.4 + 12.0
+	check(GameClock.clock.season() == 3, "it's winter (%s)" % GameClock.clock.season_name())
+	var cave := _under_place("cave")
+	await teleport(Terrain.ECHO_CAVE_X - 600.0)
+	await frames(10)
+	cave = _under_place("cave")
+	_wl()._manage_predators()
+	var bears := get_tree().get_nodes_in_group("predators").filter(func(b): return not b.is_wolf())
+	check(bears.size() == 1 and bears[0].den == cave and bears[0].state == Predator.State.SLEEP, "winter: the bear is asleep in the cave den, not out on the surface")
+	if bears.is_empty():
+		GameClock.clock.hours = saved
+		return
+	var bear: Predator = bears[0]
+	check(absf(bear.position.y - (cave.global_position.y + Predator.DEN.y)) < 30.0, "lying in the upper gallery")
+	await teleport(bear.position.x)
+	player.auto_run = true
+	player.auto_dir = 1.0
+	await frames(60 * 2)
+	player.auto_dir = 0.0
+	player.auto_run = false
+	check(bear.rouse == 0.0, "running about on the ground overhead doesn't wake it")
+	await teleport_under(cave.global_position.x + 1250.0, cave.global_position.y + 400.0)
+	check(player.underground == cave, "down in the gallery")
+	await frames(60 * 4)
+	check(bear.state == Predator.State.SLEEP and bear.rouse < 0.1, "keeping still in the dark, 400 px off: it sleeps on (rouse %.2f)" % bear.rouse)
+	player.held = ItemStack.make("torch", GameClock.clock.hours)
+	player.cond.health = 100.0
+	var woke := await _walk(-1.0, func(): return bear.state != Predator.State.SLEEP or player.global_position.x < bear.position.x + 140.0, 60 * 8)
+	if bear.state == Predator.State.SLEEP:
+		await _wait_until(func(): return bear.state != Predator.State.SLEEP, 60 * 10)
+	check(bear.state != Predator.State.SLEEP, "walking up with a torch rouses it (%s)" % woke)
+	await _wait_until(func(): return bear.state == Predator.State.BLUFF, 60 * 4)
+	check(bear.state == Predator.State.BLUFF and player.cond.health == 100.0, "woken: a warning charge first")
+	var lo := cave.global_position.x + Predator.DEN_SPAN.x
+	await _walk(-1.0, func(): return player.global_position.x < lo - 300.0, 60 * 10)
+	await frames(60 * 3)
+	check(bear.position.x >= lo - 1.0, "it won't follow you up out of the gallery (%.0f)" % (bear.position.x - cave.global_position.x))
+	player.held = null
+	await teleport(Terrain.ECHO_CAVE_X - 900.0)
+	var n := await _wait_until(func(): return bear.state == Predator.State.SLEEP, 60 * 40)
+	check(bear.state == Predator.State.SLEEP, "once you're gone it settles back to sleep (%d s)" % (n / 60))
+	await teleport_under(bear.position.x - 150.0, bear.position.y)
+	bear.hurt(99.0, player.global_position.x)
+	await frames(3)
+	var dead := _carcasses().filter(func(c): return c.species == "black_bear")
+	check(dead.size() == 1 and dead[0].global_position.y > cave.global_position.y + 300.0, "killed in the den, it lies in the den")
+	if dead:
+		check(not dead[0]._ravens.active and dead[0].to_state().has("y"), "no ravens down here; it stays underground when saved")
+		dead[0].queue_free()
+	await teleport(Terrain.ECHO_CAVE_X - 900.0)
+	_wl()._manage_predators()
+	check(get_tree().get_nodes_in_group("predators").filter(func(b): return not b.is_wolf()).is_empty(), "the den stays empty the rest of the winter")
+	await _clear_wild()
+
+	# Winter wolves: about all day, oftener, some packs travelling through.
+	await teleport(9000.0)
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 12.0 # noon
+	var packs := 0
+	var travelling := 0
+	var biggest := 0
+	for k in 40:
+		_wl()._manage_predators()
+		var wolves := get_tree().get_nodes_in_group("predators").filter(func(w): return w.is_wolf() and not w.is_queued_for_deletion())
+		if wolves:
+			packs += 1
+			biggest = maxi(biggest, wolves.size())
+			if wolves[0].travel != 0.0:
+				travelling += 1
+			await _clear_wild()
+	check(packs >= 3, "winter noon: wolf packs come by day (%d in 40 checks)" % packs)
+	check(travelling >= 1, "some are passing through (%d of %d)" % [travelling, packs])
+	var w := _wl().spawn_predator(Wildlife.WOLF, 12000.0, 9)
+	w.travel = 1.0
+	await frames(60 * 10)
+	check(w.position.x - 12000.0 > 900.0, "a travelling pack covers ground (%.0f px in 10 s)" % (w.position.x - 12000.0))
+	check(w._range() == Wildlife.WOLF.home_range * 2.0, "wolves range twice as wide in winter")
+	await _clear_wild()
+	GameClock.clock.hours = ceilf(GameClock.clock.hours / year) * year + year * 0.5 + 12.0 # early spring
+	var b := _wl().spawn_predator(Wildlife.BEAR, 30000.0, 10)
+	check(b._hunger() > 1.0, "spring: the bear's just out of the den and hungry")
+	await _clear_wild()
+	GameClock.clock.hours = saved
+
 func _predators() -> void:
 	await frames(10)
 	var x := 9000.0
@@ -1224,6 +1310,9 @@ func _predators() -> void:
 	await _clear_wild()
 	player.cond.health = 100.0
 	player.cond.injuries.clear()
+
+	# --- The seasons: the bear dens up in winter, wolves range wide.
+	await _den_and_winter_wolves()
 
 	# --- Butchering: what fits goes into the pack, the rest waits; or drag it home.
 	await teleport(x)

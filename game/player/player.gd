@@ -615,7 +615,7 @@ func _call() -> void:
 func _wave_torch() -> void:
 	swing = 0.0
 	for p in get_tree().get_nodes_in_group("predators"):
-		if absf(p.position.x - global_position.x) < 800.0:
+		if absf(p.position.x - global_position.x) < 800.0 and absf(p.position.y - global_position.y) < 300.0:
 			p.scare(global_position.x)
 
 ## Something wild close in front (a wolf or the bear at your throat, a rabbit): the nearest
@@ -624,7 +624,7 @@ func _nearest_in(group: String, reach: float) -> Node2D:
 	var best: Node2D = null
 	for a in get_tree().get_nodes_in_group(group):
 		var dx: float = a.position.x - global_position.x
-		if absf(dx) < reach and (signf(dx) == facing or absf(dx) < 40.0) and (best == null or absf(dx) < absf(best.position.x - global_position.x)):
+		if absf(dx) < reach and absf(a.position.y - global_position.y) < 250.0 and (signf(dx) == facing or absf(dx) < 40.0) and (best == null or absf(dx) < absf(best.position.x - global_position.x)):
 			best = a
 	return best
 

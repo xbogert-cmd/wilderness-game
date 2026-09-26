@@ -3,13 +3,16 @@ class_name Predator extends Node2D
 ## the ground, a rabbit in a snare, and (the bear) bait. They never come near your camp or a
 ## fire, and a torch in your hand keeps them off. They follow their noses: food scent carries
 ## downwind, and so does the smell of raw meat you're carrying.
-## Wolves run in a small pack and mostly at night (all day in winter). Bold ones stalk a player
-## who is hurt or carrying meat after dark, lunge, and back off; hurt one and the pack scatters.
-## The bear keeps to the foothills and sleeps through winter. Come too close, or near its food,
-## and it bluff-charges; push it (or hurt it) and the next charge is real.
+## Wolves run in a small pack and mostly at night. In winter they're out all day and range
+## far: packs travel the country, and hunger makes them bolder. Bold ones stalk a player who
+## is hurt or carrying meat after dark, lunge, and back off; hurt one and the pack scatters.
+## The bear keeps to the foothills, hungry and nosing far for food in spring and autumn. Come
+## too close, or near its food, and it bluff-charges; push it (or hurt it) and the next charge
+## is real. In winter it sleeps in the den in the cave's upper gallery: noise and light close
+## by rouse it, and a woken bear defends its den (it never leaves the gallery).
 
-enum State { ROAM, SEEK, FEED, SHADOW, STALK, LUNGE, BACK_OFF, BLUFF, FLEE }
-const STATE_NAMES: PackedStringArray = ["roam", "seek", "feed", "shadow", "stalk", "lunge", "back off", "bluff", "flee"]
+enum State { ROAM, SEEK, FEED, SHADOW, STALK, LUNGE, BACK_OFF, BLUFF, FLEE, SLEEP }
+const STATE_NAMES: PackedStringArray = ["roam", "seek", "feed", "shadow", "stalk", "lunge", "back off", "bluff", "flee", "sleep"]
 const SAFE_R := 900.0 ## camps and fires: nothing wild comes this close
 const TORCH_R := 600.0 ## a flame in your hand
 const BRACED_R := 330.0 ## a spear or torch pointed at it: it won't come closer than this
@@ -18,6 +21,9 @@ const KINDS := {
 	"black_bear": {"hp": 2.2, "trot": 85.0, "run": 470.0, "bite": 32.0, "reach": 130.0, "region": "torso"},
 }
 const EAT_PER_SEC := 0.05 ## portions of meat a feeding animal gets through
+const DEN := Vector2(830.0, 400.0) ## where the bear beds down, in the cave's layout
+const DEN_SPAN := Vector2(450.0, 1330.0) ## the gallery floor a woken bear keeps to (layout x)
+const ROUSE_R := 520.0 ## a sleeping bear can be disturbed from this close
 
 var def: SpeciesDef
 var world: World
@@ -42,6 +48,11 @@ var _hit := false ## this lunge has landed
 var strike_t := 0.0 ## seconds left of a landed bite or swipe (the rig clamps the jaws, swings the paw)
 var _since_print := 0.0
 var _howl := 0.0
+var travel := 0.0 ## a winter pack on the move: the way it's heading (0 = keeping to home)
+var den: Underground ## the bear asleep in its winter den (null otherwise)
+var rouse := 0.0 ## how near a sleeping bear is to waking, 0..1
+var _stirred := false
+var _calm := 0.0
 var _rng := RandomNumberGenerator.new()
 
 func setup(species: SpeciesDef, x: float, seed_value: int) -> void:
@@ -57,6 +68,9 @@ func setup(species: SpeciesDef, x: float, seed_value: int) -> void:
 func _ready() -> void:
 	add_to_group("predators")
 	z_index = -4 # in the plane, behind the player
+	if den:
+		z_as_relative = false
+		z_index = 2 # in front of the cave walls, behind the player
 	var rig := PredatorRig.new()
 	rig.animal = self
 	add_child(rig)
@@ -66,6 +80,30 @@ func stat(k: String) -> Variant:
 
 func is_wolf() -> bool:
 	return def.id == "wolf"
+
+## Beds the bear down in the cave den for the winter (before it's added to the tree).
+func bed_down(u: Underground) -> void:
+	den = u
+	state = State.SLEEP
+	facing = -1
+	position = u.global_position + Vector2(DEN.x * u.dir, DEN.y)
+	home_x = position.x
+
+## How far it wanders from home: wider in winter (wolves) and autumn (the bear, fattening up).
+func _range() -> float:
+	var s := GameClock.clock.season()
+	if is_wolf():
+		return def.home_range * (2.0 if s == 3 else 1.0)
+	return def.home_range * (1.5 if s == 2 else 1.0)
+
+## Scent reach: a bear just out of its den, or fattening for winter, follows its nose far.
+func _hunger() -> float:
+	var y := GameClock.clock.year_pos()
+	if is_wolf():
+		return 1.25 if y >= 0.75 else 1.0 # winter
+	if y < 0.125: # early spring, just out of the den
+		return 1.5
+	return 1.3 if y >= 0.5 and y < 0.75 else 1.0 # autumn
 
 # --- Where it may go ------------------------------------------------------------
 
@@ -80,6 +118,8 @@ func _torch_near(x: float) -> bool:
 	return player.holding("torch") and absf(player.global_position.x - x) < TORCH_R and not player.dead
 
 func _off_limits(x: float) -> bool:
+	if den: # cornered in its den, it holds its ground
+		return false
 	return safe_at(get_tree(), x) or _torch_near(x)
 
 ## A spear or torch held toward it.
@@ -100,7 +140,7 @@ func _find_food() -> Node:
 		if n.is_queued_for_deletion() or not n.appeals(def.id):
 			continue
 		var dx: float = n.global_position.x - position.x
-		var reach := def.scent * (1.0 + w.wind * 0.8 if signf(-dx) == float(w.wind_dir) else 0.75)
+		var reach := def.scent * _hunger() * (1.0 + w.wind * 0.8 if signf(-dx) == float(w.wind_dir) else 0.75)
 		if absf(dx) < reach and absf(dx) < best_d and not safe_at(get_tree(), n.global_position.x):
 			best = n
 			best_d = absf(dx)
@@ -115,7 +155,8 @@ func _smells_player() -> bool:
 
 ## Wolves only close in after dark on someone who's hurt or carrying meat, and not at a camp.
 func _bold() -> bool:
-	return is_wolf() and _night() and (player.cond.health < 55.0 or player.smells_of_meat()) \
+	var starving := GameClock.clock.season() == 3 # winter hunger: a smaller wound will do
+	return is_wolf() and _night() and (player.cond.health < (70.0 if starving else 55.0) or player.smells_of_meat()) \
 		and not _off_limits(player.global_position.x) and not player.sleeping and player.under < 0.3
 
 # --- Brain -------------------------------------------------------------------------
@@ -126,6 +167,9 @@ func _physics_process(delta: float) -> void:
 	_think -= delta
 	_timer -= delta
 	strike_t = maxf(strike_t - delta, 0.0)
+	if state == State.SLEEP:
+		_doze(delta)
+		return
 	if _think <= 0.0:
 		_think = 0.4
 		_decide()
@@ -134,11 +178,14 @@ func _physics_process(delta: float) -> void:
 	if is_wolf() and _night():
 		_howl -= delta
 		if _howl <= 0.0:
-			_howl = _rng.randf_range(50.0, 140.0)
+			_howl = _rng.randf_range(50.0, 140.0) * (0.5 if GameClock.clock.season() == 3 else 1.0)
 			if pack.is_empty() or pack[0] == self:
 				howl()
 
 func _decide() -> void:
+	if den:
+		_den_decide()
+		return
 	var px := player.global_position.x
 	var d := absf(px - position.x)
 	if player.sleeping and d < 900.0 and not _off_limits(px) and player.under < 0.3:
@@ -210,9 +257,20 @@ func _act(delta: float) -> void:
 	var run: float = stat("run")
 	match state:
 		State.ROAM:
-			speed = trot * 0.6
-			if absf(_target_x - position.x) < 60.0 or _timer <= 0.0:
-				_target_x = clampf(home_x + _rng.randf_range(-def.home_range, def.home_range), Terrain.WORLD_MIN + Animal.EDGE, Terrain.WORLD_MAX - Animal.EDGE)
+			speed = trot * (0.85 if travel != 0.0 else 0.6)
+			if den: # back to the bedding
+				_target_x = home_x
+				speed = trot * 0.5
+				if absf(home_x - position.x) < 20.0:
+					speed = 0.0
+					facing = toward if player.underground == den else -1 # watching you
+			elif travel != 0.0: # a winter pack covering ground
+				if absf(_target_x - position.x) < 60.0 or _timer <= 0.0:
+					_target_x = position.x + travel * _rng.randf_range(1500.0, 2500.0)
+					_timer = _rng.randf_range(12.0, 20.0)
+				home_x = position.x
+			elif absf(_target_x - position.x) < 60.0 or _timer <= 0.0:
+				_target_x = clampf(home_x + _rng.randf_range(-_range(), _range()), Terrain.WORLD_MIN + Animal.EDGE, Terrain.WORLD_MAX - Animal.EDGE)
 				_timer = _rng.randf_range(8.0, 16.0)
 			facing = int(signf(_target_x - position.x)) if absf(_target_x - position.x) > 5.0 else facing
 		State.SEEK:
@@ -290,6 +348,12 @@ func _move(delta: float) -> void:
 	if state != State.FLEE and _off_limits(nx) and not _off_limits(position.x):
 		nx = position.x # stop at the edge of the camp's light
 		speed = 0.0
+	if den:
+		nx = clampf(nx, den.global_position.x + DEN_SPAN.x * den.dir, den.global_position.x + DEN_SPAN.y * den.dir) if den.dir > 0.0 \
+			else clampf(nx, den.global_position.x + DEN_SPAN.y * den.dir, den.global_position.x + DEN_SPAN.x * den.dir)
+		position.x = nx
+		position.y = world.floor_y(nx, position.y)
+		return
 	_since_print += absf(nx - position.x)
 	position.x = nx
 	position.y = world.ground_y(position.x)
@@ -310,6 +374,8 @@ func hurt(amount: float, from_x: float) -> void:
 	if hp <= 0.0:
 		die()
 		return
+	if state == State.SLEEP:
+		_wake()
 	if is_wolf():
 		for w in pack:
 			if is_instance_valid(w):
@@ -340,8 +406,12 @@ func scare(from_x: float) -> void:
 		flee(from_x)
 
 func die() -> void:
-	world.spawn({"kind": "carcass", "x": position.x, "facing": facing, "species": def.id,
-		"hour": GameClock.clock.hours, "arrows": arrows})
+	var c := {"kind": "carcass", "x": position.x, "facing": facing, "species": def.id,
+		"hour": GameClock.clock.hours, "arrows": arrows}
+	if den:
+		c.y = position.y
+		world.chunk_state(den.chunk_index).den_bear_killed = GameClock.clock.hours # the den stays empty this winter
+	world.spawn(c)
 	pack.erase(self)
 	for w in pack:
 		if is_instance_valid(w):
@@ -357,6 +427,9 @@ func zone_at(p: Vector2) -> int:
 	var l := (p - position)
 	l.x *= facing
 	var wolf := is_wolf()
+	if state == State.SLEEP: # curled up low in the bedding
+		var e2 := (l - Vector2(0, -40)) / Vector2(100, 42)
+		return 0 if e2.length() > 1.0 else (2 if l.x > 20.0 else 1)
 	var head := Vector2(64, -76) if wolf else Vector2(98, -96)
 	if l.distance_to(head) < (13.0 if wolf else 22.0):
 		return 2
@@ -366,3 +439,65 @@ func zone_at(p: Vector2) -> int:
 	if e.length() > 1.0:
 		return 0
 	return 2 if l.x > c.x + r.x * 0.25 else 1
+
+# --- The winter den -------------------------------------------------------------------
+
+## Asleep: noise and light close by (you down in the gallery) slowly rouse it.
+func _doze(delta: float) -> void:
+	var d := position.distance_to(player.global_position)
+	var near := player.underground == den and not player.dead and d < ROUSE_R
+	var stir := 0.0
+	if near:
+		var moving := absf(player.velocity.x) > 5.0
+		var loud := 0.03
+		if player.running or player.swing >= 0.0:
+			loud = 1.0
+		elif moving:
+			loud = 0.12 if player.crouching else 0.35
+		if player.holding("torch"):
+			loud += 0.3 # smoke and crackle
+		stir = (1.0 - d / ROUSE_R) * loud * 0.6
+		Journal.note("den_bear", "The bear is back in its den for the winter, asleep in the upper gallery of the cave. It breathes slow and deep. Quiet feet, no fire, and it might sleep on.")
+	rouse = clampf(rouse + (stir - 0.05) * delta, 0.0, 1.0)
+	if rouse > 0.5 and not _stirred:
+		_stirred = true
+		player.message.emit("The bear groans and shifts in the bedding. Its breathing has changed.")
+	elif rouse < 0.25:
+		_stirred = false
+	if rouse >= 1.0:
+		_wake()
+
+func _wake() -> void:
+	state = State.ROAM
+	rouse = 0.0
+	_calm = 0.0
+	angry = false # groggy: a warning first (hurt it and the charge is real)
+	facing = int(signf(player.global_position.x - position.x)) if player.global_position.x != position.x else facing
+	player.message.emit("The bear heaves up out of the bedding, huge in the dark!")
+	Sfx.play_at(self, global_position + Vector2(facing * 80.0, -120.0), Sfx.roar(), 2.0)
+
+## Awake in the den: see you off, then settle back down once you're gone.
+func _den_decide() -> void:
+	var d := position.distance_to(player.global_position)
+	var here := player.underground == den and not player.dead and absf(player.global_position.y - position.y) < 200.0
+	if state == State.FLEE:
+		if _timer <= 0.0:
+			state = State.ROAM
+		return
+	if state in [State.LUNGE, State.BACK_OFF, State.BLUFF]:
+		return
+	if here and d < 650.0:
+		_calm = 0.0
+		if d < 420.0:
+			var pushed := Time.get_ticks_msec() / 1000.0 - _warned < 25.0
+			_start(State.LUNGE if angry or pushed else State.BLUFF, 1.6)
+		else:
+			state = State.ROAM
+			facing = int(signf(player.global_position.x - position.x))
+		return
+	state = State.ROAM
+	_calm += 0.4
+	if _calm > 12.0 and absf(home_x - position.x) < 20.0: # you're gone: back to sleep
+		state = State.SLEEP
+		angry = false
+		facing = -1

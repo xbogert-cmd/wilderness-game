@@ -403,6 +403,9 @@ func _look(p: Player, id: String) -> void:
 		"barrel":
 			p.message.emit("Dry rot and mouse nests. Whatever was stored in it is long gone.")
 		"den":
+			if get_tree().get_nodes_in_group("predators").any(func(b): return b.den == self and b.state == Predator.State.SLEEP):
+				p.message.emit("The bear fills the hollow, curled nose to paws, breathing slow and deep. Every hair on your neck says back away, quietly.")
+				return
 			p.message.emit("A bear's winter den: a hollow scraped in the dirt, old bedding of grass and needles, black hair caught on the rock. Nobody home.")
 			Journal.note("den", "A bear dens in the cave's upper gallery in winter: a scraped hollow, bedding, black hair on the rock. Better not to be down there when it's back.")
 		"fossils":

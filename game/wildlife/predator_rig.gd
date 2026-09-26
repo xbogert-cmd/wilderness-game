@@ -1,6 +1,7 @@
 class_name PredatorRig extends Node2D
 ## Procedural wolf and black bear, in the deer's flat-shape style. Poses: walk, gallop, head
-## low (stalking, feeding), and the bear rearing up at the end of a bluff charge.
+## low (stalking, feeding), the bear rearing up at the end of a bluff charge, and the bear
+## curled asleep in its winter den.
 ## Facing right, origin on the ground under the body; scale.x flips it.
 
 var animal: Predator
@@ -83,6 +84,9 @@ func _wolf(d: SpeciesDef) -> void:
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func _bear(d: SpeciesDef) -> void:
+	if animal.state == Predator.State.SLEEP:
+		_bear_asleep(d)
+		return
 	var bound := _gallop()
 	# Rearing pivots the whole bear up around its hind feet.
 	draw_set_transform(Vector2(-60, 0), -0.75 * _rear, Vector2.ONE)
@@ -126,6 +130,21 @@ func _bear(d: SpeciesDef) -> void:
 			for c in 3:
 				draw_arc(shoulder, 78.0 + c * 7.0, ang - 0.9, ang + 0.2, 10, Color(1, 1, 1, 0.35 * animal.strike_t / 0.45), 2.0)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
+
+## Curled on its side in the bedding, nose tucked to its paws, breathing slow; a twitch as it stirs.
+func _bear_asleep(d: SpeciesDef) -> void:
+	var breath := sin(_t * 0.9) * 3.0
+	var twitch := sin(_t * 17.0) * 2.0 * clampf(animal.rouse * 2.0 - 1.0, 0.0, 1.0)
+	draw_colored_polygon(_ellipse(Vector2(-10, -40 - breath * 0.5), 92.0, 40.0 + breath), d.body_color)
+	draw_colored_polygon(_ellipse(Vector2(-60, -30), 36.0, 26.0), d.body_color.darkened(0.08)) # haunch
+	draw_colored_polygon(_ellipse(Vector2(62, -10), 34.0, 11.0), d.body_color.darkened(0.12)) # forepaws
+	var head := Vector2(74, -30 + twitch)
+	draw_circle(head, 21.0, d.body_color)
+	draw_colored_polygon(PackedVector2Array([head + Vector2(4, -12), head + Vector2(32, 2), head + Vector2(28, 12), head + Vector2(0, 14)]), Color("8a6a4a"))
+	draw_circle(head + Vector2(30, 7), 5.0, d.dark_color)
+	draw_line(head + Vector2(6, -4), head + Vector2(14, -3), d.dark_color, 2.0) # eye shut
+	for k in [0.0, 1.0]:
+		draw_circle(head + Vector2(-12 + k * 9, -17), 7.0, d.body_color.darkened(0.12 * k))
 
 func _leg(top: Vector2, offset: float, fore: bool, color: Color, paw: Color, width: float, bound: float) -> void:
 	var swing := sin((_phase + offset) * TAU) * (0.1 if bound > 0.0 else 0.42) * clampf(animal.speed / 50.0, 0.0, 1.0)
