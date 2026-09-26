@@ -18,7 +18,7 @@ func _ready() -> void:
 	max_distance = 2500.0
 
 func step() -> void:
-	var wet := body.wade_depth > 0.0 or absf(body.global_position.x - Terrain.CREEK_X) < Terrain.CREEK_HALF + 60.0
+	var wet := body.wade_depth > 0.0 or body.world.terrain.water_index(body.global_position.x, 60.0) >= 0
 	stream = _mud if wet else _grass
 	pitch_scale = 0.75 if GameClock.weather.snow_cm > 3.0 and not wet else 1.0 # a muffled crunch in snow
 	body.world.tracks.add(body.global_position.x + body.facing * randf_range(-12.0, 12.0), "boot", body.facing)

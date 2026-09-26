@@ -1,15 +1,30 @@
 class_name Creek extends Node2D
-## The creek as something to use: fill a held container, or drink straight from it.
-## Creek water is always dirty; boiling makes it safe. In a hard cold it freezes over: the
-## ice bears your weight, and you chop a hole to reach the water (it skins over again).
+## A creek, river, pond or lake as something to use: fill a held container, or drink straight
+## from it. Wild water is always dirty; boiling makes it safe. In a hard cold it freezes over:
+## the ice bears your weight, and you chop a hole to reach the water (it skins over again).
+## One node per body of water (index into Terrain.WATERS), built with its chunk.
 
 const DIRTY_HEALTH_COST := 3.0
 const FROZEN := 0.6 ## weather.ice at which the surface bears weight
 const HOLE_HOURS := 8.0
 
 var terrain: Terrain
+var index := 0 ## which of Terrain.WATERS
 var hole_until := -INF
 var _ice: CollisionShape2D
+
+func w() -> Dictionary:
+	return Terrain.WATERS[index]
+
+func kind() -> String:
+	return w().kind
+
+## The body of water whose span contains x, if its chunk is loaded.
+static func at(tree: SceneTree, x: float) -> Creek:
+	for c: Creek in tree.get_nodes_in_group("creek"):
+		if absf(x - c.w().x) < c.w().half:
+			return c
+	return null
 
 func _ready() -> void:
 	add_to_group("interactable")
@@ -17,9 +32,9 @@ func _ready() -> void:
 	var body := StaticBody2D.new()
 	_ice = CollisionShape2D.new()
 	var seg := SegmentShape2D.new()
-	var s := terrain.water_surface_at(Terrain.CREEK_X)
-	seg.a = Vector2(Terrain.CREEK_X - Terrain.CREEK_HALF, s)
-	seg.b = Vector2(Terrain.CREEK_X + Terrain.CREEK_HALF, s)
+	var s := terrain.surface_of(index)
+	seg.a = Vector2(w().x - w().half, s)
+	seg.b = Vector2(w().x + w().half, s)
 	_ice.shape = seg
 	_ice.disabled = true
 	body.add_child(_ice)
@@ -42,17 +57,19 @@ func _physics_process(_delta: float) -> void:
 				p.velocity.y = 0.0
 		_ice.disabled = not solid
 
-## The creek, if the player is standing at the water; else null.
+## The water the player is standing at; else null.
 static func reachable(p: Player) -> Creek:
-	var c: Creek = p.get_tree().get_first_node_in_group("creek")
-	return c if c and c._at_water(p) else null
+	for c: Creek in p.get_tree().get_nodes_in_group("creek"):
+		if c._at_water(p):
+			return c
+	return null
 
 func _at_water(p: Player) -> bool:
-	return absf(p.global_position.x - Terrain.CREEK_X) < Terrain.CREEK_HALF - 40.0
+	return absf(p.global_position.x - w().x) < w().half - 40.0
 
 func interact_pos() -> Vector2:
 	var p: Player = get_tree().get_first_node_in_group("player")
-	var x := clampf(p.global_position.x, Terrain.CREEK_X - Terrain.CREEK_HALF, Terrain.CREEK_X + Terrain.CREEK_HALF)
+	var x := clampf(p.global_position.x, w().x - w().half, w().x + w().half)
 	return Vector2(x, p.global_position.y)
 
 func interact_label(p: Player) -> String:
@@ -61,8 +78,8 @@ func interact_label(p: Player) -> String:
 	if frozen() and not hole_open():
 		return "Chop a hole in the ice"
 	if p.held and p.held.def.capacity > 0.0:
-		return "Fill %s (creek water is dirty)" % p.held.def.name.to_lower()
-	return "Drink from the creek (dirty)"
+		return "Fill %s (%s water is dirty)" % [p.held.def.name.to_lower(), kind()]
+	return "Drink from the %s (dirty)" % kind()
 
 func interact(p: Player) -> void:
 	if frozen() and not hole_open():
@@ -80,7 +97,7 @@ func interact(p: Player) -> void:
 func fill(p: Player, s: ItemStack) -> void:
 	var took := s.add_water(s.def.capacity, false)
 	if took > 0.0:
-		p.message.emit("Filled with %.2f L of creek water. Boil it before drinking." % took)
+		p.message.emit("Filled with %.2f L of %s water. Boil it before drinking." % [took, kind()])
 	elif s.water_clean and s.water > 0.001:
 		p.message.emit("It holds clean water. Empty or drink it first so they don't mix.")
 	else:

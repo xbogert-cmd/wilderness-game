@@ -10,6 +10,8 @@ class_name Scenario extends Node
 ## Mode "world": the foothills, the rock shelter, the fire lookout, the map, and the herd.
 ## Mode "predators": choice menus, torch, wolves and the bear around food and camps, the spear,
 ## butchering and dragging, snares and rabbits, pelts and clothing.
+## Mode "frontier": the wider world: new waters and biomes, the homestead, the trapper's camp,
+## the plane wreck, the log bridge, flares, the far lights, and old saves' maps.
 
 var player: Player
 var world: World
@@ -29,6 +31,7 @@ func _ready() -> void:
 		"wild": _wild.call_deferred()
 		"winter": _winter.call_deferred()
 		"predators": _predators.call_deferred()
+		"frontier": _frontier.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -169,10 +172,12 @@ func _run() -> void:
 	check(world.sheltered_at(camp_x), "lean-to shelters")
 
 	# --- Sticks, campfire -----------------------------------------------------
-	for it in get_tree().get_nodes_in_group("interactable"):
-		if it is WorldItem and it.stack.def.id == "sticks" and player.backpack.count_of("sticks") < 5:
+	var piles := get_tree().get_nodes_in_group("interactable").filter(func(it): return it is WorldItem and it.stack.def.id == "sticks" and absf(it.global_position.x - camp_x) < 5000.0)
+	for it in piles:
+		if is_instance_valid(it) and not it.is_queued_for_deletion() and player.backpack.count_of("sticks") < 5:
 			await teleport(it.global_position.x)
-			it.interact(player)
+			if is_instance_valid(it):
+				it.interact(player)
 	check(player.backpack.count_of("sticks") >= 3, "gathered sticks: %d" % player.backpack.count_of("sticks"))
 	var fire_x := camp_x + 260.0
 	await teleport(fire_x)
@@ -448,7 +453,8 @@ func _world_tour() -> void:
 	await frames(10)
 	check(lk.on_top(player), "up on the catwalk (%.0f px up)" % (lk.global_position.y - player.global_position.y))
 	await frames(30)
-	check(Array(world.explored).count(0) == 0 and Journal.has("lookout"), "the whole map fills in from up here")
+	check(world.seen(0.0) and world.seen(Terrain.CREEK_X) and world.seen(Terrain.CRASH_X) and world.seen(Terrain.WORLD_MAX - 300.0) and not world.seen(Terrain.HOMESTEAD_X) and Journal.has("lookout"),
+		"the valley and the country east fill in from up here (the far west is too far)")
 	var cam := get_viewport().get_camera_2d() as FollowCamera
 	check(cam.view_zoom == Lookout.VIEW_ZOOM, "the view pulls back over the valley")
 	var cupboard: Node2D = null
@@ -1479,6 +1485,147 @@ func _predators() -> void:
 	check(player.backpack.worn.body == bearc and not player.dead, "you come to still wearing your clothes")
 	player.from_dict(old)
 	check(player.backpack.worn.body != null and player.backpack.worn.body.def.id == "hide_coat", "an old save's coat in the pack gets worn")
+
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+
+# --- Mode "frontier" ----------------------------------------------------------------
+
+func _site(kind: String) -> Site:
+	for n in get_tree().get_nodes_in_group("landmark"):
+		if n is Site and n.kind == kind:
+			return n
+	return null
+
+func _frontier() -> void:
+	await frames(10)
+	GameClock.clock.hours = 10.0
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	var t := world.terrain
+	check(Terrain.WORLD_MIN < -20000.0 and Terrain.WORLD_MAX > 70000.0, "the world runs both ways from the trailhead")
+	check(t.water_index(Terrain.CREEK_X) == 0 and t.height_at(Terrain.CREEK_X) > t.surface_of(0), "Rattlesnake Creek is where it always was")
+	var river := 1
+	check(Terrain.WATERS[river].kind == "river" and t.height_at(Terrain.WATERS[river].x) - t.surface_of(river) > 120.0, "the Sweetwater runs chest-deep")
+	for b in ["sage", "meadow", "marsh", "river", "valley", "foothills", "ridge", "burn", "alpine"]:
+		pass
+	var seen_biomes := {}
+	var x := Terrain.WORLD_MIN + 1000.0
+	while x < Terrain.WORLD_MAX - 1000.0:
+		seen_biomes[Terrain.biome(x)] = true
+		x += 500.0
+	check(seen_biomes.size() == 9, "nine kinds of country west to east: %s" % ", ".join(seen_biomes.keys()))
+
+	# The river: drink and fill like the creek; wading it soaks you.
+	var rx: float = Terrain.WATERS[river].x
+	await teleport(rx - Terrain.WATERS[river].half + 120.0)
+	await frames(10)
+	var water := Creek.reachable(player)
+	check(water != null and water.kind() == "river", "at the river's edge")
+	player.hold(player.backpack.find(func(st): return st.def.id == "water_bottle"))
+	player.held.water = 0.0
+	water.interact(player)
+	check(player.held.water > 0.5 and not player.held.water_clean, "filled the bottle from the river (dirty)")
+	player.stow()
+	await teleport(rx)
+	await frames(20)
+	check(player.wade_depth > 100.0, "mid-river the water's chest-deep (%.0f px)" % player.wade_depth)
+
+	# A log bridge over it, through the build menu.
+	await teleport(rx - Terrain.WATERS[river].half - 200.0)
+	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
+	bm._choose("bridge")
+	player.aim_override = Vector2(rx - 100.0, t.height_at(rx - 100.0))
+	await frames(3)
+	var use := InputEventAction.new()
+	use.action = "use"
+	use.pressed = true
+	bm._unhandled_input(use)
+	player.aim_override = Vector2.INF
+	var bbp: Blueprint = null
+	for n in get_tree().get_nodes_in_group("structure"):
+		if n is Blueprint and n.build_id == "bridge":
+			bbp = n
+	check(bbp != null and absf(bbp.global_position.x - rx) < 1.0, "the bridge blueprint snaps over the river")
+	if bbp:
+		for size in ["long", "long", "long", "long", "medium", "medium"]:
+			var lg := world.spawn({"kind": "log", "size": size, "x": player.global_position.x, "y": t.height_at(player.global_position.x) - 60.0}) as WorldLog
+			await frames(3)
+			player.carrying = lg
+			lg.pick_up(player)
+			bbp.interact(player)
+		check(bbp.complete(), "logs delivered from the bank")
+		bbp.interact(player)
+		await frames(int(Builds.STRUCTURES.bridge.seconds * 60.0) + 20)
+		var bridge := get_tree().get_nodes_in_group("structure").filter(func(n): return n is LogBridge)
+		check(bridge.size() == 1, "the log bridge is built")
+		player.auto_dir = 1.0
+		var crossed := await _wait_until(func(): return player.global_position.x > rx + Terrain.WATERS[river].half + 100.0, 60 * 15)
+		player.auto_dir = 0.0
+		check(player.global_position.x > rx + Terrain.WATERS[river].half and player.cond.wetness < 0.05, "walked across dry (%d s)" % (crossed / 60))
+
+	# The trapper's camp, just east of the river.
+	await teleport(Terrain.TRAPPER_X)
+	await frames(5)
+	var tr := _site("trapper")
+	check(tr != null and Player.choices_of(tr, player).size() == 2, "the trapper's camp: a cache and a carving")
+	var snares := player.backpack.count_of("snare")
+	tr.interact(player)
+	await frames(60 * 4)
+	check(player.backpack.count_of("snare") == snares + 3 and Journal.has("trapper_note"), "the cache: snares and the trapper's notebook")
+	Player.choices_of(tr, player)[0][1].call()
+	check(Journal.has("carving"), "\"Don't follow the lights.\"")
+
+	# The homestead: the root cellar and the grave.
+	await teleport(Terrain.HOMESTEAD_X + 100.0)
+	await frames(5)
+	var hs := _site("homestead")
+	check(hs != null and Journal.has("homestead"), "found the old homestead")
+	hs.interact(player)
+	await frames(60 * 4)
+	check(Journal.has("diary_1") and Journal.has("diary_2") and player.backpack.count_of("tinned_beans") >= 2, "the root cellar: tins and a diary")
+	Player.choices_of(hs, player)[0][1].call()
+	check(Journal.has("grave"), "the grave: went up the ridge")
+
+	# The plane wreck past the lookout.
+	await teleport(Terrain.CRASH_X)
+	await frames(5)
+	var cr := _site("crash")
+	check(cr != null and Journal.has("crash") and world.sheltered_at(Terrain.CRASH_X - 40.0), "the plane wreck in the burn: shelter inside the fuselage")
+	check(Player.choices_of(cr, player).size() == 3, "cockpit, cargo, footprints")
+	Player.choices_of(cr, player)[0][1].call()
+	await frames(60 * 4)
+	check(player.backpack.count_of("flare") == 2 and Journal.has("pilot_log"), "the cockpit: flares and the pilot's log")
+	Player.choices_of(cr, player)[0][1].call()
+	await frames(60 * 4)
+	check((player.backpack.count_of("sealed_case") == 1 or (player.held and player.held.def.id == "sealed_case") or get_tree().get_nodes_in_group("interactable").any(func(n): return n is WorldItem and n.stack.def.id == "sealed_case")) and Journal.has("survivor_note"), "the cargo: a sealed case, and M's note")
+	check(world.seen(Terrain.WORLD_MAX - 1000.0), "the survey map fills in the basin")
+
+	# A flare scatters wolves.
+	var wolf := _wl().spawn_predator(Wildlife.WOLF, player.global_position.x + 900.0, 9)
+	player.hold(player.backpack.find(func(st): return st.def.id == "flare"))
+	player.use_held()
+	await frames(10)
+	check(wolf.state == Predator.State.FLEE and player.held != null and player.held.count == 1, "a flare goes up and the wolf runs")
+	wolf.queue_free()
+
+	# The far lights, at night, from the east.
+	var bd: Backdrop = get_tree().get_root().find_children("*", "Backdrop", true, false)[0]
+	var night := floorf(GameClock.clock.hours / 24.0) * 24.0
+	for d in 3: # two nights in three: find one of them
+		GameClock.clock.hours = night + d * 24.0 + 23.5
+		if hash([GameClock.clock.day(), "lights"]) % 3 != 0:
+			break
+	await frames(90)
+	check(bd._far_lights.visible and bd._far_lights.modulate.a > 0.1, "lights over the far range at night")
+
+	# An old save's map (the valley only) grows to the whole world.
+	var old := PackedByteArray()
+	old.resize(240)
+	old.fill(0)
+	old[int(Terrain.CREEK_X / World.MAP_CELL)] = 1
+	world.set_explored(old)
+	check(world.explored.size() == World.MAP_CELLS and world.seen(Terrain.CREEK_X) and not world.seen(Terrain.CREEK_X - 2000.0), "an old save's map lines up in the bigger world")
 
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)

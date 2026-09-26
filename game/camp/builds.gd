@@ -15,6 +15,7 @@ const STRUCTURES := {
 	"bait": {"name": "Bait pile", "width": 60.0, "h": 30.0, "needs": {"berries": 4}, "hours": 0.05, "seconds": 1.0},
 	"blind": {"name": "Hunting blind", "width": 160.0, "h": 105.0, "needs": {"sticks": 6}, "hours": 0.4, "seconds": 2.5},
 	"snare": {"name": "Snare", "width": 40.0, "h": 30.0, "needs": {"snare": 1}, "hours": 0.1, "seconds": 1.0},
+	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": true},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 }
 
@@ -50,6 +51,7 @@ const WHAT := {
 	"bait": "draws deer (and the bear)",
 	"blind": "hide from deer while you hunt",
 	"snare": "catches rabbits overnight",
+	"bridge": "across a creek or the river: walk over dry",
 	"cabin": "the warmest shelter: a real home",
 }
 

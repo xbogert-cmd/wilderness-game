@@ -27,6 +27,7 @@ const KINDS := {
 	"bait": preload("res://game/hunting/bait_pile.gd"),
 	"gut_pile": preload("res://game/hunting/gut_pile.gd"),
 	"snare": preload("res://game/hunting/snare.gd"),
+	"bridge": preload("res://game/camp/log_bridge.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)
@@ -45,7 +46,7 @@ func _ready() -> void:
 	dynamic.name = "Dynamic"
 	dynamic.z_index = 3
 	add_child(dynamic)
-	for x in [-40.0, Terrain.WORLD_W + 40.0]: # hard stops beyond the edge ridges
+	for x in [Terrain.WORLD_MIN - 40.0, Terrain.WORLD_MAX + 40.0]: # hard stops beyond the edge ridges
 		var wall := StaticBody2D.new()
 		var col := CollisionShape2D.new()
 		var r := RectangleShape2D.new()
@@ -81,20 +82,49 @@ func chunk_state(i: int) -> Dictionary:
 		state[key] = {"felled": {}, "picked": {}, "objects": _initial_objects(i), "left": GameClock.clock.hours}
 	return state[key]
 
+const MAP_CELLS := int((Terrain.WORLD_MAX - Terrain.WORLD_MIN) / MAP_CELL)
+
+func _cell(x: float) -> int:
+	return int(floor((x - Terrain.WORLD_MIN) / MAP_CELL))
+
+## Older saves mapped only the original valley (x from 0): pad it out to the whole world.
+func set_explored(a: PackedByteArray) -> void:
+	if a.size() == int(48000.0 / MAP_CELL):
+		var west := PackedByteArray()
+		west.resize(_cell(0.0))
+		west.fill(0)
+		west.append_array(a)
+		a = west
+	a.resize(MAP_CELLS)
+	explored = a
+
 func explore(x: float) -> void:
-	if explored.size() != int(Terrain.WORLD_W / MAP_CELL):
-		explored.resize(int(Terrain.WORLD_W / MAP_CELL))
-	for i in range(maxi(int((x - SIGHT) / MAP_CELL), 0), mini(int((x + SIGHT) / MAP_CELL) + 1, explored.size())):
+	explore_range(x - SIGHT, x + SIGHT)
+	_biome_notes(x)
+	var b := Terrain.biome(x)
+	match b:
+		"river": Journal.note("river", "Came down to the Sweetwater River, west of the valley. Wide, cold and deep enough to soak you to the chest. A bridge of logs would make it easy.")
+		"marsh": Journal.note("marsh", "West of the river the ground goes soft: a marsh of cattails and willows, and a pond. Everything that walks here leaves tracks.")
+		"sage": Journal.note("sage", "Out on the sage flats at the western edge of the valley. Open country, wind, a small creek, and not much cover.")
+		"burn": Journal.note("burn", "Down the far side of the ridge into an old burn: standing dead trees, fireweed, black ground. Quiet here.")
+		"alpine": Journal.note("alpine", "Up into a high basin with a tarn, a small cold lake under the peaks. Twisted little firs and boulders.")
+
+func explore_range(a: float, b: float) -> void:
+	if explored.size() != MAP_CELLS:
+		explored.resize(MAP_CELLS)
+	for i in range(maxi(_cell(a), 0), mini(_cell(b) + 1, explored.size())):
 		explored[i] = 1
-	if x > Terrain.FOOTHILLS_X:
+
+func _biome_notes(x: float) -> void:
+	if x > Terrain.FOOTHILLS_X and x < Terrain.RIDGE_X:
 		Journal.note("foothills", "Walked out of the creek valley into the foothills. Rockier ground, fewer aspens, and the land climbing toward the ridge and the lookout.")
 
 func reveal_all() -> void:
-	explored.resize(int(Terrain.WORLD_W / MAP_CELL))
+	explored.resize(MAP_CELLS)
 	explored.fill(1)
 
 func seen(x: float) -> bool:
-	var i := int(x / MAP_CELL)
+	var i := _cell(x)
 	return i >= 0 and i < explored.size() and explored[i] == 1
 
 func update_focus(x: float) -> void:
@@ -104,7 +134,7 @@ func update_focus(x: float) -> void:
 		if absi(i - c) > 1:
 			_unload(i)
 	for i in range(c - 1, c + 2):
-		if i >= 0 and i < Terrain.CHUNKS and not chunks.has(i):
+		if i >= Terrain.FIRST and i <= Terrain.LAST and not chunks.has(i):
 			_load(i)
 
 func _load(i: int) -> void:
@@ -155,7 +185,7 @@ func _initial_objects(i: int) -> Array:
 	var out := []
 	for k in 6:
 		var x := i * Terrain.CHUNK_W + rng.randf_range(300, Terrain.CHUNK_W - 300)
-		if terrain.water_surface_at(x) == INF and x > 500.0 and x < Terrain.WORLD_W - 500.0:
+		if terrain.water_surface_at(x) == INF and Terrain.inside(x, 500.0) and (i != 0 or x > 500.0):
 			out.append({"kind": "item", "x": x, "stack": ItemStack.make("sticks", 0.0, rng.randi_range(1, 3)).to_dict()})
 	return out
 

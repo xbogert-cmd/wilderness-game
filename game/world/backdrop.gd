@@ -7,7 +7,9 @@ class_name Backdrop extends Node2D
 const FEET_BELOW_CENTER := 250.0 ## where the player's feet sit on screen (px below centre)
 const DEPTH_RISE := 350.0 ## how far up the screen the horizon of a layer at s=0 sits
 const FOG_SHADER := preload("res://game/world/fog.gdshader")
-const CREEK_W := 2.0 * Terrain.CREEK_HALF
+## Flowing water (creeks and the river) runs off into the distance in every layer.
+static func _flowing() -> Array:
+	return Terrain.WATERS.filter(func(w): return w.kind in ["creek", "river"])
 
 var camera: Camera2D
 var player: Node2D
@@ -15,6 +17,7 @@ var layers: Array[Dictionary] = []
 var fg_items: Array[Node2D] = []
 var fog_material: ShaderMaterial
 var _far_tower: Node2D ## the lookout as a far silhouette; fades as the real one comes near
+var _far_lights: Node2D ## the lights over the eastern skyline, some nights
 var _ref_cy := 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -23,6 +26,7 @@ func build(terrain: Terrain, cam: Camera2D, focus: Node2D) -> void:
 	player = focus
 	_rng.seed = World.WORLD_SEED
 	_ref_cy = terrain.bank_y - FEET_BELOW_CENTER
+	_add_layer(0.02, 0.02, -61, 0.0, _light_layer)
 	_add_layer(0.1, 0.1, -60, 0.55, _mountains)
 	_add_layer(0.35, 0.35, -50, 0.4, _forest.bind(0.6))
 	_add_layer(0.6, 0.6, -40, 0.25, _forest.bind(0.85))
@@ -48,6 +52,29 @@ func _process(delta: float) -> void:
 	fg.modulate.a = move_toward(fg.modulate.a, 0.0 if camera.zoom.x < 0.75 else 1.0, delta * 1.5)
 	if _far_tower:
 		_far_tower.modulate.a = 1.0 - smoothstep(Terrain.RIDGE_X - 8000.0, Terrain.RIDGE_X - 3000.0, c.x)
+	_lights(delta, c.x)
+
+## After dark, from the ridge or anywhere east of it: pale lights drifting low along the far
+## skyline, past the edge of the map. Not every night, and never for long.
+func _lights(delta: float, cx: float) -> void:
+	if _far_lights == null:
+		return
+	var clock := GameClock.clock
+	var night := clock.daylight() < 0.05 and GameClock.weather.cloud < 0.7
+	var tonight := hash([clock.day(), "lights"]) % 3 != 0 # two nights in three
+	var h := clock.hour_of_day()
+	var want := 1.0 if night and tonight and (h > 22.0 or h < 3.0) and cx > Terrain.RIDGE_X - 4000.0 else 0.0
+	_far_lights.modulate.a = move_toward(_far_lights.modulate.a, want, delta * (0.15 if Engine.get_frames_drawn() > 400 else 5.0)) # (already there if you arrive at night)
+	_far_lights.visible = _far_lights.modulate.a > 0.01
+	if _far_lights.visible:
+		var t := Time.get_ticks_msec() / 1000.0
+		for i in _far_lights.get_child_count():
+			var l: Node2D = _far_lights.get_child(i)
+			l.position.x = l.get_meta("x0") + sin(t * 0.05 + i * 1.7) * 60.0
+			l.position.y = l.get_meta("y0") + sin(t * 0.13 + i) * 8.0
+			l.modulate.a = 0.6 + 0.4 * sin(t * (0.7 + i * 0.3))
+		if cx > Terrain.RIDGE_X - 3000.0 and _far_lights.modulate.a > 0.5:
+			Journal.note("lights_seen", "Saw them myself tonight: pale lights low along the skyline, far to the east, past the basin. Moving slow, together. Not fire, not stars. The keeper and the pilot weren't imagining things.")
 
 func _fade_foreground(delta: float) -> void:
 	var p := player.get_global_transform_with_canvas().origin
@@ -60,7 +87,7 @@ func _fade_foreground(delta: float) -> void:
 		item.modulate.a = move_toward(item.modulate.a, 0.22 if covers else 1.0, delta * 2.5)
 
 func _span(s: float) -> Vector2:
-	return Vector2(-1800.0, Terrain.WORLD_W * s + 1800.0)
+	return Vector2(Terrain.WORLD_MIN * s - 1800.0, Terrain.WORLD_MAX * s + 1800.0)
 
 func _hills(s: float, freq: float) -> FastNoiseLite:
 	var n := FastNoiseLite.new()
@@ -70,7 +97,10 @@ func _hills(s: float, freq: float) -> FastNoiseLite:
 	return n
 
 func _ground_line(s: float, n: FastNoiseLite, amp: float, x: float) -> float:
-	var fade := smoothstep(CREEK_W * s, CREEK_W * s + 900.0 * s, absf(x - Terrain.CREEK_X * s))
+	var fade := 1.0
+	for w in _flowing():
+		var cw: float = 2.0 * w.half
+		fade = minf(fade, smoothstep(cw * s, cw * s + 900.0 * s, absf(x - w.x * s)))
 	return n.get_noise_1d(x) * amp * fade
 
 # --- Layers ------------------------------------------------------------------
@@ -88,7 +118,7 @@ func _mountains(node: Node2D, s: float, mat: Material) -> void:
 		var yf := -120.0 - absf(n.get_noise_1d(x)) * 330.0
 		back.append(Vector2(x, yb))
 		front.append(Vector2(x, yf))
-		if x > Terrain.WORLD_W * s * 0.75 and yf < peak.y:
+		if absf(x - Terrain.LOOKOUT_X * s) < 400.0 and yf < peak.y: # the highest point near the real lookout
 			peak = Vector2(x, yf)
 		x += 30.0
 	for ridge in [[back, Palette.MOUNTAIN.lightened(0.18)], [front, Palette.MOUNTAIN]]:
@@ -109,6 +139,40 @@ func _mountains(node: Node2D, s: float, mat: Material) -> void:
 	node.add_child(tower)
 	_far_tower = tower
 
+
+## The lights, on a layer so far off it barely moves: always somewhere off to the east over the
+## far range, beyond the edge of the map. Each carries a small light so the night can't dim it.
+func _light_layer(node: Node2D, s: float, _mat: Material) -> void:
+	_far_lights = Node2D.new()
+	_far_lights.modulate.a = 0.0
+	_far_lights.visible = false
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, 0.0)
+	tex.width = 64
+	tex.height = 64
+	for i in 4:
+		var l := Node2D.new()
+		var x0 := (Terrain.WORLD_MAX - 1000.0) * s + i * 55.0
+		l.set_meta("x0", x0)
+		l.set_meta("y0", -345.0 - (i % 2) * 26.0)
+		l.position = Vector2(x0, l.get_meta("y0"))
+		for k in 3:
+			l.add_child(SceneryArt.poly(SceneryArt.blob(Vector2.ZERO, 9.0 + k * 10.0, _rng, 10, 0.05), Color(0.8, 0.95, 1.0, 0.85 - k * 0.3), null))
+		var glow := PointLight2D.new()
+		glow.texture = tex
+		glow.texture_scale = 3.0
+		glow.color = Color(0.75, 0.92, 1.0)
+		glow.energy = 1.6
+		l.add_child(glow)
+		_far_lights.add_child(l)
+	node.add_child(_far_lights)
+
 func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 	var span := _span(s)
 	var n := _hills(s, 1.0 / (2400.0 * s))
@@ -123,26 +187,46 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 	ground.append(Vector2(span.x, 3000))
 	node.add_child(SceneryArt.poly(ground, Palette.SOIL_TOP.lerp(Palette.GRASS, 0.45).darkened(0.15), mat, 0.0, SceneryArt.GROUND))
 
-	# Creek ribbon: this layer's slice of the watercourse, widening toward the next nearer layer.
-	var cx := Terrain.CREEK_X * s
-	var w_far := CREEK_W * s * s
-	var w_near := CREEK_W * s_next * s_next
-	var strip := DEPTH_RISE * (s_next - s) + 20.0
-	node.add_child(SceneryArt.poly(PackedVector2Array([
-		Vector2(cx - w_far * 0.5, -2), Vector2(cx + w_far * 0.5, -2),
-		Vector2(cx + w_near * 0.5, strip), Vector2(cx - w_near * 0.5, strip)]), Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat, 0.0, SceneryArt.WATER))
+	# Creek and river ribbons: this layer's slice of each watercourse, widening toward the next nearer layer.
+	var gaps := []
+	for wd in _flowing():
+		var cx: float = wd.x * s
+		var w_far: float = 2.0 * wd.half * s * s
+		var w_near: float = 2.0 * wd.half * s_next * s_next
+		var strip := DEPTH_RISE * (s_next - s) + 20.0
+		node.add_child(SceneryArt.poly(PackedVector2Array([
+			Vector2(cx - w_far * 0.5, -2), Vector2(cx + w_far * 0.5, -2),
+			Vector2(cx + w_near * 0.5, strip), Vector2(cx - w_near * 0.5, strip)]), Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat, 0.0, SceneryArt.WATER))
+		gaps.append([cx, w_far * 0.5 + 60.0 * s])
+	for wd in Terrain.WATERS: # ponds and the tarn: open water in the near layers, no trees standing in it
+		if wd.kind in ["creek", "river"] or s < 0.5:
+			continue
+		var cx: float = wd.x * s
+		var hw: float = wd.half * s * 1.3
+		node.add_child(SceneryArt.poly(PackedVector2Array([Vector2(cx - hw, -1), Vector2(cx + hw, -1), Vector2(cx + hw * 0.9, 14), Vector2(cx - hw * 0.9, 14)]),
+			Palette.WATER.lerp(Palette.WATER_LIGHT, 0.35), mat, 0.0, SceneryArt.WATER))
+		gaps.append([cx, hw + 80.0 * s])
 
 	var h_min := 1100.0 * s * s
 	var h_max := 1700.0 * s * s
 	var gap := 220.0 * s
 	x = span.x
 	while x < span.y:
-		if absf(x - cx) > w_far * 0.5 + 60.0 * s:
+		if not gaps.any(func(g): return absf(x - g[0]) < g[1]):
 			var roll := _rng.randf()
 			var tree: Node2D
 			var detail := s > 0.5
 			var fh := Terrain.foothills(x / s) # the same thinning east as the gameplay plane
-			if roll > 0.9 - 0.2 * fh:
+			var b := Terrain.biome(x / s)
+			if b == "burn" and roll < 0.75:
+				tree = SceneryArt.snag(_rng, _rng.randf_range(h_min, h_max) * 0.8, mat)
+			elif (b == "sage" or b == "marsh") and roll < 0.85:
+				tree = SceneryArt.bush(_rng, _rng.randf_range(80.0, 160.0) * s, Color("7f8a62") if b == "sage" else Color("6f7f45"), mat)
+			elif b == "sage": # junipers: short and dark
+				tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max) * 0.35, Color("2f4a3e"), Color("2f4a3e"), Palette.BARK, mat)
+			elif b == "alpine" and roll < 0.5:
+				tree = SceneryArt.rock(_rng, _rng.randf_range(120.0, 300.0) * s, mat)
+			elif roll > 0.9 - 0.2 * fh:
 				tree = SceneryArt.rock(_rng, _rng.randf_range(90.0, 260.0) * s, mat) if fh > 0.5 else SceneryArt.bush(_rng, 160.0 * s, Palette.BUSH, mat)
 			elif roll < 0.6:
 				tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max), Palette.FIR_DARK, Palette.FIR_LIGHT if detail else Palette.FIR_DARK, Palette.BARK, mat)
@@ -166,7 +250,6 @@ func _fog(node: Node2D, s: float, _mat: Material) -> void:
 func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 	var span := _span(s)
 	var mat := SceneryArt.material(0.0, 10.0)
-	var cx := Terrain.CREEK_X * s
 	var line := PackedVector2Array()
 	var x := span.x
 	while x <= span.y:
@@ -176,15 +259,19 @@ func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 	ground.append(Vector2(span.y, 2000))
 	ground.append(Vector2(span.x, 2000))
 	node.add_child(SceneryArt.poly(ground, Palette.FG_DARK, mat, 0.0, SceneryArt.GROUND))
-	# Near reach of the creek, flowing out toward the viewer.
-	var w := CREEK_W * s * s
-	node.add_child(SceneryArt.poly(PackedVector2Array([
-		Vector2(cx - w * 0.5, -6), Vector2(cx + w * 0.5, -6),
-		Vector2(cx + w * 0.8, 700), Vector2(cx - w * 0.8, 700)]), Palette.WATER.darkened(0.45), mat, 0.0, SceneryArt.WATER))
+	# Near reaches of the creeks and the river, flowing out toward the viewer.
+	var near := []
+	for wd in _flowing():
+		var cx: float = wd.x * s
+		var w: float = 2.0 * wd.half * s * s
+		node.add_child(SceneryArt.poly(PackedVector2Array([
+			Vector2(cx - w * 0.5, -6), Vector2(cx + w * 0.5, -6),
+			Vector2(cx + w * 0.8, 700), Vector2(cx - w * 0.8, 700)]), Palette.WATER.darkened(0.45), mat, 0.0, SceneryArt.WATER))
+		near.append([cx, w * 0.6 + 150.0])
 	x = span.x
 	while x < span.y:
 		x += _rng.randf_range(500, 1500)
-		if absf(x - cx) < w * 0.6 + 150.0:
+		if near.any(func(g): return absf(x - g[0]) < g[1]):
 			continue
 		var item: Node2D
 		if _rng.randf() < 0.35:

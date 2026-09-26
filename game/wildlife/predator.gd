@@ -212,7 +212,7 @@ func _act(delta: float) -> void:
 		State.ROAM:
 			speed = trot * 0.6
 			if absf(_target_x - position.x) < 60.0 or _timer <= 0.0:
-				_target_x = clampf(home_x + _rng.randf_range(-def.home_range, def.home_range), Animal.EDGE, Terrain.WORLD_W - Animal.EDGE)
+				_target_x = clampf(home_x + _rng.randf_range(-def.home_range, def.home_range), Terrain.WORLD_MIN + Animal.EDGE, Terrain.WORLD_MAX - Animal.EDGE)
 				_timer = _rng.randf_range(8.0, 16.0)
 			facing = int(signf(_target_x - position.x)) if absf(_target_x - position.x) > 5.0 else facing
 		State.SEEK:
@@ -286,7 +286,7 @@ func _spread() -> float:
 
 func _move(delta: float) -> void:
 	var step := speed * facing * delta
-	var nx := clampf(position.x + step, Animal.EDGE, Terrain.WORLD_W - Animal.EDGE)
+	var nx := clampf(position.x + step, Terrain.WORLD_MIN + Animal.EDGE, Terrain.WORLD_MAX - Animal.EDGE)
 	if state != State.FLEE and _off_limits(nx) and not _off_limits(position.x):
 		nx = position.x # stop at the edge of the camp's light
 		speed = 0.0

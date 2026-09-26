@@ -65,7 +65,7 @@ static func active_at(species: SpeciesDef, h: float) -> bool:
 ## Where it's heading when calm: a bait pile it can smell, else its end of the game trail.
 func _goal() -> float:
 	if leaving:
-		return clampf(position.x + signf(position.x - _spooked_x) * 3000.0, EDGE, Terrain.WORLD_W - EDGE)
+		return clampf(position.x + signf(position.x - _spooked_x) * 3000.0, Terrain.WORLD_MIN + EDGE, Terrain.WORLD_MAX - EDGE)
 	if GameClock.clock.hours < _lure_until:
 		return _lure_x
 	if _active():
@@ -95,7 +95,7 @@ func _physics_process(delta: float) -> void:
 	if _timer <= 0.0:
 		_routine()
 	var step := speed * facing * delta
-	var nx := clampf(position.x + step, EDGE, Terrain.WORLD_W - EDGE)
+	var nx := clampf(position.x + step, Terrain.WORLD_MIN + EDGE, Terrain.WORLD_MAX - EDGE)
 	if state != State.FLEE and near_camp(nx) and not near_camp(position.x): # turn away from camp
 		nx = position.x
 		facing = -facing

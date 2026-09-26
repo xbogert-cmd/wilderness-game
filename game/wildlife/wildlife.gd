@@ -44,8 +44,8 @@ static func trail(i: int) -> Vector2:
 	rng.seed = hash([World.WORLD_SEED, i, "trail"])
 	var bed := i * Terrain.CHUNK_W + rng.randf_range(900.0, Terrain.CHUNK_W - 900.0)
 	var feed := bed + (1.0 if rng.randf() < 0.5 else -1.0) * rng.randf_range(1600.0, 2600.0)
-	feed = clampf(feed, Animal.EDGE + 200.0, Terrain.WORLD_W - Animal.EDGE - 200.0)
-	return Vector2(clampf(bed, Animal.EDGE + 200.0, Terrain.WORLD_W - Animal.EDGE - 200.0), feed)
+	feed = clampf(feed, Terrain.WORLD_MIN + Animal.EDGE + 200.0, Terrain.WORLD_MAX - Animal.EDGE - 200.0)
+	return Vector2(clampf(bed, Terrain.WORLD_MIN + Animal.EDGE + 200.0, Terrain.WORLD_MAX - Animal.EDGE - 200.0), feed)
 
 ## Tops up the herd around the player and lets far-off deer go.
 func _manage_herd() -> void:
@@ -71,7 +71,7 @@ func _manage_herd() -> void:
 	sides.shuffle()
 	for side in sides:
 		var x: float = px + side * _rng.randf_range(maxf(SPAWN_RANGE.x, view + 200.0), SPAWN_RANGE.y)
-		if x < Animal.EDGE + 200.0 or x > Terrain.WORLD_W - Animal.EDGE - 200.0 or not world.chunks.has(world.terrain.chunk_of(x)):
+		if not Terrain.inside(x, Animal.EDGE + 200.0) or not world.chunks.has(world.terrain.chunk_of(x)):
 			continue
 		var t := trail(world.terrain.chunk_of(x))
 		var lo := minf(t.x, t.y)
@@ -144,7 +144,7 @@ func _food_near(x: float, reach: float, kind: String) -> Node:
 ## A spot on one side, beyond the edge of the screen, in a loaded chunk and not at a camp.
 func _out_of_sight(px: float, side: float, view: float) -> float:
 	var x := px + side * _rng.randf_range(maxf(1800.0, view + 250.0), 4200.0)
-	if x < Animal.EDGE + 200.0 or x > Terrain.WORLD_W - Animal.EDGE - 200.0 or not world.chunks.has(world.terrain.chunk_of(x)) \
+	if not Terrain.inside(x, Animal.EDGE + 200.0) or not world.chunks.has(world.terrain.chunk_of(x)) \
 			or Predator.safe_at(get_tree(), x) or world.terrain.water_surface_at(x) != INF:
 		return NAN
 	return x
@@ -165,7 +165,7 @@ func _manage_rabbits() -> void:
 	if not dawn_dusk or get_tree().get_nodes_in_group("small_game").size() >= 2:
 		return
 	var x := player.global_position.x + player.facing * _rng.randf_range(800.0, 1300.0)
-	if x < Animal.EDGE or x > Terrain.WORLD_W - Animal.EDGE or world.terrain.water_surface_at(x) != INF:
+	if not Terrain.inside(x, Animal.EDGE) or world.terrain.water_surface_at(x) != INF:
 		return
 	var r := Rabbit.new()
 	r.world = world
@@ -223,7 +223,7 @@ func _process(delta: float) -> void:
 		var day := GameClock.clock.daylight() > 0.25 and GameClock.weather.precip < 0.3
 		if day and get_tree().get_nodes_in_group("birds").size() < 2:
 			var x := player.global_position.x + player.facing * _rng.randf_range(700.0, 1100.0)
-			if world.terrain.water_surface_at(x) == INF and x > Animal.EDGE and x < Terrain.WORLD_W - Animal.EDGE:
+			if world.terrain.water_surface_at(x) == INF and Terrain.inside(x, Animal.EDGE):
 				var flock := BirdFlock.new()
 				flock.world = world
 				flock.player = player

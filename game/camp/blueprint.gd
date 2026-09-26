@@ -26,6 +26,8 @@ func load_state(d: Dictionary, _elapsed: float) -> void:
 	for k in delivered:
 		delivered[k] = int(delivered[k])
 	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)))
+	if def().has("water") and world.terrain.water_index(global_position.x) >= 0: # a bridge's outline sits at bank height
+		global_position.y = world.terrain.surface_of(world.terrain.water_index(global_position.x)) - 40.0
 
 func to_state() -> Dictionary:
 	return {"kind": "blueprint", "build": build_id, "x": global_position.x, "delivered": delivered}
@@ -39,8 +41,16 @@ func complete() -> bool:
 			return false
 	return true
 
-func interact_pos() -> Vector2:
-	return global_position
+func interact_pos() -> Vector2: # anywhere along a wide one (a bridge's is the whole span)
+	var p: Player = get_tree().get_first_node_in_group("player")
+	var half := maxf(width(), _span()) * 0.5
+	return Vector2(clampf(p.global_position.x, global_position.x - half, global_position.x + half), global_position.y) if p else global_position
+
+func _span() -> float:
+	if not def().has("water"):
+		return 0.0
+	var i := world.terrain.water_index(global_position.x)
+	return Terrain.WATERS[i].half * 2.0 + 180.0 if i >= 0 else 0.0
 
 func interact_label(p: Player) -> String:
 	if complete():
@@ -109,7 +119,7 @@ static func host_at(tree: SceneTree, kind: String, x: float, reach := 40.0) -> N
 	return best
 
 func _draw() -> void:
-	var w := width()
+	var w := maxf(width(), _span())
 	var c := Color(0.95, 0.9, 0.7, 0.55)
 	var h: float = def().h
 	draw_rect(Rect2(-w * 0.5, -h, w, h), c, false, 2.0)

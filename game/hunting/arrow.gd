@@ -40,7 +40,7 @@ func _physics_process(delta: float) -> void:
 		if p.y >= ground or (water != INF and p.y >= water):
 			_land(p, water == INF)
 			return
-	if _life <= 0.0 or position.x < 0.0 or position.x > Terrain.WORLD_W:
+	if _life <= 0.0 or not Terrain.inside(position.x):
 		queue_free()
 
 ## Deer, wolves, the bear, rabbits: anything an arrow can strike.

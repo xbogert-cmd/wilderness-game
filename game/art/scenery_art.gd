@@ -206,3 +206,55 @@ static func grass(rng: RandomNumberGenerator, xs: PackedFloat32Array, ys: Packed
 	p.color = color
 	p.material = mat
 	return p
+
+## Cattails and reeds in a clump: thin blades, a few brown seed heads.
+static func reeds(rng: RandomNumberGenerator, w: float, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var blades := []
+	var heads := []
+	for i in rng.randi_range(9, 15):
+		var x := rng.randf_range(-w * 0.5, w * 0.5)
+		var h := rng.randf_range(110.0, 190.0)
+		var tip := Vector2(x + rng.randf_range(-14, 14), -h)
+		blades.append(PackedVector2Array([Vector2(x - 2.0, 4), Vector2(x + 2.0, 4), tip]))
+		if rng.randf() < 0.45:
+			var hc := Vector2(x, -h * 0.82)
+			heads.append(PackedVector2Array([hc + Vector2(-4, -14), hc + Vector2(4, -14), hc + Vector2(4, 14), hc + Vector2(-4, 14)]))
+	n.add_child(multi(blades, Color("6f7d42"), mat, 190.0, GRASS))
+	if heads:
+		n.add_child(multi(heads, Color("5a3f2a"), mat, 190.0))
+	return n
+
+## A fire-killed tree: a charred trunk and a few broken stubs, no foliage.
+static func snag(rng: RandomNumberGenerator, h: float, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var tw := maxf(h * 0.026, 3.0)
+	var lean := rng.randf_range(-0.05, 0.05) * h
+	var char_c := Color("2a2522")
+	n.add_child(poly(PackedVector2Array([Vector2(-tw, 4), Vector2(tw, 4), Vector2(lean + tw * 0.3, -h), Vector2(lean - tw * 0.3, -h * 0.97)]), char_c, mat, h))
+	var stubs := []
+	for i in rng.randi_range(3, 6):
+		var t := rng.randf_range(0.3, 0.85)
+		var y := -h * t
+		var x := lean * t
+		var side := 1.0 if rng.randf() < 0.5 else -1.0
+		var l := rng.randf_range(0.06, 0.14) * h
+		stubs.append(PackedVector2Array([Vector2(x, y), Vector2(x, y - tw), Vector2(x + side * l, y - l * 0.5 - tw * 0.5), Vector2(x + side * l, y - l * 0.5)]))
+	n.add_child(multi(stubs, char_c, mat, h))
+	n.add_child(poly(PackedVector2Array([Vector2(-tw * 0.9, -h * 0.1), Vector2(-tw * 0.3, -h * 0.35), Vector2(-tw * 0.2, -h * 0.1)]), Color("8a7a6a"), mat, h)) # silvered weathering
+	return n
+
+## Fireweed: tall stems with a spike of pink flowers, first to come back after a fire.
+static func fireweed(rng: RandomNumberGenerator, w: float, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var stems := []
+	var flowers := []
+	for i in rng.randi_range(4, 8):
+		var x := rng.randf_range(-w * 0.5, w * 0.5)
+		var h := rng.randf_range(70.0, 130.0)
+		stems.append(PackedVector2Array([Vector2(x - 1.5, 4), Vector2(x + 1.5, 4), Vector2(x, -h)]))
+		for k in 4:
+			flowers.append(blob(Vector2(x + rng.randf_range(-3, 3), -h + k * 9.0), 4.5 - k * 0.6, rng, 6, 0.2))
+	n.add_child(multi(stems, Color("5d6e3a"), mat, 130.0, GRASS))
+	n.add_child(multi(flowers, Color("c0569a"), mat, 130.0, LEAF))
+	return n

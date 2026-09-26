@@ -9,7 +9,7 @@ const INK := Color(0.22, 0.18, 0.13)
 const TEXT := Color(0.93, 0.9, 0.83)
 const MAP := Rect2(70, 130, 1780, 400)
 const H_TOP := -3000.0 ## terrain y at the top of the map strip
-const H_BOTTOM := 400.0
+const H_BOTTOM := 700.0
 
 var player: Player
 var world: World
@@ -63,7 +63,7 @@ func _fill_journal() -> void:
 		_list.add_child(l)
 
 func _mx(x: float) -> float:
-	return MAP.position.x + x / Terrain.WORLD_W * MAP.size.x
+	return MAP.position.x + (x - Terrain.WORLD_MIN) / (Terrain.WORLD_MAX - Terrain.WORLD_MIN) * MAP.size.x
 
 func _my(y: float) -> float:
 	return MAP.position.y + (y - H_TOP) / (H_BOTTOM - H_TOP) * MAP.size.y
@@ -92,8 +92,8 @@ func _draw() -> void:
 	# Ground profile, one explored cell at a time; unknown ground stays as blank paper.
 	var cell := World.MAP_CELL
 	var snowy := GameClock.weather.snow_cm > 2.0
-	var x := 0.0
-	while x < Terrain.WORLD_W:
+	var x := Terrain.WORLD_MIN
+	while x < Terrain.WORLD_MAX:
 		if world.seen(x):
 			var a := _ground(x)
 			var b := _ground(x + cell)
@@ -102,14 +102,18 @@ func _draw() -> void:
 		else:
 			draw_line(Vector2(_mx(x), MAP.end.y - 6), Vector2(_mx(x + cell), MAP.end.y - 6), Color(INK, 0.25), 1.0)
 		x += cell
-	# The creek.
-	if world.seen(Terrain.CREEK_X):
-		var cx := _mx(Terrain.CREEK_X)
-		var cw := maxf(Terrain.CREEK_HALF * 2.0 / Terrain.WORLD_W * MAP.size.x, 4.0)
-		draw_rect(Rect2(cx - cw * 0.5, _my(world.terrain.bank_y) - 2, cw, 10), Color(0.72, 0.84, 0.9) if Creek.frozen() else Color(0.3, 0.5, 0.62))
-		_label(Vector2(cx, _my(world.terrain.bank_y) + 34), "Rattlesnake Creek")
+	# Creeks, the river, the pond and the tarn, where you've seen them.
+	for i in Terrain.WATERS.size():
+		var wd: Dictionary = Terrain.WATERS[i]
+		if not world.seen(wd.x):
+			continue
+		var cx := _mx(wd.x)
+		var cw := maxf(wd.half * 2.0 / (Terrain.WORLD_MAX - Terrain.WORLD_MIN) * MAP.size.x, 4.0)
+		var sy := _my(world.terrain.surface_of(i))
+		draw_rect(Rect2(cx - cw * 0.5, sy - 2, cw, 10), Color(0.72, 0.84, 0.9) if Creek.frozen() else Color(0.3, 0.5, 0.62))
+		_label(Vector2(cx, sy + 34 + (18 if i % 2 else 0)), wd.name)
 	# Game trails, where you've seen them.
-	for i in Terrain.CHUNKS:
+	for i in range(Terrain.FIRST, Terrain.LAST + 1):
 		var t := Wildlife.trail(i)
 		var tx := minf(t.x, t.y)
 		while tx < maxf(t.x, t.y):
@@ -133,6 +137,13 @@ func _draw() -> void:
 		draw_line(l + Vector2(6, 0), l + Vector2(3, -30), INK, 2.0)
 		draw_rect(Rect2(l + Vector2(-8, -40), Vector2(16, 10)), INK)
 		_label(l + Vector2(0, -50), "Fire lookout")
+	for sx in Site.PLACES: # places people left behind
+		if world.seen(sx):
+			var g := _ground(sx)
+			draw_line(g + Vector2(-8, 0), g + Vector2(0, -14), INK, 2.0)
+			draw_line(g + Vector2(8, 0), g + Vector2(0, -14), INK, 2.0)
+			draw_line(g + Vector2(-8, 0), g + Vector2(8, 0), INK, 2.0)
+			_label(g + Vector2(0, -22), {"homestead": "Old homestead", "trapper": "Trapper's camp", "crash": "Plane wreck"}[Site.PLACES[sx]])
 	# What you've built.
 	for d in _structures():
 		var sx := float(d.get("x", 0.0))

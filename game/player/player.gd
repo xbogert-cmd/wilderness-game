@@ -468,6 +468,12 @@ func use_held() -> void:
 		if not held.water_clean:
 			cond.health -= Creek.DIRTY_HEALTH_COST
 			message.emit("Gritty creek water. Boiling it first would be safer.")
+	elif d.has("flare"):
+		var f := Flare.new()
+		f.position = global_position + Vector2(facing * 20.0, -170.0)
+		world.add_child(f)
+		message.emit("The flare streaks up and bursts red over the trees.")
+		_consume_one()
 	elif d.id == "sleeping_bag":
 		sleep()
 	elif d.has("medical"):

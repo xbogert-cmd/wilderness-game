@@ -41,9 +41,12 @@ func _cast() -> void:
 	if s == INF:
 		player.message.emit("Cast toward open water.")
 		return
-	var creek: Creek = get_tree().get_first_node_in_group("creek")
+	var creek := Creek.at(get_tree(), x)
+	if creek and not creek.w().fish:
+		player.message.emit("Nothing but minnows in this %s." % creek.kind())
+		return
 	if Creek.frozen() and not (creek and creek.hole_open()):
-		player.message.emit("The creek is frozen. Chop a hole in the ice first.")
+		player.message.emit("The %s is frozen. Chop a hole in the ice first." % (creek.kind() if creek else "water"))
 		return
 	if player.wade_depth > 60.0:
 		player.message.emit("Too deep to cast from here.")

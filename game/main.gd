@@ -120,7 +120,7 @@ func _ready() -> void:
 	if save and save.has("journal"):
 		Journal.current.from_dict(save.journal)
 	if save and save.has("explored"):
-		world.explored = PackedByteArray(save.explored)
+		world.set_explored(PackedByteArray(save.explored))
 	Journal.current.written.connect(func(t: String): player.message.emit("Journal: \"%s…\"  (%s)" % [t.left(48).strip_edges(), Keys.label("map")]))
 	Journal.note("start", "Day one. Came in on the Rattlesnake Creek trail with a pack, a hatchet and a knife. The valley's quiet. The old fire lookout stands on the east ridge; the sign says a mile to the creek.")
 	tips = Tips.new()
@@ -440,7 +440,7 @@ func _shot(path: String) -> void:
 func _tour() -> void:
 	var failures := 0
 	var xs := []
-	for i in Terrain.CHUNKS:
+	for i in range(Terrain.FIRST, Terrain.LAST + 1):
 		xs.append((i + 0.5) * Terrain.CHUNK_W)
 	var back := xs.duplicate()
 	back.reverse()
@@ -452,7 +452,7 @@ func _tour() -> void:
 		var c := world.terrain.chunk_of(player.global_position.x)
 		var want := []
 		for i in range(c - 1, c + 2):
-			if i >= 0 and i < Terrain.CHUNKS:
+			if i >= Terrain.FIRST and i <= Terrain.LAST:
 				want.append(i)
 		var have: Array = world.chunks.keys()
 		have.sort()

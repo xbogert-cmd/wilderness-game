@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tinned_beans"
+name = "Tin of Beans"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.45
+color = Color(0.541, 0.561, 0.580, 1)
+tags = PackedStringArray("food")
+max_stack = 3
+food = 30.0
+description = "Old but sealed. Keeps forever."

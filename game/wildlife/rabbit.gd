@@ -32,7 +32,7 @@ func _physics_process(delta: float) -> void:
 		elif randf() < 0.5:
 			facing = -facing
 		_from = position.x
-		_to = clampf(position.x + facing * (FLEE_HOP if fleeing else HOP), Animal.EDGE, Terrain.WORLD_W - Animal.EDGE)
+		_to = clampf(position.x + facing * (FLEE_HOP if fleeing else HOP), Terrain.WORLD_MIN + Animal.EDGE, Terrain.WORLD_MAX - Animal.EDGE)
 		if world.terrain.water_surface_at(_to) != INF and not Creek.frozen():
 			_to = position.x
 		_hop = 0.0

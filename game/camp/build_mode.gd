@@ -62,8 +62,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				player.message.emit("Blueprint placed. Bring the materials and press E.")
 				_cancel()
 			else:
-				player.message.emit("A pot tripod goes over a campfire that doesn't have one." if Builds.STRUCTURES[build_id].has("on") \
-					else "Can't build there: needs level, dry ground with space.")
+				var bd: Dictionary = Builds.STRUCTURES[build_id]
+				player.message.emit("A pot tripod goes over a campfire that doesn't have one." if bd.has("on") \
+					else ("A bridge goes over a creek or the river: stand by the bank." if bd.has("water") else "Can't build there: needs level, dry ground with space."))
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("aim") or event.is_action_pressed("menu"):
 			_cancel()
@@ -84,7 +85,13 @@ func _process(_delta: float) -> void:
 		return
 	var x := clampf(player.aim_point().x, player.global_position.x - RANGE, player.global_position.x + RANGE)
 	var d: Dictionary = Builds.STRUCTURES[build_id]
-	if d.has("on"): # snaps onto the nearest host, e.g. a tripod over a campfire
+	if d.has("water"): # a bridge goes over the nearest creek or river
+		var i := world.terrain.water_index(x, 900.0)
+		var flowing: bool = i >= 0 and Terrain.WATERS[i].kind in ["creek", "river"]
+		if flowing:
+			x = Terrain.WATERS[i].x
+		_ok = flowing and not get_tree().get_nodes_in_group("structure").any(func(s): return absf(s.global_position.x - x) < 10.0)
+	elif d.has("on"): # snaps onto the nearest host, e.g. a tripod over a campfire
 		var host := Blueprint.host_at(get_tree(), d.on, x, RANGE)
 		if host:
 			x = host.global_position.x

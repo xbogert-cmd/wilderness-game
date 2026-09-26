@@ -26,8 +26,8 @@ func _ready() -> void:
 	creek.bus = &"Ambience"
 	creek.max_distance = 3200.0
 	creek.attenuation = 1.6
-	creek.position = Vector2(Terrain.CREEK_X, terrain.water_surface_at(Terrain.CREEK_X))
 	add_child(creek)
+	_place_creek()
 	creek.play(_rng.randf() * 30.0)
 	music = AudioStreamPlayer.new()
 	music.stream = load("res://assets/audio/music/storm_cue.wav")
@@ -49,7 +49,21 @@ func _bed(n: String, bus: StringName) -> AudioStreamPlayer:
 	p.play(_rng.randf() * 20.0) # desync loops so seams never line up
 	return p
 
+## The water sound sits on whichever creek or river is nearest (the river runs louder).
+func _place_creek() -> void:
+	var best := -1
+	for i in Terrain.WATERS.size():
+		var w: Dictionary = Terrain.WATERS[i]
+		if w.kind in ["creek", "river"] and (best < 0 or absf(w.x - player.global_position.x) < absf(Terrain.WATERS[best].x - player.global_position.x)):
+			best = i
+	var wd: Dictionary = Terrain.WATERS[best]
+	creek.position = Vector2(wd.x, terrain.surface_of(best))
+	creek.volume_db = 4.0 if wd.kind == "river" else 0.0
+	creek.max_distance = 4200.0 if wd.kind == "river" else 3200.0
+	creek.stream_paused = Creek.frozen() and GameClock.weather.ice > 0.9 # frozen hard: silence
+
 func _process(delta: float) -> void:
+	_place_creek()
 	var c := GameClock.clock
 	var w := GameClock.weather
 	var h := c.hour_of_day()
