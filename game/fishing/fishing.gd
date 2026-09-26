@@ -66,8 +66,11 @@ func _cast() -> void:
 	bobber = Vector2(x, s)
 	var depth := world.terrain.height_at(x) - s
 	_ice = through_ice
-	_species = "trout" if _rng.randf() < (0.7 if depth > 70.0 else 0.35) else "whitefish"
-	_wait = -log(1.0 - _rng.randf() * 0.98) * GameClock.tuning.bite_mean_sec * _conditions() # exponential: most bites come soon, a few make you wait
+	var water: String = creek.kind() if creek else "creek"
+	_species = FishLife.pick(water, _rng, depth > 70.0) # what lives here, and what's running
+	if _species == "salmon":
+		Journal.note("salmon_run", "The salmon are running up the Sweetwater, big red fish come up from the sea to spawn. They jump at the falls. The river's full of them till the late autumn.")
+	_wait = -log(1.0 - _rng.randf() * 0.98) * GameClock.tuning.bite_mean_sec * _conditions() * FishLife.bite_mult(water) # exponential: most bites come soon, a few make you wait
 
 ## <1 = fish bite sooner. Dawn and dusk feed best; overcast and drizzle help; cold seasons slow.
 func _conditions() -> float:

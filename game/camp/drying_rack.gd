@@ -6,7 +6,7 @@ class_name DryingRack extends Node2D
 const SLOTS := 8
 const DRY_HOURS := 12.0
 const FIRE_REACH := 420.0
-const DRYABLE := ["venison_raw", "trout_raw", "whitefish_raw"]
+const DRYABLE := ["venison_raw", "trout_raw", "whitefish_raw", "salmon_raw", "grayling_raw", "catfish_raw", "perch_raw"]
 
 var world: World
 var pieces: Array = [] ## hours dried, one per strip

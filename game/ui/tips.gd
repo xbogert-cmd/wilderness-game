@@ -74,6 +74,8 @@ func _rules() -> Array:
 		["ledge", p.underground != null and p.underground.kind == "cave", "Ledges down here work like ground: walk along them, or press {move_down} to drop through. Ropes climb with {interact}."],
 		["mine", f is Underground.Deposit or f is Underground.Block, "Hold the axe and swing ({use}) to break it."],
 		["smokehouse", f is Smokehouse, "Hang raw meat or fish inside and keep the smudge fed with sticks: about ten hours of smoke and it keeps over a month, whatever the weather."],
+		["leister", p.held != null and (p.held.def.has("leister") or p.held.def.has("spear")) and Creek.at(p.get_tree(), p.global_position.x + p.facing * 150.0) != null and not Creek.frozen(), "Fish show as shadows in the shallows. Click right where one is to spear it."],
+		["fishtrap", f is FishTrap, "Traps and nets fish while you're away. A trap keeps them alive; what's in a net is dead and spoils, so check it often. A weir across the creek funnels fish into a trap."],
 		["bearbag", f is BearBag, "Food hung high from a branch is safe. Lower it to get at it and haul it back up before you leave: on the ground, anything can have it."],
 		["cache", f is RaisedCache, "Climb the ladder ({interact}) and open the box up top; hop off with {move_down}. Nothing raids food up here, and in the cold it freezes and keeps."],
 		["raided", f is StorageChest and f.raided != "", "Food left in a chest away from camp gets raided: by the bear in its country, by mice anywhere. Keep it up off the ground."],

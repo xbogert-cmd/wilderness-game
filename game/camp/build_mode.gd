@@ -3,6 +3,9 @@ class_name BuildMode extends Node2D
 ## the player. Left click places a blueprint where it fits; right click cancels.
 
 const RANGE := 380.0
+const WATER_KINDS := {"span": ["creek", "river"], "creek": ["creek"], "fish": ["creek", "river", "pond", "lake", "pool"], "still": ["river", "pond", "lake", "pool"]}
+const WATER_WHERE := {"span": "A bridge goes over a creek or the river: stand by the bank.", "creek": "A weir goes across a creek.",
+	"fish": "A fish trap goes in water with fish in it (not while it's frozen).", "still": "A gill net goes across the river, a lake, a pond or a pool (not while it's frozen)."}
 const MAX_STEP := 40.0 ## allowed height difference across the footprint
 
 var player: Player
@@ -31,7 +34,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				var bd: Dictionary = Builds.STRUCTURES[build_id]
 				player.message.emit(("A bear bag hangs from a tall standing tree (one without a bag)." if bd.on == "tree" else "A pot tripod goes over a campfire that doesn't have one.") if bd.has("on") \
-					else ("A bridge goes over a creek or the river: stand by the bank." if bd.has("water") else "Can't build there: needs level, dry ground with space."))
+					else (WATER_WHERE[bd.water] if bd.has("water") else "Can't build there: needs level, dry ground with space."))
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("aim") or event.is_action_pressed("menu"):
 			_cancel()
@@ -51,12 +54,15 @@ func _process(_delta: float) -> void:
 		return
 	var x := clampf(player.aim_point().x, player.global_position.x - RANGE, player.global_position.x + RANGE)
 	var d: Dictionary = Builds.STRUCTURES[build_id]
-	if d.has("water"): # a bridge goes over the nearest creek or river
-		var i := world.terrain.water_index(x, 900.0)
-		var flowing: bool = i >= 0 and Terrain.WATERS[i].kind in ["creek", "river"]
-		if flowing:
-			x = Terrain.WATERS[i].x
-		_ok = flowing and not get_tree().get_nodes_in_group("structure").any(func(s): return absf(s.global_position.x - x) < 10.0)
+	if d.has("water"): # a bridge (or weir) across the nearest creek; a trap or net in the water
+		var i := world.terrain.water_index(x, 900.0 if d.water in ["span", "creek"] else 40.0) # traps and nets: aim at the water itself
+		var wd: Dictionary = Terrain.WATERS[i] if i >= 0 else {}
+		var fits_here: bool = i >= 0 and wd.kind in WATER_KINDS[d.water] and (d.water == "span" or wd.fish)
+		if fits_here:
+			x = wd.x if d.water in ["span", "creek"] else clampf(x, wd.x - wd.half + d.width * 0.5 + 20.0, wd.x + wd.half - d.width * 0.5 - 20.0)
+		var crowded := get_tree().get_nodes_in_group("structure").any(func(s): return absf(s.global_position.x - x) < (10.0 if d.water == "span" else (s.width() + d.width) * 0.4) \
+			and (d.water == "span" or s is FishTrap or s is Weir or (s is Blueprint and s.def().has("water"))))
+		_ok = fits_here and not crowded and (d.water == "span" or not Creek.frozen())
 	elif d.has("on"): # snaps onto the nearest host, e.g. a tripod over a campfire
 		var host := Blueprint.host_at(get_tree(), d.on, x, RANGE)
 		if host:

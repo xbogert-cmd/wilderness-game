@@ -16,10 +16,13 @@ const STRUCTURES := {
 	"blind": {"name": "Hunting blind", "width": 160.0, "h": 105.0, "needs": {"sticks": 6}, "hours": 0.4, "seconds": 2.5},
 	"snare": {"name": "Snare", "width": 40.0, "h": 30.0, "needs": {"snare": 1}, "hours": 0.1, "seconds": 1.0},
 	"sled": {"name": "Sled", "width": 190.0, "h": 60.0, "needs": {"medium": 1, "sticks": 6}, "hours": 1.0, "seconds": 3.5, "loose": true},
-	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": true},
+	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": "span"},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 	"smokehouse": {"name": "Smokehouse", "width": 170.0, "h": 245.0, "needs": {"medium": 3, "short": 4, "sticks": 4}, "hours": 3.0, "seconds": 5.0},
 	"cache": {"name": "Raised cache", "width": 230.0, "h": 430.0, "needs": {"long": 2, "medium": 3, "short": 2, "sticks": 6}, "hours": 4.0, "seconds": 6.0},
+	"fish_trap": {"name": "Fish trap", "width": 80.0, "h": 70.0, "needs": {"sticks": 6, "#cord": 1}, "hours": 0.5, "seconds": 3.0, "water": "fish"},
+	"weir": {"name": "Fish weir", "width": 150.0, "h": 60.0, "needs": {"sticks": 10, "short": 2}, "hours": 2.0, "seconds": 4.0, "water": "creek"},
+	"net": {"name": "Gill net", "width": 180.0, "h": 60.0, "needs": {"#cord": 3, "sticks": 2}, "hours": 0.5, "seconds": 3.0, "water": "still"},
 	"bear_bag": {"name": "Bear bag", "width": 60.0, "h": 420.0, "needs": {"hide": 1, "#cord": 1}, "hours": 0.3, "seconds": 3.0, "on": "tree"},
 }
 
@@ -34,6 +37,7 @@ const RECIPES := {
 	"deer_call": {"needs": {"sticks": 1}, "hours": 0.5, "seconds": 2.5, "bench": true},
 	"snare": {"needs": {"#cord": 1, "sticks": 1}, "hours": 0.3, "seconds": 2.0, "count": 2},
 	"spear": {"needs": {"sticks": 3}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	"fish_spear": {"needs": {"sticks": 2, "#cord": 1}, "hours": 0.8, "seconds": 3.0, "bench": true}, # a three-pronged leister
 	# Clothing. Buckskin is fair-weather gear; wolf and bear fur are what gets you through winter.
 	"buckskin_leggings": {"needs": {"hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
 	"wolf_hat": {"needs": {"#fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
@@ -45,7 +49,8 @@ const RECIPES := {
 
 ## Recipe book chapters, in order.
 const GROUPS := {
-	"Basics": ["vine_cord", "splint", "snare", "fishing_pole"],
+	"Basics": ["vine_cord", "splint", "snare"],
+	"Fishing": ["fishing_pole", "fish_spear"],
 	"Hunting": ["bow", "arrows", "spear", "deer_call"],
 	"Clothing": ["hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat", "snowshoes"],
 }
@@ -54,6 +59,7 @@ const BUILD_GROUPS := {
 	"Camp": ["campfire", "tripod", "lean_to", "woodpile", "chest", "cabin"],
 	"Work": ["workbench", "hide_frame", "drying_rack", "smokehouse", "sled", "bridge"],
 	"Food storage": ["cache", "bear_bag"],
+	"Fishing": ["fish_trap", "weir", "net"],
 	"Hunting": ["blind", "bait", "snare"],
 }
 
@@ -113,6 +119,9 @@ const WHAT := {
 	"smokehouse": "smokes meat and fish that keep over a month, in any weather",
 	"cache": "a food store up on posts: nothing raids it; food freezes and keeps",
 	"bear_bag": "food hung high from a tree branch, out of reach",
+	"fish_trap": "a basket in the current: catches fish while you're away, alive",
+	"weir": "stakes across a creek that funnel fish into a trap beside it",
+	"net": "strung across a river, lake, pond or pool: catches more, but check it often",
 }
 
 ## Cooked in the pot hanging over a lit fire, from the pot's water and ingredients gathered

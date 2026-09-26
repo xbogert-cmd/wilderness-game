@@ -76,6 +76,11 @@ godot
 
 **Winter travel:** snowshoes (bench: sticks, a tanned hide, cord; worn on the Feet slot) keep you on top of deep snow. A *sled* (build menu) carries up to four logs, a whole carcass, and a pack-sized load: over snow it runs nearly at a walk, on bare ground it drags. On frozen water chop a hole (E) and fish through it: fish gather under the ice. A blizzard (heavy snow in a hard wind) whites out the valley and its wind cuts through your clothes.
 
+**Fishing waters:** each water has its own fish. The creeks hold cutthroat trout and mountain whitefish; the Sweetwater River whitefish, trout and channel catfish (which feed at night); the marsh pond yellow perch; the Basin Tarn arctic grayling and trout; the Falls Pool big trout. In early autumn the chinook salmon run up the Sweetwater as far as the falls: you'll see them leap, the river bites far faster, and a salmon is a long, hard fight and a lot of meat. Every fish cooks, dries on the rack and smokes in the smokehouse.
+- *Fish trap* (6 sticks, cord; placed in any fishing water): a willow basket that catches fish while you're away (up to 3), still alive when you come to check it. A *fish weir* (10 sticks, 2 short logs; across a creek) funnels fish into a trap beside it: about two and a half times the catch. A *gill net* (3 cord, 2 sticks; across the river, a pond, the tarn or the pool) catches twice what a trap does (up to 5), but they're dead in it and start to spoil: check it often. Nothing's caught while the water's frozen.
+- *Fish spear* (workbench: 2 sticks, cord): a three-pronged leister. Hold it (or the hunting spear) at the water's edge and fish show as shadows in the shallows; click right where one is to spear it.
+- *Ice auger*: leaning on the post at the trapper's camp. It bores a hole in the ice in a moment (the hatchet takes a while) and the hole stays open about 20 hours instead of 8.
+
 **Keeping food:** food keeps longer in the cold: in a chest, cache or bear bag it lasts about twice as long near freezing and freezes solid below it. The root cellar's shelves (once you've searched them) stay cool all year: food there lasts about three times as long, and nothing gets in. Food left in a chest away from camp gets raided: in the bear's country (outside winter) the bear tears in and takes all of it; anywhere else mice and packrats get into some. Keep it up off the ground:
 - *Raised cache* (2 long logs, 3 medium, 2 short, 6 sticks): a roofed box on tall tin-banded posts. E at the ladder climbs up; stand on the deck and E opens it; climb down, or hop off with S. Never raided.
 - *Bear bag* (a tanned hide and cord, placed on a tall standing tree): a rope thrown over a high branch, the bag hauled up and tied off round the trunk. The rope and bag are simulated, so the bag dangles, sways and swings out in a gale. At the trunk, lower it (it comes down to you), open it, haul it back up. Up high nothing gets it; left on the ground it's fair game, and if you fell its tree the bag comes down too.
@@ -119,11 +124,12 @@ godot --headless --fixed-fps 60 -- --scenario=predators           # choices, tor
 godot --headless --fixed-fps 60 -- --scenario=frontier            # the wider world: waters, sites, bridge, flares, the lights
 godot --headless --fixed-fps 60 -- --scenario=health              # sickness, infection, frostbite, plants, stews, chests, winter travel, settings
 godot --headless --fixed-fps 60 -- --scenario=under               # cellar, cave, mine, drop-through, the dark, flint, finds, springs, falls, regrowth
+godot --headless --fixed-fps 60 -- --scenario=fish                # fish per water, the salmon run, traps, weir, net, fish spear, ice auger
 godot --headless --fixed-fps 60 -- --scenario=hunts               # wolves run down deer (or give up), kill sites, coyotes
 godot --headless --fixed-fps 60 -- --scenario=stores              # cellar shelves, raids, raised cache, bear bag physics, smokehouse
 godot --headless --fixed-fps 60 -- --scenario=sounds              # every biome sounds like itself; blending, seasons, echo, calls
 godot --fixed-fps 60 -- --scenario=icons                          # (windowed) re-render the build book's pictures into assets/builds/ after changing a build's art
-godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id] --stores[=wind] --chase
+godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id] --stores[=wind] --chase --fishgear
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
 Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "salmon_raw"
+name = "Chinook Salmon"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)])
+weight = 2.2
+color = Color(0.62, 0.42, 0.40, 1)
+tags = PackedStringArray("food", "raw", "meat", "fish")
+food = 22.0
+spoil_hours = 20.0
+cooks_into = "salmon_cooked"
+description = "A big salmon up from the sea to spawn, red and hook-jawed. Raw: cook it, smoke it, dry it."

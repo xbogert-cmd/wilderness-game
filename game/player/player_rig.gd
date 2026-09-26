@@ -327,6 +327,20 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			var point := hand + fwd * (140.0 if body.thrust >= 0.0 else 118.0)
 			draw_line(tail, point, c, 4.0)
 			draw_colored_polygon(PackedVector2Array([point + fwd.orthogonal() * 4.0, point + fwd * 16.0, point - fwd.orthogonal() * 4.0]), c.darkened(0.5))
+		"fish_spear": # a leister: struck down and forward into the water
+			var fwd := Vector2(1, 0.55).normalized() if body.thrust >= 0.0 else Vector2.from_angle(-1.05)
+			var tail := hand - fwd * (50.0 if body.thrust >= 0.0 else 26.0)
+			var point := hand + fwd * (150.0 if body.thrust >= 0.0 else 118.0)
+			draw_line(tail, point, c, 3.5)
+			for t: float in [-1.0, 0.0, 1.0]: # three tines
+				var base := point + fwd.orthogonal() * t * 6.0
+				draw_line(base, base + fwd * 18.0 + fwd.orthogonal() * t * 2.0, Color("9aa0a6"), 2.0)
+		"ice_auger": # a T handle and the spiral bit
+			var down := Vector2(0.15, 1.0).normalized()
+			draw_line(hand - down * 20.0, hand + down * 90.0, Color("8a9096"), 4.0)
+			draw_line(hand - down * 20.0 + down.orthogonal() * 22.0, hand - down * 20.0 - down.orthogonal() * 22.0, Color("5a4a38"), 5.0)
+			for k in 4:
+				draw_arc(hand + down * (60.0 + k * 8.0), 6.0, 0.0, PI, 6, Color("aab0b6"), 2.0)
 		"sticks":
 			for i in 3:
 				draw_line(hand + Vector2(-14, -2 + i * 4), hand + Vector2(20, -6 + i * 5), c, 3.0)

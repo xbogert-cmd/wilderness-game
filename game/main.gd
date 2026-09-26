@@ -246,6 +246,14 @@ func _ready() -> void:
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
 		player.bow_draw = 0.0
+	if args.has("fishgear"): # preview: a weir and a trap in the creek, you at the edge with the fish spear (fish in the shallows)
+		var cx := Terrain.CREEK_X
+		world.spawn({"kind": "weir", "x": cx - 60.0})
+		var trap: FishTrap = world.spawn({"kind": "fish_trap", "x": cx + 80.0, "fish": [["trout", GameClock.clock.hours], ["whitefish", GameClock.clock.hours]]})
+		trap.queue_redraw()
+		player.global_position = Vector2(cx - Terrain.WATERS[world.terrain.water_index(cx)].half + 30.0, world.terrain.height_at(cx - Terrain.WATERS[world.terrain.water_index(cx)].half + 30.0) - 4.0)
+		player.hold(ItemStack.make("fish_spear", GameClock.clock.hours))
+		player.facing = 1
 	if args.has("chase"): # preview: wolves running down a deer, a coyote watching from off to the side
 		var deer := wildlife.spawn(Wildlife.SPECIES[0], x + 600.0, 3)
 		var pack := []

@@ -45,7 +45,7 @@ const WATERS := [
 	{"name": "Rattlesnake Creek", "x": CREEK_X, "half": CREEK_HALF, "depth": CREEK_DEPTH, "water": CREEK_WATER, "kind": "creek", "fish": true},
 	{"name": "Sweetwater River", "x": -9000.0, "half": 470.0, "depth": 200.0, "water": 45.0, "kind": "river", "fish": true},
 	{"name": "Alder Creek", "x": -19800.0, "half": 260.0, "depth": 110.0, "water": 35.0, "kind": "creek", "fish": true},
-	{"name": "Marsh pond", "x": -12600.0, "half": 430.0, "depth": 75.0, "water": 22.0, "kind": "pond", "fish": false},
+	{"name": "Marsh pond", "x": -12600.0, "half": 430.0, "depth": 75.0, "water": 22.0, "kind": "pond", "fish": true},
 	{"name": "Burnt Creek", "x": 54600.0, "half": 240.0, "depth": 100.0, "water": 35.0, "kind": "creek", "fish": true},
 	{"name": "Basin Tarn", "x": 64500.0, "half": 820.0, "depth": 190.0, "water": 40.0, "kind": "lake", "fish": true},
 	{"name": "Juniper Spring", "x": -28800.0, "half": 170.0, "depth": 55.0, "water": 16.0, "kind": "spring", "fish": false, "clean": true},

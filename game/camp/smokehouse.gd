@@ -9,7 +9,7 @@ const SLOTS := 12
 const SMOKE_HOURS := 10.0
 const HOURS_PER_STICK := 3.0
 const MAX_FUEL := 24.0
-const SMOKABLE := ["venison_raw", "rabbit_raw", "trout_raw", "whitefish_raw"]
+const SMOKABLE := ["venison_raw", "rabbit_raw", "trout_raw", "whitefish_raw", "salmon_raw", "grayling_raw", "catfish_raw", "perch_raw"]
 
 var world: World
 var pieces: Array = [] ## [raw id, hours smoked]
@@ -80,7 +80,7 @@ func smoked() -> int:
 	return pieces.filter(func(p): return p[1] >= SMOKE_HOURS).size()
 
 static func product(raw_id: String) -> String:
-	return "smoked_fish" if raw_id in ["trout_raw", "whitefish_raw"] else "smoked_meat"
+	return "smoked_fish" if Items.get_def(raw_id).has("fish") else "smoked_meat"
 
 func interact_pos() -> Vector2:
 	return global_position
@@ -171,7 +171,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-30, -8, 60, 6), Color(1.0, 0.45, 0.12, 0.5 + 0.3 * f))
 	for i in mini(pieces.size(), 6): # what's hanging shows over the half-door
 		var k: float = pieces[i][1] / SMOKE_HOURS
-		var fish: bool = pieces[i][0] in ["trout_raw", "whitefish_raw"]
+		var fish: bool = Items.get_def(pieces[i][0]).has("fish")
 		var c := (Color("b0a080") if fish else Color("a64a3f")).lerp(Color("5a3420"), k)
 		var x := -26.0 + i * 10.4
 		draw_line(Vector2(x, -118), Vector2(x, -104), Color(0.3, 0.26, 0.22), 1.0)

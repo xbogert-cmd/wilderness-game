@@ -42,6 +42,7 @@ func _ready() -> void:
 		"sounds": _sounds.call_deferred()
 		"stores": _stores.call_deferred()
 		"hunts": _hunts.call_deferred()
+		"fish": _fish.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -824,8 +825,9 @@ func _winter() -> void:
 	check(pot.water > 0.0 and not pot.water_clean, "no hole yet: the pot packs with snow instead (%.2f L)" % pot.water)
 	pot.water = 0.0
 	creek.interact(player)
-	await frames(int(Player.SWING_TIME * 60.0) + 2)
+	await _finish_work()
 	check(creek.hole_open(), "chopped a hole")
+	player.hold(pot) # (put away while chopping)
 	player.use_held()
 	check(pot.water > 1.0, "filled the pot through the hole")
 
@@ -1730,12 +1732,12 @@ func _frontier() -> void:
 	await teleport(Terrain.TRAPPER_X)
 	await frames(5)
 	var tr := _site("trapper")
-	check(tr != null and Player.choices_of(tr, player).size() == 2, "the trapper's camp: a cache and a carving")
+	check(tr != null and Player.choices_of(tr, player).size() == 3, "the trapper's camp: a cache, an ice auger and a carving")
 	var snares := player.backpack.count_of("snare")
 	tr.interact(player)
 	await frames(60 * 4)
 	check(player.backpack.count_of("snare") == snares + 3 and Journal.has("trapper_note"), "the cache: snares and the trapper's notebook")
-	Player.choices_of(tr, player)[0][1].call()
+	Player.choices_of(tr, player).filter(func(o): return o[0].begins_with("Look at the carving"))[0][1].call()
 	check(Journal.has("carving"), "\"Don't follow the lights.\"")
 
 	# The homestead: the root cellar and the grave.
@@ -2009,6 +2011,7 @@ func _health_cooking() -> void:
 	check(creek != null, "out on the frozen creek")
 	if creek:
 		creek.interact(player)
+		await _finish_work()
 		check(creek.hole_open(), "chopped a hole in the ice")
 		player.receive(ItemStack.make("fishing_pole", h))
 		player.hold(player.backpack.find(func(st): return st.def.has("rod")))
@@ -2056,6 +2059,154 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "fish": what swims where, the salmon run, traps, the weir, nets, the fish spear, the auger
+
+func _water_x(kind: String) -> float:
+	for wd in Terrain.WATERS:
+		if wd.kind == kind:
+			return wd.x
+	return NAN
+
+func _fish() -> void:
+	await frames(10)
+	var year := GameClock.clock.season_hours() * 4.0
+	var base := ceilf(GameClock.clock.hours / year) * year # year_pos 0.5: autumn begins
+	GameClock.clock.hours = floorf((base + year * 0.85) / 24.0) * 24.0 + 12.0 # summer noon
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.ice = 0.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var tally := func(kind: String, n: int) -> Dictionary:
+		var t := {}
+		for k in n:
+			var sp := FishLife.pick(kind, rng)
+			t[sp] = t.get(sp, 0) + 1
+		return t
+	var pond: Dictionary = tally.call("pond", 200)
+	var lake: Dictionary = tally.call("lake", 200)
+	var creek: Dictionary = tally.call("creek", 200)
+	check(pond.get("perch", 0) > 120, "the marsh pond: mostly perch %s" % pond)
+	check(lake.get("grayling", 0) > 90, "the tarn: grayling %s" % lake)
+	check(not creek.has("salmon") and not creek.has("catfish"), "the creeks: trout and whitefish %s" % creek)
+	var day_river: Dictionary = tally.call("river", 300)
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 24.0 + 1.0
+	var night_river: Dictionary = tally.call("river", 300)
+	check(night_river.get("catfish", 0) > day_river.get("catfish", 0) * 2, "catfish feed at night (%d by night, %d by day)" % [night_river.get("catfish", 0), day_river.get("catfish", 0)])
+	check(not day_river.has("salmon"), "no salmon in summer")
+	GameClock.clock.hours = floorf((base + year + year * 0.04) / 24.0) * 24.0 + 12.0 # early autumn: the run
+	check(FishLife.salmon_run(), "autumn: the salmon are running (%s)" % GameClock.clock.season_name())
+	var run: Dictionary = tally.call("river", 300)
+	check(run.get("salmon", 0) > 60 and FishLife.bite_mult("river") < 1.0, "the river's full of salmon %s" % run)
+	var rx := _water_x("river")
+	await teleport(rx - Terrain.WATERS[world.terrain.water_index(rx)].half - 150.0)
+	var river: Creek = Creek.at(get_tree(), rx)
+	var jumped := false
+	for k in 60 * 12:
+		await frames(1)
+		if river and not river._jumps.is_empty():
+			jumped = true
+			break
+	check(jumped, "salmon leap in the river")
+	check(Journal.has("salmon_run"), "the run goes in the journal")
+
+	# A fish trap in the creek; a weir beside it makes it catch far more.
+	GameClock.clock.hours = floorf((base + year * 0.85) / 24.0) * 24.0 + 12.0 # summer again
+	var cx := Terrain.CREEK_X
+	await teleport(cx - 250.0)
+	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
+	bm.choose("fish_trap")
+	player.aim_override = Vector2(cx + 40.0, world.terrain.surface_of(world.terrain.water_index(cx)))
+	await frames(3)
+	check(bm._ok and absf(bm.global_position.x - (cx + 40.0)) < 60.0, "a fish trap goes in the creek, where you aim")
+	player.aim_override = Vector2(cx - 900.0, world.terrain.height_at(cx - 900.0))
+	await frames(3)
+	check(not bm._ok, "not on dry land")
+	bm._cancel()
+	bm.choose("weir")
+	player.aim_override = Vector2(cx + 50.0, world.terrain.surface_of(world.terrain.water_index(cx)))
+	await frames(3)
+	check(bm._ok and absf(bm.global_position.x - cx) < 5.0, "a weir goes straight across the creek")
+	bm._cancel()
+	player.aim_override = Vector2.INF
+	var trap := world.spawn({"kind": "fish_trap", "x": cx + 60.0}) as FishTrap
+	var r0 := trap.rate()
+	var weir := world.spawn({"kind": "weir", "x": cx}) as Weir
+	check(trap.rate() > r0 * 2.0, "the weir funnels fish into the trap (%.2f -> %.2f an hour)" % [r0, trap.rate()])
+	trap._on_tick(48.0)
+	check(trap.fish.size() >= 1 and trap.fish.size() <= FishTrap.HOLDS.fish_trap, "two days later there are fish in it (%d)" % trap.fish.size())
+	await teleport(cx + 60.0)
+	var had := player.backpack.all_stacks().filter(func(st): return st.def.has("fish")).size()
+	check(Player.first_label(Player.choices_of(trap, player)).begins_with("Take the fish"), "check the trap: take the fish")
+	trap.interact(player)
+	var fresh := player.backpack.all_stacks().filter(func(st): return st.def.has("fish"))
+	check(fresh.size() > had and fresh.all(func(st): return st.freshness(GameClock.clock.hours) == ItemStack.Fresh.FRESH), "still alive in the trap: fresh fish")
+	GameClock.weather.ice = 1.0
+	check(trap.rate() == 0.0, "nothing's caught under the ice")
+	GameClock.weather.ice = 0.0
+	trap.queue_free()
+	weir.queue_free()
+	# A gill net on the river: more fish, but they're dead and ageing.
+	var net := world.spawn({"kind": "net", "x": rx + 100.0}) as FishTrap
+	net._on_tick(24.0)
+	check(net.fish.size() >= 1, "a day in the river, the net has fish (%d)" % net.fish.size())
+	if net.fish:
+		check(net.fish.any(func(f): return f[1] < GameClock.clock.hours - 0.5), "they've been dead in it a while")
+	net.queue_free()
+
+	# The fish spear: shadows in the shallows; strike where one is.
+	await teleport(cx - Terrain.WATERS[world.terrain.water_index(cx)].half + 60.0)
+	var crk: Creek = Creek.at(get_tree(), cx)
+	player.receive(ItemStack.make("fish_spear", GameClock.clock.hours))
+	player.hold(player.backpack.find(func(st): return st.def.id == "fish_spear"))
+	await frames(30)
+	check(crk.shadows.size() >= 3, "holding the fish spear at the water's edge: fish show as shadows (%d)" % crk.shadows.size())
+	var got := false
+	for k in 8:
+		await frames(10)
+		var f: Dictionary = crk.shadows.reduce(func(a, b): return a if absf(a.x - player.global_position.x) < absf(b.x - player.global_position.x) else b)
+		if absf(f.x - player.global_position.x) > 280.0:
+			continue
+		var before := player.backpack.all_stacks().filter(func(st): return st.def.has("fish")).size()
+		player.aim_override = Vector2(f.x, world.terrain.surface_of(crk.index) + f.y)
+		player.use_held()
+		player.aim_override = Vector2.INF
+		await frames(30)
+		if player.backpack.all_stacks().filter(func(st): return st.def.has("fish")).size() > before:
+			got = true
+			break
+	check(got, "strike where the shadow is: a speared fish")
+	player.stow()
+
+	# The ice auger: a quick clean hole that stays open.
+	var trapper: Site = null
+	for st in get_tree().get_nodes_in_group("interactable"):
+		if st is Site and st.kind == "trapper":
+			trapper = st
+	if trapper == null:
+		await teleport(Terrain.TRAPPER_X)
+		await frames(10)
+		for st in get_tree().get_nodes_in_group("interactable"):
+			if st is Site and st.kind == "trapper":
+				trapper = st
+	check(trapper != null and Player.choices_of(trapper, player).any(func(o): return o[0].begins_with("Take the ice auger")), "an ice auger at the trapper's camp")
+	if trapper:
+		trapper._take_auger(player)
+	check(player.backpack.count_of("ice_auger") == 1, "took the auger")
+	GameClock.weather.ice = 1.0
+	await teleport(cx)
+	await frames(20)
+	crk = Creek.reachable(player)
+	check(crk != null and crk.interact_label(player) == "Bore a hole in the ice with the auger", "on the ice: bore a hole")
+	if crk:
+		crk.interact(player)
+		await _finish_work()
+		check(crk.hole_open() and crk.hole_until - GameClock.clock.hours > Creek.HOLE_HOURS * 2.0, "a clean hole that stays open most of a day (%.0f h)" % (crk.hole_until - GameClock.clock.hours))
+	GameClock.weather.ice = 0.0
+	for id in ["fish_trap", "weir", "net"]:
+		check(ResourceLoader.exists("res://assets/builds/%s.png" % id), "the build book has a picture of the %s" % id)
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
 
 # --- Mode "hunts": wolves run down deer (or don't), kill sites, coyotes -------------------
 
@@ -2426,7 +2577,7 @@ func _icons() -> void:
 	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 12.0
 	for id in Builds.STRUCTURES:
 		var x := 9000.0
-		if id == "bridge":
+		if Builds.STRUCTURES[id].has("water"):
 			x = world.terrain.WATERS[world.terrain.water_index(Terrain.CREEK_X, 2000.0)].x
 		await teleport(x)
 		var n: Node2D = world.spawn({"kind": "campfire" if id == "tripod" else id, "x": x})

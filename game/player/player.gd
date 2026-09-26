@@ -73,7 +73,7 @@ var _climb_path: PackedVector2Array
 var _climb_leg := 0
 var _climb_done: Callable
 const CLIMB_SPEED := 190.0 ## px per second up or down a ladder
-const RECIPES: PackedStringArray = ["splint", "vine_cord", "snare", "fishing_pole", "bow", "arrows", "spear", "deer_call",
+const RECIPES: PackedStringArray = ["splint", "vine_cord", "snare", "fishing_pole", "fish_spear", "bow", "arrows", "spear", "deer_call",
 	"hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat", "snowshoes"]
 const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never breaks
 var known_recipes := RECIPES
@@ -404,7 +404,7 @@ func holding(tag: String) -> bool:
 
 ## Raw meat on you (in the pack, in hand, or a carcass in tow) or an open wound: wolves smell it.
 func smells_of_meat() -> bool:
-	if hauling or (held and held.def.has("raw") and held.def.id != "trout_raw" and held.def.id != "whitefish_raw"):
+	if hauling or (held and held.def.has("raw") and not held.def.has("fish")):
 		return true
 	if backpack.find(func(s): return s.def.id in ["venison_raw", "rabbit_raw"]) != null:
 		return true
@@ -530,6 +530,11 @@ func use_held() -> void:
 			pull_from = get_viewport().get_mouse_position()
 	elif d.has("knife"):
 		_knife()
+	elif d.has("leister"):
+		if thrust < 0.0 and cond.spend_stamina(THRUST_STAMINA * 0.6):
+			thrust = 0.0
+			if not spear_fish(48.0):
+				message.emit("A miss. Watch for a shadow, then strike right where it is." if aim_point().y > global_position.y - 120.0 else "Aim down into the water.")
 	elif d.has("spear"):
 		if thrust < 0.0: # click to thrust; pull back and let go to throw
 			throw_draw = 0.0
@@ -622,9 +627,28 @@ func release_held() -> void:
 			pull_from = Vector2.INF
 			if cond.spend_stamina(THRUST_STAMINA):
 				thrust = 0.0
+				spear_fish(28.0) # a hunting spear takes a fish too, if you're quick
 		else:
 			throw_spear()
 	pull_from = Vector2.INF
+
+## A spear driven into the water where you aim: a fish if one's there. False if nothing's taken.
+func spear_fish(radius: float) -> bool:
+	var at := aim_point()
+	if absf(at.x - global_position.x) > 300.0:
+		return false
+	var c := Creek.at(get_tree(), at.x)
+	if c == null or Creek.frozen() or at.y < world.terrain.surface_of(c.index) - 30.0:
+		return false
+	Sfx.play_at(self, Vector2(at.x, world.terrain.surface_of(c.index)), Sfx.splash(), -4.0, 1.2)
+	var sp := c.spear(at, radius)
+	if sp == "":
+		return false
+	var spec: Dictionary = FishFight.SPECIES[sp]
+	receive(ItemStack.make(spec.item, GameClock.clock.hours))
+	message.emit("Speared a %s!" % spec.name)
+	Journal.note("fish_spear", "Speared a fish from the shallows: stand still at the edge, watch for the shadow, and strike right where it is.")
+	return true
 
 ## How far and which way the mouse has been pulled back since you pressed (screen px): the shot
 ## flies the opposite way, like a slingshot.

@@ -66,6 +66,8 @@ func interact_options(p: Player) -> Array:
 		"trapper":
 			if not _found("cache"):
 				out.append(["Open the trapper's cache", _search.bind(p, "cache")])
+			if not _found("auger"):
+				out.append(["Take the ice auger leaning on the post", _take_auger.bind(p)])
 			out.append(["Look at the carving on the post", _read.bind(p, "carving")])
 		"crash":
 			if not _found("cockpit"):
@@ -80,6 +82,12 @@ func interact_label(p: Player) -> String:
 
 func interact(p: Player) -> void:
 	Player.run_first(interact_options(p))
+
+func _take_auger(p: Player) -> void:
+	_mark("auger")
+	_give(p, [["ice_auger", 1]])
+	p.message.emit("A hand ice auger, rusty but sound. The trapper fished through the ice all winter.")
+	Journal.note("auger", "Found the trapper's ice auger. It bores a hole through the ice in a moment, and the hole stays open for most of a day.")
 
 func _give(p: Player, items: Array) -> void:
 	var h := GameClock.clock.hours
@@ -158,6 +166,9 @@ func _trapper(rng: RandomNumberGenerator) -> void:
 	for k in 4: # the lean-to, fallen flat
 		draw_line(Vector2(-220 + k * 14.0, -2), Vector2(-60 + k * 10.0, -40 + k * 6.0), pole, 9.0)
 	draw_line(Vector2(-40, 4), Vector2(-50, -110), pole.darkened(0.15), 9.0) # the post
+	if not _found("auger"): # an ice auger leaning on it
+		draw_line(Vector2(-22, 2), Vector2(-40, -92), Color("8a9096"), 4.0)
+		draw_line(Vector2(-48, -90), Vector2(-32, -94), Color("5a4a38"), 5.0)
 	for i in 7: # fire ring
 		draw_circle(Vector2(60 + i * 20.0, -5), 9.0, Palette.ROCK.darkened(0.2))
 	for k in 2: # willow stretching hoops

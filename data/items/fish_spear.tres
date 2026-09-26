@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fish_spear"
+name = "Fish Spear"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)])
+weight = 0.9
+color = Color(0.58, 0.47, 0.32, 1)
+tags = PackedStringArray("leister", "attachable")
+description = "A three-pronged leister, the tines lashed to a long shaft. Stand at the edge of a creek, river or pond and watch the water: fish show as shadows. Click where one is to spear it."

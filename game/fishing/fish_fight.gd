@@ -10,6 +10,10 @@ const MAX_STRAIN := 3
 const SPECIES := {
 	"trout": {"name": "cutthroat trout", "item": "trout_raw", "speed": 0.75, "zone": 0.14, "hits": 4, "drift": 0.18, "runs": 0.25, "cm": Vector2(28, 46)},
 	"whitefish": {"name": "mountain whitefish", "item": "whitefish_raw", "speed": 0.5, "zone": 0.2, "hits": 3, "drift": 0.0, "runs": 0.0, "cm": Vector2(24, 38)},
+	"salmon": {"name": "chinook salmon", "item": "salmon_raw", "speed": 0.9, "zone": 0.12, "hits": 6, "drift": 0.22, "runs": 0.45, "cm": Vector2(65, 95)}, # big, strong, long runs
+	"grayling": {"name": "arctic grayling", "item": "grayling_raw", "speed": 0.65, "zone": 0.16, "hits": 3, "drift": 0.12, "runs": 0.1, "cm": Vector2(25, 40)},
+	"catfish": {"name": "channel catfish", "item": "catfish_raw", "speed": 0.4, "zone": 0.17, "hits": 5, "drift": 0.0, "runs": 0.18, "cm": Vector2(38, 70)}, # slow and heavy: a long pull
+	"perch": {"name": "yellow perch", "item": "perch_raw", "speed": 0.55, "zone": 0.24, "hits": 2, "drift": 0.05, "runs": 0.0, "cm": Vector2(15, 28)},
 }
 
 var kind := "trout"

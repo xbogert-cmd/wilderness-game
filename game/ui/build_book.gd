@@ -56,7 +56,7 @@ func fill_page(id: String) -> void:
 	if d.has("on"):
 		note += " Goes over a campfire."
 	elif d.has("water"):
-		note += " Goes across a creek or the river: stand by the bank."
+		note += " " + BuildMode.WATER_WHERE[d.water]
 	page().add_child(ink(note + " You can place it first and bring the materials after.", 16, FADED))
 	add_action("Place the blueprint", true, func():
 		close()

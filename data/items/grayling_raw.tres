@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "grayling_raw"
+name = "Arctic Grayling"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)])
+weight = 0.4
+color = Color(0.52, 0.56, 0.62, 1)
+tags = PackedStringArray("food", "raw", "meat", "fish")
+food = 12.0
+spoil_hours = 20.0
+cooks_into = "grayling_cooked"
+description = "Sail-finned and silver-blue, from the cold tarn. Raw: cook it over a fire."
