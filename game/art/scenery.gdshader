@@ -9,6 +9,8 @@ global uniform float snow; // 0..1 how snowed-in the world looks
 global uniform float autumn; // 0..1 leaves and grass turned
 global uniform float bare; // 0..1 deciduous leaves fallen
 global uniform float ice; // 0..1 creek frozen
+global uniform float frost; // white frost on grass and open ground, cold mornings
+global uniform float wet; // rained on: things a little darker
 global uniform float sun_dir; // -1 the sun's to the left .. 1 to the right
 global uniform float sun_k; // how strongly it's shining
 global uniform vec4 sun_col;
@@ -49,6 +51,7 @@ void fragment() {
 			COLOR.rgb = mix(COLOR.rgb, frozen, smoothstep(0.3, 0.8, ice));
 		} else if (kind > 2.5) {
 			COLOR.rgb = mix(COLOR.rgb, SNOW * 0.94, snow * 0.9);
+			COLOR.rgb = mix(COLOR.rgb, vec3(0.8, 0.83, 0.87), frost * 0.5 * (1.0 - snow));
 		} else if (kind > 1.5) {
 			COLOR.rgb = SNOW;
 			COLOR.a *= snow;
@@ -57,7 +60,9 @@ void fragment() {
 			COLOR.a *= 1.0 - bare;
 		} else if (kind > 0.25) {
 			COLOR.rgb = mix(COLOR.rgb, STRAW * (0.7 + 0.5 * COLOR.g), autumn * 0.7);
+			COLOR.rgb = mix(COLOR.rgb, vec3(0.82, 0.85, 0.89), frost * 0.6 * (1.0 - UV.y)); // rimed tips
 		}
 	}
+	COLOR.rgb *= 1.0 - 0.12 * wet * step(kind, 1.5);
 	COLOR.rgb = mix(COLOR.rgb, haze_color.rgb, haze);
 }

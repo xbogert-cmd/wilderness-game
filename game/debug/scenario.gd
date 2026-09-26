@@ -2151,6 +2151,7 @@ func _fish() -> void:
 	weir.queue_free()
 	# A gill net on the river: more fish, but they're dead and ageing.
 	var net := world.spawn({"kind": "net", "x": rx + 100.0}) as FishTrap
+	net._rng.seed = 3 # (a day of it: ~2.4 fish on average, but none at all about one day in ten)
 	net._on_tick(24.0)
 	check(net.fish.size() >= 1, "a day in the river, the net has fish (%d)" % net.fish.size())
 	if net.fish:
@@ -2165,7 +2166,7 @@ func _fish() -> void:
 	await frames(30)
 	check(crk.shadows.size() >= 3, "holding the fish spear at the water's edge: fish show as shadows (%d)" % crk.shadows.size())
 	var got := false
-	for k in 8:
+	for k in 30: # (they dart about: wait for one close enough)
 		await frames(10)
 		var f: Dictionary = crk.shadows.reduce(func(a, b): return a if absf(a.x - player.global_position.x) < absf(b.x - player.global_position.x) else b)
 		if absf(f.x - player.global_position.x) > 280.0:

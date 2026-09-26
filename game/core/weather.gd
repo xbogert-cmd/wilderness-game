@@ -54,6 +54,7 @@ var flood := 0.0 ## how high the creeks are running, 0 normal .. 1 bankfull and 
 var floods := 0 ## how many floods so far (things left in the water may go with each)
 var _flooding := false
 var breakup := 0.0 ## hours of the spring breakup left: ice going out down the creeks
+var since_rain := 99.0 ## hours since it last rained properly (a rainbow, drips off the trees)
 const FLOOD_AT := 0.6 ## a flood (things in the water can wash away)
 const WADE_FLOOD := 0.45 ## the creeks run too deep and fast to wade
 
@@ -91,6 +92,7 @@ func step(dh: float, clock: Clock = null) -> void:
 	cloud = move_toward(cloud, target_cloud, dh * 0.8)
 	wind = move_toward(wind, target_wind, dh * 0.8)
 	precip = move_toward(precip, PRECIP[kind], dh * 1.5)
+	since_rain = 0.0 if rain() > 0.3 else since_rain + dh
 	if precip > 0.3:
 		damp = minf(damp + dh * 0.5, 1.0)
 	else:
@@ -170,6 +172,18 @@ func thunderstorm() -> bool:
 func thunder_far() -> bool:
 	return thunderstorm() or (next_thunder and hours_left <= warning_hours * 1.5)
 
+## 0..1: white frost on the ground, cold clear mornings before the sun gets to it.
+func frost(clock: Clock) -> float:
+	var h := clock.hour_of_day()
+	return clampf(-air_temp_c(clock) / 3.0, 0.0, 1.0) * (1.0 - smoothstep(9.0, 11.0, h)) * (1.0 - smoothstep(2.0, 12.0, snow_cm)) \
+		* (1.0 - precip) * (0.4 + 0.6 * (1.0 - cloud))
+
+## 0..1: a rainbow: the sun out, low enough, right after a rain.
+func rainbow(clock: Clock) -> float:
+	var h := clock.hour_of_day()
+	var low_sun := smoothstep(7.0, 9.0, h) * (1.0 - smoothstep(10.5, 11.5, h)) + smoothstep(15.0, 16.0, h) * (1.0 - smoothstep(18.5, 19.5, h))
+	return low_sun * (1.0 - smoothstep(0.3, 1.2, since_rain)) * smoothstep(0.05, 0.25, since_rain) * (1.0 - smoothstep(0.1, 0.3, precip)) * (1.0 - smoothstep(0.5, 0.85, cloud)) * (1.0 - snow_frac)
+
 func chinook_k() -> float:
 	return clampf(chinook / 2.0, 0.0, 1.0) if chinook > 0.0 else 0.0
 
@@ -212,7 +226,7 @@ func to_dict() -> Dictionary:
 		"precip": precip, "wind": wind, "rng_state": str(rng.state),
 		"snow_frac": snow_frac, "snow_cm": snow_cm, "ice": ice, "wind_dir": wind_dir, "front": front, "daytime": _daytime,
 		"thunder": thunder, "next_thunder": next_thunder, "chinook": chinook, "fog": fog, "damp": damp,
-		"fog_day": _fog_day, "fog_chance": _fog_chance, "flood": flood, "floods": floods, "flooding": _flooding, "breakup": breakup}
+		"fog_day": _fog_day, "fog_chance": _fog_chance, "flood": flood, "floods": floods, "flooding": _flooding, "breakup": breakup, "since_rain": since_rain}
 
 func from_dict(d: Dictionary) -> void:
 	kind = int(d.kind)
@@ -239,3 +253,4 @@ func from_dict(d: Dictionary) -> void:
 	floods = int(d.get("floods", 0))
 	_flooding = bool(d.get("flooding", false))
 	breakup = float(d.get("breakup", 0.0))
+	since_rain = float(d.get("since_rain", 99.0))

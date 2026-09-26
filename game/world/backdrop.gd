@@ -32,6 +32,12 @@ func build(terrain: Terrain, cam: Camera2D, focus: Node2D) -> void:
 	_add_layer(0.6, 0.6, -40, 0.25, _forest.bind(0.85))
 	_add_layer(0.72, 0.72, -35, 0.0, _fog)
 	_add_layer(0.85, 0.85, -30, 0.1, _forest.bind(1.0))
+	for k in [[2, 1200.0, 3200.0], [1, 2800.0, 1e9]]: # over the trees a way off, then from much farther away over the far hills
+		var plume := CampSmoke.new()
+		plume.s = layers[k[0]].s
+		plume.near = k[1]
+		plume.far = k[2]
+		layers[k[0]].node.add_child(plume)
 	_add_layer(1.25, 0.0, 20, 0.0, _foreground, 500.0)
 
 func _add_layer(s: float, sy: float, z: int, haze: float, fill: Callable, screen_y := NAN) -> void:
@@ -402,4 +408,37 @@ func _soft_trunk(tw: float, mat: Material) -> Polygon2D:
 	p.texture = SceneryArt.WHITE
 	p.material = mat
 	return p
+
+## A thin column of smoke going up over the trees where your fire is burning, seen from far
+## off: it fades out as you come close (then it's the fire's own smoke you see).
+class CampSmoke extends Node2D:
+	var s := 0.6
+	var near := 1200.0 ## shown from this far from the fire...
+	var far := 3200.0 ## ...to this far
+
+	func _ready() -> void:
+		z_as_relative = false
+		z_index = -29 # over the nearer backdrop trees (its foot fades out, so it rises from beyond them)
+
+	func _process(_delta: float) -> void:
+		var b := Campfire.beacon
+		var cam := get_viewport().get_camera_2d()
+		var d := absf(cam.get_screen_center_position().x - b.x) if cam and b.x != INF else 0.0
+		visible = GameClock.clock.hours < b.y and d > near and d < far + 400.0 and GameClock.weather.precip < 0.6
+		if visible:
+			position.x = b.x * s
+			modulate.a = smoothstep(near, near + 400.0, d) * (1.0 - smoothstep(far, far + 400.0, d)) * (1.0 - GameClock.weather.precip)
+			queue_redraw()
+
+	func _draw() -> void:
+		var t := Time.get_ticks_msec() / 1000.0
+		var lean := GameClock.weather.wind * GameClock.weather.wind_dir * 160.0
+		for i in 44: # soft puffs up the column, wider and fainter as they rise, bending downwind
+			var k := fposmod(i / 44.0 + t * 0.015, 1.0)
+			var tall := 900.0 * (0.6 if s < 0.2 else 1.0)
+			var at := Vector2(lean * k * k + sin(t * 0.4 + i * 1.7) * 14.0 * k, -40.0 - k * tall)
+			var r := (10.0 + k * 55.0) * (0.7 if s < 0.2 else 1.0)
+			var a := 0.1 * smoothstep(0.05, 0.3, k) * (1.0 - k)
+			for j in 3:
+				draw_circle(at, r * (1.0 - j * 0.28), Color(0.8, 0.8, 0.82, a))
 

@@ -115,8 +115,16 @@ func _on_tick(dh: float) -> void:
 	if fuel <= 0.0:
 		lit = false
 
+## The last fire seen burning: [x, the hour its fuel runs out]. Its smoke shows over the trees
+## from far off (Backdrop), a way to find your way back to camp.
+static var beacon := Vector2(INF, -INF)
+
 func _process(delta: float) -> void:
 	_t += delta
+	if lit:
+		beacon = Vector2(global_position.x, GameClock.clock.hours + fuel)
+	elif absf(beacon.x - global_position.x) < 1.0:
+		beacon = Vector2(INF, -INF)
 	var strength := clampf(fuel / 2.0, 0.25, 1.0) if lit else 0.0
 	_light.visible = lit
 	var dark := 1.0 - GameClock.clock.daylight() * (1.0 - GameClock.weather.cloud * 0.5)

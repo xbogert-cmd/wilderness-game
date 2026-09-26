@@ -4,6 +4,9 @@ class_name Footsteps extends AudioStreamPlayer2D
 var body: Player
 var _grass := _pool("grass")
 var _mud := _pool("mud")
+var _snow := Sfx.pool("step_snow", Sfx.takes("step_snow", 6), 1.1, 2.5)
+var _leaves := Sfx.pool("step_leaves", Sfx.takes("step_leaves", 6), 1.1, 2.5)
+const LEAF_LITTER := ["valley", "grove", "river", "foothills", "meadow"] ## where autumn leaves lie
 
 static func _pool(surface: String) -> AudioStreamRandomizer:
 	var r := AudioStreamRandomizer.new()
@@ -19,8 +22,11 @@ func _ready() -> void:
 
 func step() -> void:
 	var wet := body.wade_depth > 0.0 or body.world.terrain.water_index(body.global_position.x, 60.0) >= 0
-	stream = _mud if wet else _grass
-	pitch_scale = 0.75 if GameClock.weather.snow_cm > 3.0 and not wet else 1.0 # a muffled crunch in snow
+	var yp := GameClock.clock.year_pos()
+	var snow := GameClock.weather.snow_cm > 3.0 and not wet
+	var leaves := not wet and not snow and yp > 0.55 and yp < 0.85 and Terrain.biome(body.global_position.x) in LEAF_LITTER
+	stream = _mud if wet else (_snow if snow else (_leaves if leaves else _grass))
+	pitch_scale = 1.0
 	if body.underground or body.global_position.y < body.world.ground_y(body.global_position.x) - 40.0:
 		pitch_scale = 0.85 # rock and hard dirt, or deck boards: no prints in the snow below
 	else:

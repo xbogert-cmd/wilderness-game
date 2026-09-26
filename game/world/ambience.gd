@@ -67,6 +67,9 @@ var _heard := {} ## one-off cues already played this session
 var _music_cooldown := 0.0
 const MUSIC_COOLDOWN := 600.0 ## real seconds between cues: music stays rare so it means something
 var _call_t := 2.0
+var _creak_t := 5.0
+## How wooded each country is: rain on the leaves, the dawn chorus, creaking trees.
+const WOODED := {"valley": 0.8, "grove": 1.0, "oldgrowth": 1.0, "river": 0.6, "foothills": 0.6, "burn": 0.3, "meadow": 0.3, "marsh": 0.2, "ridge": 0.4, "alpine": 0.2}
 var _reverbs: Array[AudioEffectReverb] = []
 var _rng := RandomNumberGenerator.new()
 
@@ -80,6 +83,9 @@ func _ready() -> void:
 		beds[n] = _bed(n, &"Weather" if KIND.get(n) == "wind" else &"Ambience")
 	beds["wind_storm"] = _bed("wind_storm", &"Weather")
 	beds["rain"] = _bed("rain", &"Weather")
+	beds["rain_forest"] = _bed("rain_forest", &"Weather") # rain on the leaves overhead
+	beds["rain_roof"] = _bed("rain_roof", &"Weather") # drumming on the roof you're under
+	beds["dawn_chorus"] = _bed("dawn_chorus", &"Ambience")
 	creek = AudioStreamPlayer2D.new()
 	creek.stream = load("res://assets/audio/creek.wav")
 	creek.bus = &"Ambience"
@@ -184,7 +190,7 @@ func _process(delta: float) -> void:
 			for n in p[slot[0]]:
 				want[n] = want.get(n, 0.0) + p[slot[0]][n] * slot[1] * k
 	for n in beds:
-		if n in ["rain", "wind_storm"]:
+		if n in ["rain", "wind_storm", "rain_forest", "rain_roof", "dawn_chorus"]:
 			continue
 		var kind: String = KIND.get(n, "still")
 		var g: float = want.get(n, 0.0) * season_gain(kind) * below
@@ -192,7 +198,25 @@ func _process(delta: float) -> void:
 			g *= falls * rain_mask * (hush if kind in ["bird", "insect"] else 1.0)
 		_gain(n, minf(g, 1.0), delta)
 	_gain("wind_storm", smoothstep(0.6, 1.0, w.wind) * below, delta)
-	_gain("rain", w.rain() * below, delta)
+	var woods := 0.0 # how much of the country round you is under trees
+	for b in mix:
+		woods += mix[b] * WOODED.get(b, 0.0)
+	var roof := 1.0 if player.world.sheltered_at(player.global_position.x) else 0.0
+	_gain("rain", w.rain() * below * (1.0 - 0.75 * woods) * (1.0 - 0.6 * roof), delta)
+	_gain("rain_forest", w.rain() * below * woods * (1.0 - 0.7 * roof), delta)
+	_gain("rain_roof", w.rain() * roof * below, delta)
+	# The dawn chorus: every bird in the woods at once, in the half-light, spring and summer
+	var dawn := smoothstep(4.6, 5.6, h) * (1.0 - smoothstep(7.0, 8.2, h))
+	var singing: float = [1.0, 0.9, 0.3, 0.0][c.season()]
+	_gain("dawn_chorus", dawn * singing * clampf(woods * 1.2, 0.0, 1.0) * hush * rain_mask * below * falls * 0.85, delta)
+	# Trees creak and groan when the wind gets up in the woods
+	_creak_t -= delta
+	if _creak_t <= 0.0:
+		_creak_t = _rng.randf_range(4.0, 11.0)
+		if w.wind > 0.55 and woods > 0.3 and player.under < 0.3:
+			var side := 1.0 if _rng.randf() < 0.5 else -1.0
+			Sfx.play_at(self, player.global_position + Vector2(side * _rng.randf_range(200.0, 1400.0), -300.0),
+				Sfx.pool("creak", Sfx.takes("creak", 1) + Sfx.takes("creak2", 1) + Sfx.takes("creak3", 3), 1.1, 3.0), -14.0 + 8.0 * (w.wind - 0.55), 1.0, &"Calls")
 	var space := lerpf(0.0, 0.45, player.under) # a cave rings
 	for b in mix:
 		space += SPACE.get(b, 0.03) * mix[b] * (1.0 - player.under)

@@ -78,6 +78,13 @@ static func thin() -> bool:
 func flowing() -> bool:
 	return kind() in FLOWING
 
+## 0..1: mist rising off the water: a cold, still morning (the water warmer than the air).
+func mist() -> float:
+	var w8 := GameClock.weather
+	var h := GameClock.clock.hour_of_day()
+	return (1.0 - smoothstep(6.0, 12.0, w8.air_temp_c(GameClock.clock))) * smoothstep(3.5, 5.0, h) * (1.0 - smoothstep(8.5, 10.5, h)) \
+		* (1.0 - smoothstep(0.25, 0.45, w8.wind)) * (0.0 if frozen() or kind() == "spring" else 1.0)
+
 ## Running too high and fast to wade.
 func in_flood() -> bool:
 	return flowing() and GameClock.weather.flood >= Weather.WADE_FLOOD and not frozen()
@@ -100,6 +107,18 @@ func _draw() -> void:
 				var b := a + Vector2(dir * r.randf_range(14.0, 34.0) * k * 2.0, r.randf_range(-1.5, 3.0))
 				draw_line(a, b, Color(0.95, 0.98, 1.0, 0.85), 1.5)
 				a = b
+	var m := mist()
+	if m > 0.0: # mist smoking up off the water on a cold still morning
+		var r := RandomNumberGenerator.new()
+		r.seed = index * 31
+		var tt := Time.get_ticks_msec() / 1000.0
+		for i in int(w().half / 30.0):
+			var ph := r.randf() * TAU
+			var rise := fposmod(tt * r.randf_range(0.04, 0.09) + r.randf(), 1.0) # each wisp climbs and thins, and another comes
+			var at := Vector2(r.randf_range(-0.9, 0.9) * w().half + w().x - global_position.x + sin(tt * 0.3 + ph) * 30.0, s - 10.0 - rise * 150.0)
+			var rad := 40.0 + rise * 60.0
+			for j in 4:
+				draw_circle(at, rad * (1.0 - j * 0.2), Color(0.9, 0.92, 0.95, 0.08 * m * (1.0 - rise)))
 	for f in _floes: # plates of broken ice going out, tilting in the current
 		var at := Vector2(f.x - global_position.x, s + sin(Time.get_ticks_msec() * 0.002 + f.ph) * 3.0)
 		var tilt := sin(Time.get_ticks_msec() * 0.0013 + f.ph) * 0.12
@@ -131,7 +150,7 @@ func _draw() -> void:
 func _process(delta: float) -> void:
 	var p: Player = get_tree().get_first_node_in_group("player")
 	var near: bool = p != null and absf(p.global_position.x - w().x) < w().half + 2500.0
-	var redraw := frozen() and hole_open() # it skins over again in time
+	var redraw := (frozen() and hole_open()) or (near and mist() > 0.0) # it skins over again in time; the mist moves
 	var level := terrain.surface_of(index)
 	if water_mat and absf(level - _level) > 0.5: # rising and falling with a flood
 		_level = level

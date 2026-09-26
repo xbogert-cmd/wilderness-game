@@ -6,6 +6,12 @@ global uniform float ice; // 0 open .. 1 frozen hard
 global uniform float snow;
 global uniform float sun_k;
 global uniform vec4 sun_col;
+global uniform float rain_k; // raining: rings all over the surface
+global uniform float fish_rise; // dawn and dusk: fish rising
+global uniform float sun_sx; // the sun and moon across the view (0..1), for their paths on the water
+global uniform float moon_sx;
+global uniform float moon_a;
+uniform float fish = 1.0; // this water has fish in it
 uniform vec4 deep : source_color = vec4(0.16, 0.3, 0.34, 0.85);
 uniform vec4 shallow : source_color = vec4(0.36, 0.55, 0.6, 0.55);
 uniform float surface_y; // world y of the surface (it rises in a flood)
@@ -32,6 +38,21 @@ void fragment() {
 	c.rgb += (n - 0.5) * 0.06;
 	{ // clear water: deep down you see the creek running on behind (the far reach), not a bowl
 		c.a *= 1.0 - 0.75 * smoothstep(20.0, 90.0, d) * (1.0 - mud);
+	}
+	if (d < 30.0 && ice < 0.55) { // on the surface: rain rings, rising fish, the sun's and moon's path
+		float surf = smoothstep(30.0, 0.0, d);
+		vec2 rc = vec2(world.x * 0.03, floor(TIME * 1.6));
+		float rp = fract(TIME * 1.6);
+		float rr = abs(abs(fract(rc.x) - 0.5) * 2.0 - rp) * step(0.5, hash(floor(rc)));
+		c.rgb += smoothstep(0.08, 0.0, rr) * smoothstep(8.0, 0.0, d) * rain_k * 0.3 * (1.0 - rp);
+		vec2 fc = vec2(world.x * 0.004, floor(TIME / 5.0));
+		float fp = fract(TIME / 5.0);
+		float fr = abs(abs(fract(fc.x) - 0.5) * 2.0 - fp * 0.8) * step(0.72, hash(floor(fc) + 5.0));
+		c.rgb += smoothstep(0.03, 0.0, fr) * smoothstep(10.0, 0.0, d) * fish_rise * fish * 0.35 * (1.0 - fp);
+		float wob = vnoise(vec2(world.x * 0.05, d * 0.5 - TIME * 2.0));
+		float sp = exp(-abs(SCREEN_UV.x + (wob - 0.5) * 0.02 - sun_sx) * 22.0) * step(0.55, wob);
+		float mp = exp(-abs(SCREEN_UV.x + (wob - 0.5) * 0.02 - moon_sx) * 30.0) * step(0.5, wob);
+		c.rgb += sun_col.rgb * sp * sun_k * 0.45 * surf + vec3(0.8, 0.85, 0.95) * mp * moon_a * 0.5 * surf;
 	}
 	{ // the sky in the surface, and the sun glinting off the ripples
 		float refl = smoothstep(40.0, 0.0, d) * (1.0 - mud);

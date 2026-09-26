@@ -22,6 +22,8 @@ var canvas_mod: CanvasModulate
 var backdrop: Backdrop
 var rain: Rain
 var veil: ShaderMaterial ## fog and blizzard over the view (visibility.gdshader)
+var _aurora := 0.0
+static var force_aurora := false ## (preview)
 static var sun_dir := 0.0 ## -1 the sun's off to the left .. 1 to the right
 static var sun_k := 0.0 ## how strongly the sun's shining (0 night, cloud, underground)
 var beams: ShaderMaterial ## sunbeams, cloud shadows and vignette
@@ -90,9 +92,23 @@ func _process(_delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("under", under)
 	RenderingServer.global_shader_parameter_set("cam_x", get_viewport().get_camera_2d().get_screen_center_position().x if get_viewport().get_camera_2d() else 0.0)
 	var tm := fposmod(h - Clock.SUNSET, 24.0) / (24.0 - (Clock.SUNSET - Clock.SUNRISE))
+	RenderingServer.global_shader_parameter_set("frost", w.frost(clock))
+	RenderingServer.global_shader_parameter_set("wet", clampf(maxf(w.rain() * 1.5, w.damp * 0.8), 0.0, 1.0))
+	RenderingServer.global_shader_parameter_set("rain_k", w.rain())
+	RenderingServer.global_shader_parameter_set("fish_rise", (exp(-pow((h - 6.8) / 1.2, 2.0)) + exp(-pow((h - 19.8) / 1.2, 2.0))) * (1.0 - w.precip * 0.7))
+	RenderingServer.global_shader_parameter_set("sun_sx", lerpf(0.08, 0.92, t))
+	RenderingServer.global_shader_parameter_set("moon_sx", lerpf(0.1, 0.9, tm))
+	RenderingServer.global_shader_parameter_set("moon_a", (1.0 - smoothstep(0.0, 0.1, light)) * (1.0 - w.cloud) * sin(clampf(tm, 0.0, 1.0) * PI))
 	sky.set_shader_parameter("moon_uv", Vector2(lerpf(0.1, 0.9, tm), 0.7 - sin(clampf(tm, 0.0, 1.0) * PI) * 0.55))
 	sky.set_shader_parameter("moon_alpha", 1.0 - smoothstep(0.0, 0.1, light))
 	sky.set_shader_parameter("stars", 1.0 - smoothstep(0.0, 0.12, light))
+	sky.set_shader_parameter("rainbow", w.rainbow(clock) * (1.0 - under))
+	var yp := clock.year_pos()
+	var summer_pm := smoothstep(0.22, 0.28, yp) * (1.0 - smoothstep(0.47, 0.53, yp)) * smoothstep(12.0, 14.5, h) * (1.0 - smoothstep(19.0, 20.5, h))
+	sky.set_shader_parameter("towers", maxf(summer_pm * 0.7 * (1.0 - smoothstep(0.6, 0.85, w.cloud)), 1.0 if w.thunder_far() and not w.thunderstorm() else 0.0))
+	var aurora_night := force_aurora or hash([clock.day(), "aurora"]) % 3 == 0 and clock.season() == 3 and (h > 21.0 or h < 4.5)
+	_aurora = 1.0 if force_aurora else move_toward(_aurora, 1.0 if aurora_night else 0.0, get_process_delta_time() * 0.1)
+	sky.set_shader_parameter("aurora", _aurora * (1.0 - w.cloud))
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
 	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz + 1.2 * w.fog)
@@ -103,6 +119,7 @@ func _process(_delta: float) -> void:
 		var sun_uv: Vector2 = sky.get_shader_parameter("sun_uv")
 		beams.set_shader_parameter("sun", sun_uv * view)
 		var low := smoothstep(0.3, 0.7, sun_uv.y) # low in the sky: long beams
+		AirLife.beams = low * float(sky.get_shader_parameter("sun_alpha")) * (1.0 - w.cloud) * (1.0 - under) * BEAMS.get(Terrain.biome(p.global_position.x), 0.3)
 		beams.set_shader_parameter("rays", low * float(sky.get_shader_parameter("sun_alpha")) * (1.0 - w.cloud) * (1.0 - under) * BEAMS.get(Terrain.biome(p.global_position.x), 0.3) * (1.0 + fog))
 		beams.set_shader_parameter("ray_col", (c[3] as Color).lerp(Color(1, 0.95, 0.8), 0.3))
 		beams.set_shader_parameter("vignette", 0.3)

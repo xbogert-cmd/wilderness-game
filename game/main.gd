@@ -78,6 +78,16 @@ func _ready() -> void:
 	add_child(camera)
 	var rain := Rain.new()
 	camera.add_child(rain)
+	var air := AirLife.new()
+	air.player = player
+	camera.add_child(air)
+	var critters := Critters.new()
+	critters.player = player
+	critters.world = world
+	world.add_child(critters)
+	var sky_life := SkyLife.new()
+	sky_life.player = player
+	add_child(sky_life)
 	var glow_layer := CanvasLayer.new()
 	glow_layer.layer = 1
 	glow_layer.follow_viewport_enabled = true
@@ -212,6 +222,18 @@ func _ready() -> void:
 		GameClock.weather.flood = float(args.flood) if args.flood != "" else 0.8
 	if args.has("chinook"):
 		GameClock.weather.chinook = 12.0
+	if args.has("afterrain"): # just stopped raining: wet ground, drips, maybe a rainbow
+		GameClock.weather.since_rain = 0.3
+		GameClock.weather.damp = 1.0
+	if args.has("aurora"):
+		Atmosphere.force_aurora = true
+	if args.has("geese"):
+		sky_life._next_geese = 0.5
+	if args.has("beacon"): # a fire burning back at this x, for its smoke from afar
+		Campfire.beacon = Vector2(float(args.beacon), GameClock.clock.hours + 6.0)
+	if args.has("wind"):
+		GameClock.weather.wind = float(args.wind)
+		GameClock.weather.hours_left = 20.0
 	if args.has("baro"):
 		player.receive(ItemStack.make("barometer", GameClock.clock.hours))
 	if args.has("snow"):

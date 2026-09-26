@@ -182,6 +182,34 @@ under={
 "type": "float",
 "value": 0.0
 }
+frost={
+"type": "float",
+"value": 0.0
+}
+wet={
+"type": "float",
+"value": 0.0
+}
+rain_k={
+"type": "float",
+"value": 0.0
+}
+sun_sx={
+"type": "float",
+"value": 0.5
+}
+moon_sx={
+"type": "float",
+"value": 0.5
+}
+moon_a={
+"type": "float",
+"value": 0.0
+}
+fish_rise={
+"type": "float",
+"value": 0.0
+}
 cam_x={
 "type": "float",
 "value": 0.0

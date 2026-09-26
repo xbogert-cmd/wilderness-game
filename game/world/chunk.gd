@@ -504,6 +504,7 @@ func _creek(terrain: Terrain, i: int) -> void:
 	var m := ShaderMaterial.new()
 	m.shader = WATER_SHADER
 	m.set_shader_parameter("surface_y", terrain.surface_of(i))
+	m.set_shader_parameter("fish", 1.0 if wd.fish else 0.0)
 	water.material = m
 	water.z_index = 7 # over the player's submerged legs
 	add_child(water)

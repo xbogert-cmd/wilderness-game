@@ -84,6 +84,12 @@ Built by `tools/process_audio.py` from the originals in `assets/audio/src/bsb/` 
 | `sfx/ice_1`, `ice2_1` | BigSoundBank 2205, 2206 | Cracking ice #1, #2 |
 | `sfx/thunder_near*_1` | BigSoundBank 3180, 2718, 3179, 3115 | Thunder #7, #1, #6, #4: close strikes |
 | `sfx/thunder_far*_1` | BigSoundBank 3116, 3114, 3184, 3182 | Thunder #5, #3, #11, #9, low-passed (420 Hz): distant rolls |
+| `sfx/step_snow_1..6` | BigSoundBank 3363 | Steps in the Snow #3 |
+| `sfx/step_leaves_1..6` | BigSoundBank 0137 | Feet in Leaves #1 |
+| `amb/rain_forest` | Freesound 870824 (CHallSmith, CC0) | Rain, heavy, falling on leaves |
+| `amb/rain_roof` | Freesound 397916 (Bronxio, CC0) | Inside a tent with rain |
+| `amb/dawn_chorus` | Freesound 745273 (SamsterBirdies, CC0) | Coniferous forest dawn chorus (source kept trimmed to 2:20-3:40) |
+| `sfx/creak_1`, `creak2_1`, `creak3_1..3` | Freesound 797994, 797992 (Comradar), 95264 (Department64), all CC0 | Trees creaking |
 | `amb/marsh_day` | BigSoundBank 0691 | Pond in a Field |
 | `amb/marsh_night` | BigSoundBank 0998 | Frogs #2 |
 | `amb/frogs_close` | Freesound 569543 (bmacphail) | Many Frogs at Night in Marsh |

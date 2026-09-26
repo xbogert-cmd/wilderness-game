@@ -44,6 +44,9 @@ LOOPS = {
     "sage_day": ("fs/176786.ogg", 20.0, 60.0),
     "nighthawks": ("fs/245393.ogg", 2.0, 48.0),
     "toads": ("fs/519590.ogg", 2.0, 55.0),
+    "rain_forest": ("fs/870824.ogg", 20.0, 60.0),
+    "rain_roof": ("fs/397916.ogg", 2.0, 45.0),
+    "dawn_chorus": ("fs/745273.ogg", 10.0, 60.0), # (the source is kept trimmed to 140-220 s of the original)
 }
 
 # name: (source, [(start, length), ...])  -> sfx/<name>_<n>.wav
@@ -72,6 +75,11 @@ SHOTS: dict[str, tuple[str, list[tuple[float, float]]]] = {
     "rockfall": ("bsb/1022.ogg", [(1.70, 1.2), (11.68, 1.2), (13.22, 1.2), (16.53, 1.3), (18.61, 1.2)]),
     "ice": ("bsb/2205.ogg", [(0.0, 1.9)]),
     "ice2": ("bsb/2206.ogg", [(0.0, 1.29)]),
+    "step_snow": ("bsb/3363.ogg", [(0.11, 0.3), (1.89, 0.3), (3.17, 0.3), (3.9, 0.3), (5.66, 0.3), (6.79, 0.3)]),
+    "step_leaves": ("bsb/0137.ogg", [(1.19, 0.45), (2.85, 0.45), (5.52, 0.45), (6.42, 0.45), (8.94, 0.45), (10.65, 0.45)]),
+    "creak": ("fs/797994.ogg", [(0.0, 2.8)]),
+    "creak2": ("fs/797992.ogg", [(0.0, 2.0)]),
+    "creak3": ("fs/95264.ogg", [(0.0, 3.5), (4.5, 3.5), (9.0, 3.5)]),
     "thunder_near": ("bsb/3180.ogg", [(0.0, 12.0)]),
     "thunder_near2": ("bsb/2718.ogg", [(0.0, 14.0)]),
     "thunder_near3": ("bsb/3179.ogg", [(0.0, 12.0)]),

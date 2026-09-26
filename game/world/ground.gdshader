@@ -11,7 +11,10 @@ global uniform float under;
 global uniform float sun_k;
 global uniform vec4 sun_col;
 global uniform vec4 haze_color;
-global uniform float cam_x; // the view's centre: nearer ground slides past faster (parallax)
+global uniform float cam_x;
+global uniform float frost; // 0..1 white frost on a cold clear morning
+global uniform float wet; // 0..1 rained on: darker ground, puddles in the hollows
+global uniform float rain_k; // raining now: rings on the puddles // the view's centre: nearer ground slides past faster (parallax)
 uniform vec4 creeks = vec4(0.0, -1.0, 0.0, -1.0); // x and half-width of up to two creeks here
 uniform vec4 soil_top : source_color = vec4(0.36, 0.27, 0.19, 1.0);
 uniform vec4 soil_deep : source_color = vec4(0.2, 0.15, 0.11, 1.0);
@@ -78,6 +81,20 @@ void fragment() {
 	float stone = step(0.972, hash(cell)) * smoothstep(0.4, 0.28, distance(fract(sc) * vec2(1.0, 1.4), vec2(0.5, 0.7)));
 	vec3 rock = vec3(0.56, 0.54, 0.5) * (0.8 + 0.35 * hash(cell + 3.1));
 	col = mix(col, rock * mix(1.1, 0.8, fract(sc.y) ), stone);
+	// after rain: the ground darker, puddles in the hollows showing the sky, rings when it's raining
+	col *= 1.0 - 0.28 * wet * (1.0 - snow);
+	float hollow = fbm(vec2(u * 0.011, v * 0.05) + 31.0);
+	float puddle = smoothstep(0.66, 0.7, hollow) * smoothstep(0.35, 0.8, wet) * (1.0 - snow);
+	vec3 pool = mix(haze_color.rgb * vec3(0.62, 0.68, 0.76), col * 0.5, 0.3); // the sky in it, darker than the sky
+	pool = mix(pool, col * 0.55, smoothstep(0.7, 0.66, hollow) * 0.0 + smoothstep(0.672, 0.66, hollow)); // a dark wet rim
+	vec2 rc = vec2(u * 0.05, v * 0.12 + floor(TIME * 1.3) * 0.37);
+	float ring = smoothstep(0.08, 0.0, abs(distance(fract(rc), vec2(0.5)) - fract(TIME * 1.3) * 0.45)) * step(0.55, hash(floor(rc) + floor(TIME * 1.3)));
+	pool += ring * rain_k * 0.25;
+	col = mix(col, pool, puddle);
+	// frost: pale over the grass and glinting, before the sun gets to it
+	vec3 rime = mix(vec3(0.78, 0.82, 0.86), vec3(0.92, 0.94, 0.97), grain);
+	col = mix(col, rime, frost * (0.2 + 0.35 * smoothstep(0.45, 0.8, grain)) * (1.0 - stone)); // rime on the blades, the ground showing through
+	col += step(0.99, hash(floor(vec2(u * 0.7, v * 0.7)))) * frost * 0.35;
 	// snow over it all, blue in the hollows, glinting
 	float drift = fbm(vec2(u * 0.006, v * 0.05));
 	vec3 snowc = mix(vec3(0.76, 0.82, 0.92), vec3(0.95, 0.97, 1.0), smoothstep(0.35, 0.65, drift));
