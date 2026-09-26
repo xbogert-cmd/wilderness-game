@@ -72,7 +72,16 @@ SHOTS: dict[str, tuple[str, list[tuple[float, float]]]] = {
     "rockfall": ("bsb/1022.ogg", [(1.70, 1.2), (11.68, 1.2), (13.22, 1.2), (16.53, 1.3), (18.61, 1.2)]),
     "ice": ("bsb/2205.ogg", [(0.0, 1.9)]),
     "ice2": ("bsb/2206.ogg", [(0.0, 1.29)]),
+    "thunder_near": ("bsb/3180.ogg", [(0.0, 12.0)]),
+    "thunder_near2": ("bsb/2718.ogg", [(0.0, 14.0)]),
+    "thunder_near3": ("bsb/3179.ogg", [(0.0, 12.0)]),
+    "thunder_near4": ("bsb/3115.ogg", [(0.0, 13.0)]),
+    "thunder_far": ("bsb/3116.ogg", [(0.0, 14.0)]),
+    "thunder_far2": ("bsb/3114.ogg", [(0.0, 11.0)]),
+    "thunder_far3": ("bsb/3184.ogg", [(8.0, 14.0)]),
+    "thunder_far4": ("bsb/3182.ogg", [(0.0, 14.0)]),
 }
+LOWPASS = {"thunder_far": 420} ## name prefix: cutoff Hz (distance takes the crack off thunder)
 
 SEAM = 3.0
 
@@ -130,6 +139,11 @@ def shot(name: str, src: str, start: float, length: float) -> None:
         a[len(a) - 1 - i] = int(a[len(a) - 1 - i] * i / g)
     p = OUT / "sfx" / f"{name}.wav"
     write(p, a)
+    for k, hz in LOWPASS.items():
+        if name.startswith(k):
+            tmp = p.with_suffix(".lp.wav")
+            ff("-i", str(p), "-af", f"lowpass=f={hz},lowpass=f={hz}", str(tmp))
+            tmp.replace(p)
     normalise(p, -18.0)
 
 
@@ -175,11 +189,16 @@ if __name__ == "__main__":
         files = [Path(f) for f in sys.argv[2:]] or sorted(SRC.glob("*/*.ogg"))
         for f in files:
             env(f)
-    else:
+    else: # build [names...]: all of them, or just these
+        only = sys.argv[2:]
         for k, v in LOOPS.items():
+            if only and k not in only:
+                continue
             loop(k, *v)
             print("loop", k)
         for k, (src, cuts) in SHOTS.items():
+            if only and k not in only:
+                continue
             for i, (st, ln) in enumerate(cuts):
                 shot(f"{k}_{i + 1}", src, st, ln)
             print("shots", k, len(cuts))

@@ -21,7 +21,7 @@ func load_state(d: Dictionary, _elapsed: float) -> void:
 	if water < 0: # placed a little off: find the nearest water
 		water = world.terrain.water_index(x, 800.0)
 	var wd: Dictionary = Terrain.WATERS[water]
-	global_position = Vector2(wd.x, world.terrain.surface_of(water))
+	global_position = Vector2(wd.x, world.terrain.surface_of(water, false))
 	var x0: float = wd.x - wd.half - OVERHANG
 	var x1: float = wd.x + wd.half + OVERHANG
 	_a = Vector2(x0, world.terrain.height_at(x0) - 6.0) - global_position

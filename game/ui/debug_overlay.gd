@@ -32,7 +32,7 @@ func _process(_delta: float) -> void:
 		"FPS %d" % Engine.get_frames_per_second(),
 		"Day %d  %02d:%02d  %s" % [c.day() + 1, int(c.hour_of_day()), int(fmod(c.hour_of_day(), 1.0) * 60), c.season_name()],
 		"Weather %s -> %s in %.1fh%s  cloud %.2f rain %.2f wind %.2f" % [Weather.NAMES[w.kind], Weather.NAMES[w.next_kind], w.hours_left, "  [WARNING]" if w.storm_warning() else "", w.cloud, w.precip, w.wind],
-		"Air %.1f°C" % w.air_temp_c(c),
+		"Air %.1f°C  fog %.2f  flood %.2f (%d)  ice %.2f  chinook %.1fh  breakup %.1fh%s" % [w.air_temp_c(c), w.fog, w.flood, w.floods, w.ice, w.chinook, w.breakup, "  THUNDER" if w.thunder else ""],
 		"HP %.0f  STA %.0f  FOOD %.0f  WATER %.0f  WARM %.0f  WET %.2f" % [k.health, k.stamina, k.hunger, k.thirst, k.warmth, k.wetness],
 		"Injuries %s" % str(k.injuries),
 		"Pos %.0f, %.0f  wade %.0f  chunks %s" % [player.global_position.x, player.global_position.y, player.wade_depth, str(world.chunks.keys())],

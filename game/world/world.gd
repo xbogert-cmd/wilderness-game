@@ -34,6 +34,7 @@ const KINDS := {
 	"gut_pile": preload("res://game/hunting/gut_pile.gd"),
 	"snare": preload("res://game/hunting/snare.gd"),
 	"bridge": preload("res://game/camp/log_bridge.gd"),
+	"stones": preload("res://game/camp/stepping_stones.gd"),
 	"sled": preload("res://game/camp/sled.gd"),
 }
 

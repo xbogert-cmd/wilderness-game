@@ -4,15 +4,17 @@ class_name FishTrap extends Node2D
 ## check it. A fish weir (stakes across a creek) funnels far more of them into a trap below
 ## it. A *gill net* strung across a river, lake, pond or pool catches more, but what's in it is
 ## dead: check it often or it spoils. Nothing's caught while the water's frozen over.
-## Catches up on hours spent away.
+## Catches up on hours spent away. A flood on a creek or the river may tear it loose and take it.
 
 const RATE := {"fish_trap": 0.05, "net": 0.1} ## fish per hour, on average
 const HOLDS := {"fish_trap": 3, "net": 5}
 const WEIR_R := 420.0
+const WASH := {"fish_trap": 0.5, "net": 0.6, "weir": 0.3} ## odds a flood takes it
 
 var world: World
 var variety := "fish_trap" ## "fish_trap" or "net"
 var fish: Array = [] ## [species, hour caught]
+var floods_seen := 0 ## Weather.floods when it was last checked
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -28,13 +30,14 @@ func _ready() -> void:
 func load_state(d: Dictionary, elapsed: float) -> void:
 	variety = d.kind
 	var i := world.terrain.water_index(float(d.x))
-	global_position = Vector2(float(d.x), world.terrain.surface_of(i) if i >= 0 else world.terrain.height_at(float(d.x)))
+	global_position = Vector2(float(d.x), world.terrain.surface_of(i, false) if i >= 0 else world.terrain.height_at(float(d.x)))
 	fish = d.get("fish", []).map(func(f): return [str(f[0]), float(f[1])])
+	floods_seen = int(d.get("floods", GameClock.weather.floods))
 	if elapsed > 0.0:
 		_on_tick.call_deferred(elapsed)
 
 func to_state() -> Dictionary:
-	return {"kind": variety, "x": global_position.x, "fish": fish}
+	return {"kind": variety, "x": global_position.x, "fish": fish, "floods": floods_seen}
 
 func can_unload() -> bool:
 	return true
@@ -63,6 +66,8 @@ func rate() -> float:
 func _on_tick(dh: float) -> void:
 	if not is_instance_valid(self) or is_queued_for_deletion():
 		return
+	if flood_took(self, _name()):
+		return
 	var n := 0
 	var t := 0.0 # hours in, over dh
 	while fish.size() < HOLDS[variety]:
@@ -76,6 +81,24 @@ func _on_tick(dh: float) -> void:
 		n += 1
 	if n > 0:
 		queue_redraw()
+
+## Each flood since it was last looked at may have torn it loose (only in running water).
+## True if it's gone.
+static func flood_took(n: Node2D, what: String) -> bool:
+	if n.floods_seen >= GameClock.weather.floods:
+		return false
+	var chance: float = WASH[n.variety] if "variety" in n else WASH.weir
+	var i: int = n.world.terrain.water_index(n.global_position.x)
+	var running: bool = i >= 0 and Terrain.WATERS[i].kind in Creek.FLOWING
+	while n.floods_seen < GameClock.weather.floods:
+		n.floods_seen += 1
+		if running and randf() < chance:
+			var p: Player = n.get_tree().get_first_node_in_group("player")
+			if p:
+				p.message.emit("The flood has torn your %s loose and taken it off down the %s." % [what, Terrain.WATERS[i].name])
+			n.queue_free()
+			return true
+	return false
 
 func interact_pos() -> Vector2:
 	return global_position

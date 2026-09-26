@@ -6,7 +6,8 @@ global uniform float ice; // 0 open .. 1 frozen hard
 global uniform float snow;
 uniform vec4 deep : source_color = vec4(0.16, 0.3, 0.34, 0.85);
 uniform vec4 shallow : source_color = vec4(0.36, 0.55, 0.6, 0.55);
-uniform float surface_y; // world y of the surface
+uniform float surface_y; // world y of the surface (it rises in a flood)
+uniform float mud = 0.0; // a flood runs brown
 varying vec2 world;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -21,8 +22,11 @@ void vertex() {
 
 void fragment() {
 	float d = world.y - surface_y;
+	if (d < -1.0) discard; // above the water (the polygon reaches flood height)
 	vec4 c = mix(shallow, deep, clamp(d / 110.0, 0.0, 1.0));
 	float n = vnoise(vec2(world.x * 0.02, world.y * 0.05 - TIME * 1.5));
+	c.rgb = mix(c.rgb, vec3(0.56, 0.46, 0.32) + (n - 0.5) * 0.12, mud * 0.75);
+	c.a = mix(c.a, 0.88, mud * 0.6);
 	c.rgb += (n - 0.5) * 0.06;
 	float line = smoothstep(4.0, 0.0, d) * (0.6 + 0.4 * vnoise(vec2(world.x * 0.05 + TIME, TIME)));
 	c.rgb = mix(c.rgb, haze_color.rgb, line * 0.7);

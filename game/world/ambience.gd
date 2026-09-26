@@ -133,7 +133,7 @@ func _place_creek() -> void:
 			best = i
 	var wd: Dictionary = Terrain.WATERS[best]
 	creek.position = Vector2(wd.x, terrain.surface_of(best))
-	creek.volume_db = {"river": 4.0, "pool": 9.0}.get(wd.kind, 0.0) # the pool is the falls: a roar
+	creek.volume_db = {"river": 4.0, "pool": 9.0}.get(wd.kind, 0.0) + 7.0 * GameClock.weather.flood # the pool is the falls: a roar; a flood roars too
 	creek.max_distance = {"river": 4200.0, "pool": 5200.0}.get(wd.kind, 3200.0)
 	creek.stream_paused = Creek.frozen() and GameClock.weather.ice > 0.9 # frozen hard: silence
 

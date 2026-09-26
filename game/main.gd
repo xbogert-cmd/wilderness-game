@@ -90,7 +90,21 @@ func _ready() -> void:
 	atmo.canvas_mod = canvas_mod
 	atmo.backdrop = backdrop
 	atmo.rain = rain
+	var veil_layer := CanvasLayer.new() # fog and blizzard over the world, under the HUD
+	veil_layer.layer = 5
+	var veil := ColorRect.new()
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	atmo.veil = ShaderMaterial.new()
+	atmo.veil.shader = preload("res://game/world/visibility.gdshader")
+	veil.material = atmo.veil
+	veil_layer.add_child(veil)
+	add_child(veil_layer)
 	add_child(atmo)
+	var storm := Storm.new()
+	storm.player = player
+	storm.world = world
+	add_child(storm)
 
 	var fishing := Fishing.new()
 	fishing.player = player
@@ -168,6 +182,19 @@ func _ready() -> void:
 		GameClock.clock.hours += 24.0 * float(args.day)
 	if args.has("weather"):
 		GameClock.force_weather(Weather.NAMES.find(args.weather))
+	if args.has("thunder"): # a thunderstorm on, and a strike close by in a moment
+		GameClock.force_weather(Weather.Kind.RAIN)
+		GameClock.weather.thunder = true
+		get_tree().create_timer(1.5).timeout.connect(func(): storm.strike(true, player.global_position.x + 400.0))
+	if args.has("fog"):
+		GameClock.weather.fog = float(args.fog) if args.fog != "" else 0.9
+		GameClock.weather.wind = 0.1
+	if args.has("flood"):
+		GameClock.weather.flood = float(args.flood) if args.flood != "" else 0.8
+	if args.has("chinook"):
+		GameClock.weather.chinook = 12.0
+	if args.has("baro"):
+		player.receive(ItemStack.make("barometer", GameClock.clock.hours))
 	if args.has("snow"):
 		GameClock.weather.snow_cm = float(args.snow)
 	if args.has("ice"):

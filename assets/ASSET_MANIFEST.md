@@ -82,6 +82,8 @@ Built by `tools/process_audio.py` from the originals in `assets/audio/src/bsb/` 
 | `sfx/bats_1` | BigSoundBank 0458 | Cries of bats |
 | `sfx/rockfall_1..5` | BigSoundBank 1022 | Fall of Stone |
 | `sfx/ice_1`, `ice2_1` | BigSoundBank 2205, 2206 | Cracking ice #1, #2 |
+| `sfx/thunder_near*_1` | BigSoundBank 3180, 2718, 3179, 3115 | Thunder #7, #1, #6, #4: close strikes |
+| `sfx/thunder_far*_1` | BigSoundBank 3116, 3114, 3184, 3182 | Thunder #5, #3, #11, #9, low-passed (420 Hz): distant rolls |
 | `amb/marsh_day` | BigSoundBank 0691 | Pond in a Field |
 | `amb/marsh_night` | BigSoundBank 0998 | Frogs #2 |
 | `amb/frogs_close` | Freesound 569543 (bmacphail) | Many Frogs at Night in Marsh |

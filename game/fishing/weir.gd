@@ -1,9 +1,10 @@
 class_name Weir extends Node2D
 ## A fish weir: a fence of stakes driven across a creek in a V, with a gap at the point. Fish
 ## moving up or down the creek are funnelled through the gap, and a fish trap set there (or
-## anywhere close) catches two or three times as many.
+## anywhere close) catches two or three times as many. A big flood can take it out.
 
 var world: World
+var floods_seen := 0
 
 func _ready() -> void:
 	add_to_group("persist")
@@ -12,13 +13,19 @@ func _ready() -> void:
 	add_to_group("weir")
 	z_as_relative = false
 	z_index = 9
+	GameClock.ticked.connect(_on_tick)
+
+func _on_tick(_dh: float) -> void:
+	if not is_queued_for_deletion():
+		FishTrap.flood_took(self, "fish weir")
 
 func load_state(d: Dictionary, _elapsed: float) -> void:
+	floods_seen = int(d.get("floods", GameClock.weather.floods))
 	var i := world.terrain.water_index(float(d.x))
-	global_position = Vector2(float(d.x), world.terrain.surface_of(i) if i >= 0 else world.terrain.height_at(float(d.x)))
+	global_position = Vector2(float(d.x), world.terrain.surface_of(i, false) if i >= 0 else world.terrain.height_at(float(d.x)))
 
 func to_state() -> Dictionary:
-	return {"kind": "weir", "x": global_position.x}
+	return {"kind": "weir", "x": global_position.x, "floods": floods_seen}
 
 func can_unload() -> bool:
 	return true

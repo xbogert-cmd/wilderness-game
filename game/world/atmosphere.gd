@@ -21,6 +21,7 @@ var sky: ShaderMaterial
 var canvas_mod: CanvasModulate
 var backdrop: Backdrop
 var rain: Rain
+var veil: ShaderMaterial ## fog and blizzard over the view (visibility.gdshader)
 var _keys: Array = []
 
 func _ready() -> void:
@@ -54,8 +55,16 @@ func _process(_delta: float) -> void:
 		ambient = ambient.lerp(Color(0.8, 0.82, 0.86) * lerpf(0.45, 1.0, light), bz * 0.35)
 	var p: Player = get_tree().get_first_node_in_group("player")
 	var under := p.under if p else 0.0
+	var fog := Terrain.fog_at(p.global_position.x) * (1.0 - under) if p else 0.0
+	if fog > 0.0: # fog greys and flattens the light
+		ambient = ambient.lerp(horizon.lerp(Color(0.75, 0.77, 0.78) * lerpf(0.3, 1.0, light), 0.6), fog * 0.25)
+		horizon = horizon.lerp(Color(0.78, 0.8, 0.8) * lerpf(0.3, 1.0, light), fog * 0.6)
 	if under > 0.0: # underground it's dark whatever the hour: bring a light
 		ambient = ambient.lerp(Color(0.11, 0.105, 0.12), under * 0.95)
+	if Storm.flash > 0.0: # lightning
+		ambient = ambient.lerp(Color(0.92, 0.94, 1.0), Storm.flash * 0.75)
+		top = top.lerp(Color(0.8, 0.82, 0.95), Storm.flash * 0.6)
+		horizon = horizon.lerp(Color(0.85, 0.87, 0.97), Storm.flash * 0.6)
 	ambient.a = 1.0
 
 	RenderingServer.global_shader_parameter_set("haze_color", horizon)
@@ -74,5 +83,17 @@ func _process(_delta: float) -> void:
 	sky.set_shader_parameter("stars", 1.0 - smoothstep(0.0, 0.12, light))
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
-	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz)
+	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz + 1.2 * w.fog)
+	if veil and p:
+		var vp := get_viewport()
+		var ct := vp.get_canvas_transform()
+		veil.set_shader_parameter("center", ct * (p.global_position + Vector2(0, -80)))
+		veil.set_shader_parameter("view", vp.get_visible_rect().size)
+		veil.set_shader_parameter("scroll", -ct.origin)
+		veil.set_shader_parameter("fog", fog)
+		veil.set_shader_parameter("snow", bz * (1.0 - under) * (0.5 if p.world.sheltered_at(p.global_position.x) else 1.0))
+		veil.set_shader_parameter("wind_dir", float(w.wind_dir))
+		var dim := lerpf(0.22, 1.0, light) * lerpf(1.0, 0.8, w.cloud)
+		veil.set_shader_parameter("fog_color", Color(0.8, 0.82, 0.83) * dim + Color(0.02, 0.02, 0.03))
+		veil.set_shader_parameter("snow_color", Color(0.9, 0.92, 0.95) * dim + Color(0.03, 0.03, 0.04))
 	rain.set_weather(w.rain() * (1.0 - under), w.snowfall() * (1.0 - under), w.wind)

@@ -60,6 +60,17 @@ func _wind(at: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([mid + Vector2(dir * (len + 7.0), 0), mid + Vector2(dir * len, -5), mid + Vector2(dir * len, 5)]), c)
 	_text(at + Vector2(54, 0), "Wind: " + word, 15, c)
 
+## The keeper's barometer: the reading, and which way it's heading.
+func _barometer(at: Vector2) -> void:
+	var w := GameClock.weather
+	var trend := w.pressure_trend()
+	var word: String = {-2: "falling fast", -1: "falling", 0: "steady", 1: "rising"}[trend]
+	var c := Color(TEXT, 0.8) if trend > -2 else Color(1.0, 0.72, 0.45, 0.95)
+	var mid := at + Vector2(22, -5)
+	draw_arc(mid, 10.0, PI, TAU, 12, c, 2.0)
+	draw_line(mid, mid + Vector2.from_angle(PI * (1.5 + 0.2 * trend)) * 9.0, c, 2.0)
+	_text(at + Vector2(54, 0), "Barometer: %.2f, %s" % [w.pressure_inhg(), word], 15, c)
+
 func _text(pos: Vector2, s: String, size := 16, col := TEXT, center := false) -> void:
 	var w := _font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var p := pos - Vector2(w * 0.5 if center else 0.0, 0)
@@ -90,6 +101,10 @@ func _draw() -> void:
 	if cond.wetness > 0.15: notes.append("Soaked" if cond.wetness > 0.6 else "Damp")
 	if cond.fatigue > 60.0: notes.append("Exhausted" if cond.fatigue > 85.0 else "Tired")
 	if GameClock.weather.blizzard() > 0.3: notes.append("Blizzard")
+	if cond.plunged > 0.0: notes.append("Ice-water soaked: get to a fire!")
+	if GameClock.weather.thunderstorm(): notes.append("Thunderstorm")
+	if Terrain.fog_at(player.global_position.x) > 0.35 and not player.underground: notes.append("Fog")
+	if GameClock.weather.chinook > 0.0: notes.append("Chinook")
 	if cond.sickness > 0.15: notes.append("Very sick" if cond.sickness > 0.5 else "Queasy")
 	if cond.infection > Condition.FEVER_AT: notes.append("Fever (infected)")
 	elif cond.infection > 0.12: notes.append("Wound festering")
@@ -111,6 +126,8 @@ func _draw() -> void:
 			hand += "  · %d arrows" % player.backpack.count_of("arrows")
 	_text(Vector2(GAP * 4 + 30, size.y - 40), hand, 15, Color(TEXT, 0.85))
 	_wind(Vector2(size.x - 190, size.y - 44))
+	if player.backpack.count_of("barometer") > 0 or (player.held and player.held.def.id == "barometer"):
+		_barometer(Vector2(size.x - 190, size.y - 72))
 
 	# Interaction popups: a key-cap plus action, floating over the thing you'd act on.
 	var placed: Array[Vector2] = []

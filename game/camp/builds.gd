@@ -16,6 +16,7 @@ const STRUCTURES := {
 	"blind": {"name": "Hunting blind", "width": 160.0, "h": 105.0, "needs": {"sticks": 6}, "hours": 0.4, "seconds": 2.5},
 	"snare": {"name": "Snare", "width": 40.0, "h": 30.0, "needs": {"snare": 1}, "hours": 0.1, "seconds": 1.0},
 	"sled": {"name": "Sled", "width": 190.0, "h": 60.0, "needs": {"medium": 1, "sticks": 6}, "hours": 1.0, "seconds": 3.5, "loose": true},
+	"stones": {"name": "Stepping stones", "width": 200.0, "h": 40.0, "needs": {}, "hours": 2.0, "seconds": 4.0, "water": "ford"}, # rocks rolled up out of the creek bed
 	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": "span"},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 	"smokehouse": {"name": "Smokehouse", "width": 170.0, "h": 245.0, "needs": {"medium": 3, "short": 4, "sticks": 4}, "hours": 3.0, "seconds": 5.0},
@@ -57,7 +58,7 @@ const GROUPS := {
 ## Build book chapters, in order.
 const BUILD_GROUPS := {
 	"Camp": ["campfire", "tripod", "lean_to", "woodpile", "chest", "cabin"],
-	"Work": ["workbench", "hide_frame", "drying_rack", "smokehouse", "sled", "bridge"],
+	"Work": ["workbench", "hide_frame", "drying_rack", "smokehouse", "sled", "stones", "bridge"],
 	"Food storage": ["cache", "bear_bag"],
 	"Fishing": ["fish_trap", "weir", "net"],
 	"Hunting": ["blind", "bait", "snare"],
@@ -115,6 +116,7 @@ const WHAT := {
 	"snare": "catches rabbits overnight",
 	"sled": "pull logs, a deer, or gear over snow",
 	"bridge": "across a creek or the river: walk over dry",
+	"stones": "rocks rolled out of the creek bed into a line across it: cross a creek with dry feet, until it floods over them. No materials, just work",
 	"cabin": "the warmest shelter: a real home",
 	"smokehouse": "smokes meat and fish that keep over a month, in any weather",
 	"cache": "a food store up on posts: nothing raids it; food freezes and keeps",

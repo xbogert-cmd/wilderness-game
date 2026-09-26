@@ -167,6 +167,7 @@ func _perceive(delta: float) -> void:
 		stim += (1.0 - d / heard) * 3.0
 	var looking := facing == int(signf(player.global_position.x - position.x))
 	var sight := def.sight * player.visibility() * (0.35 + 0.65 * GameClock.clock.daylight())
+	sight *= 1.0 - 0.6 * maxf(Terrain.fog_at(position.x), GameClock.weather.blizzard()) # fog and driving snow hide you
 	sight *= (0.45 if state in [State.GRAZE, State.BEDDED] else 1.0) * (1.0 if looking else 0.55)
 	if d < sight:
 		stim += (1.0 - d / sight) * 2.0

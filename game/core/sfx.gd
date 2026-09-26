@@ -51,6 +51,19 @@ static func chop() -> AudioStream:
 static func split() -> AudioStream:
 	return pool("split", takes("split", 3) + takes("axe", 6), 1.06, 2.0)
 
+## Ice cracking: thin ice underfoot, floes in the breakup.
+static func ice() -> AudioStream:
+	return pool("ice", ["res://assets/audio/sfx/ice_1.wav", "res://assets/audio/sfx/ice2_1.wav"], 1.12, 3.0)
+
+## A lightning strike close by, and thunder rolling far off.
+static func thunder_near() -> AudioStream:
+	return pool("thunder_near", ["res://assets/audio/sfx/thunder_near_1.wav", "res://assets/audio/sfx/thunder_near2_1.wav",
+		"res://assets/audio/sfx/thunder_near3_1.wav", "res://assets/audio/sfx/thunder_near4_1.wav"], 1.04, 2.0)
+
+static func thunder_far() -> AudioStream:
+	return pool("thunder_far", ["res://assets/audio/sfx/thunder_far_1.wav", "res://assets/audio/sfx/thunder_far2_1.wav",
+		"res://assets/audio/sfx/thunder_far3_1.wav", "res://assets/audio/sfx/thunder_far4_1.wav"], 1.06, 3.0)
+
 static func bleat() -> AudioStream:
 	return pool("bleat", ["res://assets/audio/sfx/bleat_1.wav", "res://assets/audio/sfx/bleat_2.wav"], 1.05, 1.5)
 

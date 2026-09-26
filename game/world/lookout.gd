@@ -109,6 +109,11 @@ func _draw() -> void:
 		draw_line(Vector2(-118 + i * 59.0, FLOOR - 176), Vector2(-118 + i * 59.0, FLOOR - 90), dark, 4.0)
 	for i in 6:
 		draw_line(Vector2(-130, FLOOR - 70 + i * 12.0), Vector2(130, FLOOR - 70 + i * 12.0), wood.darkened(0.15), 1.5)
+	if not world.chunk_state(chunk_index).get("barometer_taken", false): # the keeper's barometer on the wall
+		var at := Vector2(78, FLOOR - 42)
+		draw_circle(at, 12.0, Color(0.72, 0.58, 0.3))
+		draw_circle(at, 9.0, Color("efe6d0"))
+		draw_line(at, at + Vector2.from_angle(PI * (1.2 + 0.25 * GameClock.weather.pressure_trend())) * 8.0, Color("2a2420"), 1.5)
 	draw_colored_polygon(PackedVector2Array([Vector2(-160, FLOOR - 186), Vector2(160, FLOOR - 186), Vector2(0, FLOOR - 270)]), dark)
 	draw_rect(Rect2(-DECK - 10, FLOOR - 6, (DECK + 10) * 2.0, 12), wood)
 	if GameClock.weather.snow_cm > 2.0:
@@ -138,16 +143,35 @@ class LookoutCache extends Node2D:
 	func interact_pos() -> Vector2:
 		return global_position
 
+	func _barometer() -> bool: # still on the wall
+		return not lookout.world.chunk_state(lookout.chunk_index).get("barometer_taken", false)
+
 	func interact_label(_p: Player) -> String:
-		return "" if _searched() else "Search the keeper's cupboard"
+		if not _searched():
+			return "Search the keeper's cupboard"
+		return "Take the barometer off the wall" if _barometer() else ""
 
 	func interact(p: Player) -> void:
-		lookout.world.chunk_state(lookout.chunk_index)["lookout_searched"] = true
 		var h := GameClock.clock.hours
+		if _searched(): # (a save from before the barometer: it's still on the wall)
+			if _barometer():
+				_take_barometer(p)
+			return
+		lookout.world.chunk_state(lookout.chunk_index)["lookout_searched"] = true
 		for s in [ItemStack.make("jerky", h, 4), ItemStack.make("bandage", h, 2), ItemStack.make("lighter", h), ItemStack.make("arrows", h, 4)]:
 			if not p.receive(s):
 				lookout.world.spawn({"kind": "item", "x": p.global_position.x, "stack": s.to_dict()})
 		p.message.emit("The keeper's cupboard: jerky, bandages, a lighter, arrows, and the lookout's logbook.")
+		_take_barometer(p)
 		Journal.note("log_1", "Lookout logbook, first page kept: \"Sept 12. Smoke to the northwest, a lightning start. Reported. Elk bugling in the draw below the rock shelter all week.\"")
 		Journal.note("log_2", "Lookout logbook: \"Oct 2. First snow on the ridge overnight, gone by noon. Creek running low and clear. Deer come up the game trail west of the tower at dusk, reliable as a clock.\"")
 		Journal.note("log_3", "Lookout logbook, last entry: \"Oct 19. Lights again last night, far up the valley past the edge of the map, where nobody lives. Not fire. Relief is late. Going down to the rock shelter to wait out the storm.\" Nothing after that.")
+
+	func _take_barometer(p: Player) -> void:
+		lookout.world.chunk_state(lookout.chunk_index)["barometer_taken"] = true
+		var s := ItemStack.make("barometer", GameClock.clock.hours)
+		if not p.receive(s):
+			lookout.world.spawn({"kind": "item", "x": p.global_position.x, "stack": s.to_dict()})
+		p.message.emit("And the keeper's brass barometer off the wall. Falling means weather's coming.")
+		Journal.note("barometer", "Took the lookout keeper's barometer. When the needle drops, weather's coming, often half a day before the sky shows it. Dropping fast: a storm. A chinook drops it too.")
+		lookout.queue_redraw()

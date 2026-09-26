@@ -211,6 +211,9 @@ func _physics_process(delta: float) -> void:
 	if pulling:
 		speed *= pulling.speed_mult()
 	velocity.x = move_toward(velocity.x, dir * speed, ACCEL * delta)
+	var push := _flood_push()
+	if push != 0.0:
+		velocity.x = push
 	if running:
 		cond.spend_stamina(GameClock.tuning.run_stamina_per_sec * delta)
 	elif (carrying or hauling or pulling) and dir != 0.0:
@@ -338,6 +341,32 @@ func exertion() -> float:
 	if working > 0.0: return 0.4
 	return 0.3 if absf(velocity.x) > 1.0 else 0.0
 
+## A creek in flood is too deep and fast to wade: the current shoves you back to the bank.
+var _flood_msg := 0
+var _was_plunged := false
+func _flood_push() -> float:
+	if wade_depth < 45.0:
+		return 0.0
+	var c := Creek.at(get_tree(), global_position.x)
+	if c == null or not c.in_flood():
+		return 0.0
+	if Time.get_ticks_msec() > _flood_msg:
+		_flood_msg = Time.get_ticks_msec() + 6000
+		message.emit("The %s's in flood: too deep and fast to wade. Wait for it to go down, or cross on a bridge." % c.kind())
+		Journal.note("flood", "The creeks come up fast after a hard rain or a warm spell on the snow: brown water, bank to bank, and no wading it. A day or so and it drops. Anything left in the water can go downstream.")
+	var away := signf(global_position.x - c.w().x) # back to the nearer bank
+	return (away if away != 0.0 else 1.0) * WALK * 0.7
+
+## Through the ice into the creek: soaked through in freezing water. Get to a fire, fast.
+func plunge() -> void:
+	cond.wetness = 1.0
+	cond.warmth = maxf(cond.warmth - 30.0, 0.0)
+	cond.plunged = Condition.PLUNGE_HOURS
+	message.emit("The ice gives way! You plunge into black, freezing water.")
+	work(1.6, 0.0, "Hauling yourself out", func():
+		message.emit("You drag yourself out onto the ice, soaked to the skin and shaking. Get to a fire, fast."))
+	Journal.note("plunge", "Went through the ice. The cold drives the breath out of you, then your clothes are ice. Thin ice creaks and sags before it goes: when it does, get off it. And have a fire close.")
+
 func _on_tick(dh: float) -> void:
 	if dead:
 		return
@@ -360,6 +389,9 @@ func _on_tick(dh: float) -> void:
 		"legs_covered": backpack.worn.legs != null,
 		"deep_snow": w.snow_cm > 25.0 and not world.sheltered_at(global_position.x),
 	})
+	if _was_plunged and cond.plunged <= 0.0:
+		message.emit("The fire's heat gets into you. The shaking eases." if world.heat_at(global_position + Vector2(0, -60)) > 0.25 else "Your clothes are stiff with ice, but the worst of it's over.")
+	_was_plunged = cond.plunged > 0.0
 	if holding("light") and held.condition > 0.0:
 		held.condition = maxf(held.condition - dh / LANTERN_HOURS, 0.0)
 		if held.condition <= 0.0:

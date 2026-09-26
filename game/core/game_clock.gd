@@ -27,3 +27,6 @@ func force_weather(kind: int) -> void:
 	weather.cloud = Weather.CLOUD[kind]
 	weather.precip = Weather.PRECIP[kind]
 	weather.wind = Weather.WIND[kind]
+	weather.thunder = false
+	weather.next_thunder = false
+	weather.chinook = 0.0

@@ -47,7 +47,7 @@ func interact_pos() -> Vector2: # anywhere along a wide one (a bridge's is the w
 	return Vector2(clampf(p.global_position.x, global_position.x - half, global_position.x + half), global_position.y) if p else global_position
 
 func _span() -> float:
-	if def().get("water") != "span":
+	if def().get("water") not in ["span", "ford"]:
 		return 0.0
 	var i := world.terrain.water_index(global_position.x)
 	return Terrain.WATERS[i].half * 2.0 + 180.0 if i >= 0 else 0.0

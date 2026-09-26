@@ -181,16 +181,33 @@ func water_index(x: float, margin := 0.0) -> int:
 			return i
 	return -1
 
-func surface_of(i: int) -> float:
-	return banks[i] + WATERS[i].water
+## How far each kind of water comes up in a flood, as a share of the bank above it.
+const RISE := {"creek": 1.0, "river": 1.0, "pool": 0.6, "pond": 0.35, "lake": 0.3, "spring": 0.0}
+
+## The water's surface now (live: risen with any flood; else its usual level, for anything
+## that must not move with the weather, like where a chunk scatters its trees).
+func surface_of(i: int, live := true) -> float:
+	return banks[i] + WATERS[i].water - (max_rise(i) * GameClock.weather.flood if live else 0.0)
+
+## How far it can rise: nearly to the top of its banks.
+func max_rise(i: int) -> float:
+	return maxf(float(WATERS[i].water) - 6.0, 0.0) * RISE.get(WATERS[i].kind, 0.0)
 
 ## Water surface y at x, or INF where there is no water.
-func water_surface_at(x: float) -> float:
+func water_surface_at(x: float, live := true) -> float:
 	var i := water_index(x)
 	if i < 0:
 		return INF
-	var s := surface_of(i)
+	var s := surface_of(i, live)
 	return s if height_at(x) > s else INF
+
+## How thick the fog lies here: it fills the valleys and bottoms, and up on the ridge you
+## stand above it.
+const FOG := {"valley": 1.0, "river": 1.0, "marsh": 1.0, "meadow": 0.9, "oldgrowth": 1.0, "grove": 0.9, "alpine": 0.7,
+	"burn": 0.6, "sage": 0.5, "foothills": 0.5, "boulders": 0.4, "canyon": 0.3, "desert": 0.15, "ridge": 0.05}
+
+static func fog_at(x: float) -> float:
+	return GameClock.weather.fog * FOG.get(biome(x), 0.5)
 
 func water_depth_at(x: float, feet_y: float) -> float:
 	var s := water_surface_at(x)

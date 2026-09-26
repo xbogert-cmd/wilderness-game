@@ -35,6 +35,17 @@ godot
 
 **Seasons and snow:** the journey starts in early autumn and the year turns: autumn, winter, spring, summer (6 days each, see `data/tuning.tres`). Temperature and day length follow the year smoothly: the aspens go gold, then bare; nights get cold; below freezing the weather brings snow instead of rain. Snow lies and deepens, slows you (knee-deep costs about 40% of your pace), and takes everyone's tracks, anywhere. A long hard cold freezes the creek: the ice bears your weight, E chops a hole to reach the water (it skins over in about 8 hours), and an empty pot held on snow packs full of it to melt and boil on the fire. Your breath shows in the cold, working keeps you warmer, and winter thins the deer. The pause menu shows the day and season; the backpack shows the air temperature.
 
+**Weather you can read:** before rain the wind backs round, the sky thickens and the birds go quiet (a message says so); before a thunderstorm thunder mutters far off. The lookout keeper's brass *barometer* (on the cab wall at the fire lookout) shows the pressure bottom right while it's in your pack: *falling* means rain within hours, well before the sky shows it, *falling fast* a storm. Weather to know:
+- *Thunderstorms* (warm-season rain): lightning flashes and the thunder comes after, later the farther off the strike. Now and then it strikes close and the tallest tree nearby catches in the crown, raining embers for an hour or two until the rain beats it out. Warm yourself at the foot of it, or hold a stick in the embers for a torch. Nothing burns for good.
+- *Fog*: calm mornings after rain, and in spring and autumn, fog fills the valleys and bottoms and burns off by late morning. You can hardly see a stone's throw, and animals can hardly see you. Up on the ridge you stand above it.
+- *Blizzards* white out the view the same way, and cut through your clothes.
+- *Chinook*: now and then in midwinter a warm wind roars down off the ridge, 15 °C and more warmer, and eats the snow in hours. Thin ice and high water follow.
+- *Floods*: hard rain, thunderstorms and snowmelt raise the creeks. In flood they run brown, bank to bank, and are too deep and fast to wade: the current shoves you back to the bank; cross on a bridge, or wait a day for it to drop. A flood can tear fish traps, gill nets and weirs loose and take them downstream.
+- *Thin ice*: new ice, and thawing ice, is thin: it creaks and sags under you, then cracks, then gives way. Through the ice you're soaked to the skin in freezing water, and until you get to a fire it hurts you badly (it won't kill you on its own). Hard ice is safe.
+- *The breakup*: in a thaw the ice goes out down the creeks in grinding, cracking floes, and the water comes up behind it.
+
+**Stepping stones** (build book, no materials, 2 hours of rolling rocks out of the creek bed): a line of flat rocks across a creek to cross with dry feet. The river's too deep for them, and in flood the water runs over them.
+
 **Woodpile:** build one (B, 4 sticks) and stack short logs in it with E. It holds 15, drawn end-on as a pyramid that matches the count. E with empty hands takes one back out, and a fire within a few metres feeds straight from the pile.
 
 **Camp builds:** everything is placed with B and built by bringing materials and pressing E.
@@ -127,9 +138,10 @@ godot --headless --fixed-fps 60 -- --scenario=under               # cellar, cave
 godot --headless --fixed-fps 60 -- --scenario=fish                # fish per water, the salmon run, traps, weir, net, fish spear, ice auger
 godot --headless --fixed-fps 60 -- --scenario=hunts               # wolves run down deer (or give up), kill sites, coyotes
 godot --headless --fixed-fps 60 -- --scenario=stores              # cellar shelves, raids, raised cache, bear bag physics, smokehouse
+godot --headless --fixed-fps 60 -- --scenario=weather             # thunderstorms, lightning fires, chinooks, fog, floods, stepping stones, thin ice, breakup, barometer
 godot --headless --fixed-fps 60 -- --scenario=sounds              # every biome sounds like itself; blending, seasons, echo, calls
 godot --fixed-fps 60 -- --scenario=icons                          # (windowed) re-render the build book's pictures into assets/builds/ after changing a build's art
-godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id] --stores[=wind] --chase --fishgear
+godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1] [--den=1] --throw --recipes[=id] --buildmenu[=id] --stores[=wind] --chase --fishgear --thunder --fog[=0..1] --flood[=0..1] --chinook --baro
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
 Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.

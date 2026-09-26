@@ -112,7 +112,7 @@ func _plants(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 		var x := index * Terrain.CHUNK_W + rng.randf_range(250.0, Terrain.CHUNK_W - 250.0)
 		var wet := terrain.water_index(x, 900.0) >= 0 or Terrain.marsh(x) > 0.5
 		var sp := Plant.pick_for(Terrain.biome(x), wet, rng)
-		if terrain.water_surface_at(x) != INF or not _open(x) or absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF or absf(x - Terrain.LOOKOUT_X) < 300.0 or Underground.in_opening(x):
+		if terrain.water_surface_at(x, false) != INF or not _open(x) or absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF or absf(x - Terrain.LOOKOUT_X) < 300.0 or Underground.in_opening(x):
 			continue
 		var id := 2000 + k # clear of the tree, bush and vine ids in the "picked" table
 		var p := Plant.new()
@@ -152,7 +152,7 @@ func _trail_poly() -> Polygon2D:
 		var x := a
 		while x < b:
 			var seg := minf(x + 70.0, b)
-			if _terrain.water_surface_at(x) == INF:
+			if _terrain.water_surface_at(x, false) == INF:
 				shapes.append(PackedVector2Array([Vector2(x, _terrain.height_at(x) - 3.0), Vector2(seg, _terrain.height_at(seg) - 3.0),
 					Vector2(seg, _terrain.height_at(seg) + 7.0), Vector2(x, _terrain.height_at(x) + 7.0)]))
 			x += 95.0
@@ -197,7 +197,7 @@ func _band(p: Polygon2D, depth: float, below: float) -> void:
 	var cols := PackedColorArray()
 	var bottom := PackedVector2Array()
 	for s in _surface:
-		var d := 0.0 if _terrain.water_surface_at(s.x) != INF else depth * (1.0 + 0.15 * sin(s.x * 0.013) + 0.08 * sin(s.x * 0.041))
+		var d := 0.0 if _terrain.water_surface_at(s.x, false) != INF else depth * (1.0 + 0.15 * sin(s.x * 0.013) + 0.08 * sin(s.x * 0.041))
 		pts.append(s - Vector2(0, d))
 		cols.append(Color(0.94, 0.96, 0.99))
 		bottom.append(s + Vector2(0, below))
@@ -467,7 +467,7 @@ func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: flo
 	var x := x0
 	var cols: Array = GRASS_COLORS.get(Terrain.biome((x0 + x1) * 0.5), [Palette.GRASS, Palette.GRASS_DRY]) if not legacy() else [Palette.GRASS, Palette.GRASS_DRY]
 	while x < x1:
-		if terrain.water_surface_at(x) == INF:
+		if terrain.water_surface_at(x, false) == INF:
 			if Underground.in_opening(x, 10.0):
 				pass # nothing grows over a hole in the ground
 			elif terrain.soft_at(x) and Terrain.marsh(x) < 0.5 and rng.randf() < 0.85:
@@ -491,7 +491,7 @@ func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: flo
 
 func _creek(terrain: Terrain, i: int) -> void:
 	var wd: Dictionary = Terrain.WATERS[i]
-	var s := terrain.surface_of(i)
+	var s := terrain.surface_of(i, false) - terrain.max_rise(i) # drawn to flood height; the shader shows the level
 	var top := PackedVector2Array()
 	var bottom := PackedVector2Array()
 	var x: float = wd.x - wd.half
@@ -506,11 +506,12 @@ func _creek(terrain: Terrain, i: int) -> void:
 	water.polygon = top
 	var m := ShaderMaterial.new()
 	m.shader = WATER_SHADER
-	m.set_shader_parameter("surface_y", s)
+	m.set_shader_parameter("surface_y", terrain.surface_of(i))
 	water.material = m
 	water.z_index = 7 # over the player's submerged legs
 	add_child(water)
 	var creek := Creek.new()
 	creek.terrain = terrain
 	creek.index = i
+	creek.water_mat = m
 	add_child(creek)

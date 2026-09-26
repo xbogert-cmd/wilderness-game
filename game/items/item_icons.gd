@@ -281,6 +281,14 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 			ci.draw_line(Vector2(w * 0.12, h * 0.1), Vector2(w * 0.88, h * 0.1), a.call(HAFT), u * 0.2)
 			for k in 5:
 				ci.draw_arc(Vector2(w * 0.5, h * (0.55 + k * 0.08)), w * 0.2, 0.0, PI, 6, a.call(STEEL.lightened(0.2)), 2.0)
+		"barometer": # a brass case, the dial and its needle
+			ci.draw_circle(Vector2(w * 0.5, h * 0.5), w * 0.4, a.call(c))
+			ci.draw_circle(Vector2(w * 0.5, h * 0.5), w * 0.32, a.call(Color("efe6d0")))
+			for k in 7:
+				var ang := PI * (0.8 + k * 0.233)
+				ci.draw_line(Vector2(w * 0.5, h * 0.5) + Vector2.from_angle(ang) * w * 0.25, Vector2(w * 0.5, h * 0.5) + Vector2.from_angle(ang) * w * 0.3, a.call(Color("3a3028")), 1.5)
+			ci.draw_line(Vector2(w * 0.5, h * 0.5), Vector2(w * 0.5, h * 0.5) + Vector2.from_angle(PI * 1.35) * w * 0.26, a.call(Color("2a2420")), 2.0)
+			ci.draw_circle(Vector2(w * 0.5, h * 0.1), w * 0.08, a.call(c.darkened(0.2)))
 		"flint":
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.2, h * 0.7), Vector2(w * 0.35, h * 0.25), Vector2(w * 0.7, h * 0.18), Vector2(w * 0.85, h * 0.55), Vector2(w * 0.55, h * 0.85)]), a.call(c))
 			ci.draw_line(Vector2(w * 0.4, h * 0.35), Vector2(w * 0.65, h * 0.3), a.call(c.lightened(0.5)), 2.0)

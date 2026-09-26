@@ -16,6 +16,8 @@ class_name Scenario extends Node
 ## pot cooking (stews, teas), crafting from nearby chests, winter travel.
 ## Mode "under": the root cellar, the cave and the mine (drop-through hatches, ladders, ropes,
 ## the dark, flint and coal), the newest country, finds, springs, the falls, and regrowth.
+## Mode "weather": thunderstorms and lightning, chinooks, fog, floods and fords, thin ice,
+## the breakup, and the barometer.
 
 var player: Player
 var world: World
@@ -43,6 +45,7 @@ func _ready() -> void:
 		"stores": _stores.call_deferred()
 		"hunts": _hunts.call_deferred()
 		"fish": _fish.call_deferred()
+		"weather": _weather.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -1177,7 +1180,7 @@ func _den_and_winter_wolves() -> void:
 	var w := _wl().spawn_predator(Wildlife.WOLF, 12000.0, 9)
 	w.travel = 1.0
 	await frames(60 * 10)
-	check(w.position.x - 12000.0 > 900.0, "a travelling pack covers ground (%.0f px in 10 s)" % (w.position.x - 12000.0))
+	check(absf(w.position.x - 12000.0) > 900.0, "a travelling pack covers ground (%.0f px in 10 s)" % absf(w.position.x - 12000.0))
 	check(w._range() == Wildlife.WOLF.home_range * 2.0, "wolves range twice as wide in winter")
 	await _clear_wild()
 	GameClock.clock.hours = ceilf(GameClock.clock.hours / year) * year + year * 0.5 + 12.0 # early spring
@@ -2955,3 +2958,292 @@ func teleport_under(x: float, near_y := NAN) -> void:
 	player.global_position = Vector2(x, y - 4.0)
 	player.velocity = Vector2.ZERO
 	await frames(8)
+
+# --- Mode "weather": storms and lightning, chinooks, fog, floods, stepping stones, thin ice ---
+
+## Game hours at year position yp (0 = spring) and this hour of the day, in the coming year.
+func _when(yp: float, hour: float) -> float:
+	var year := GameClock.clock.season_hours() * 4.0
+	var base := ceilf(GameClock.clock.hours / year) * year
+	return floorf((base + fposmod(yp - Clock.START_YEAR, 1.0) * year) / 24.0) * 24.0 + hour
+
+func _storm() -> Storm:
+	return get_parent().find_children("*", "Storm", false, false)[0]
+
+func _weather() -> void:
+	await frames(10)
+	# The model on its own: thunderstorms come out of summer rain, never winter's.
+	var clock := Clock.new()
+	clock.days_per_season = GameClock.clock.days_per_season
+	var count := func(yp: float) -> int:
+		clock.hours = _when(yp, 15.0)
+		var w := Weather.new(5)
+		var n := 0
+		for k in 4000:
+			w.step(0.5, clock)
+			clock.hours = _when(yp, 15.0) # (hold the season and the afternoon)
+			n += 1 if w.thunderstorm() else 0
+		return n
+	var summer: int = count.call(0.375)
+	var winter: int = count.call(0.875)
+	check(summer > 20 and winter == 0, "thunderstorms in summer (%d half-hours of 4000), none in winter" % summer)
+	# A warm day's rain building: thunder far off before it comes.
+	var w := Weather.new(2)
+	w.kind = Weather.Kind.OVERCAST
+	w.next_kind = Weather.Kind.RAIN
+	w.next_thunder = true
+	w.hours_left = 1.0
+	check(w.thunder_far() and not w.thunderstorm(), "a thunderstorm coming: thunder far off first")
+	# The barometer falls long before the sky shows it.
+	w.hours_left = 5.0
+	w.next_thunder = false
+	var steady := Weather.new(2)
+	steady.kind = Weather.Kind.CLEAR
+	steady.next_kind = Weather.Kind.OVERCAST
+	check(w.pressure_trend() < 0 and not w.storm_warning(), "rain five hours off: the barometer's already falling, the sky's still quiet")
+	check(steady.pressure_trend() == 0 and w.pressure_inhg() < steady.pressure_inhg() + 0.3, "fair weather: steady")
+	# A chinook in midwinter: warm, and the snow and ice go.
+	clock.hours = _when(0.875, 12.0)
+	w = Weather.new(3)
+	w.snow_cm = 40.0
+	w.ice = 1.0
+	var cold := w.air_temp_c(clock)
+	w.chinook = 14.0
+	w.step(0.01, clock)
+	w.chinook = 14.0
+	check(w.air_temp_c(clock) > cold + 10.0 and w.air_temp_c(clock) > 3.0, "a chinook: midwinter goes from %.0f to %.0f °C" % [cold, w.air_temp_c(clock)])
+	var was_thin := false
+	var peak := 0.0
+	var broke := false
+	for k in 48:
+		w.step(0.25, clock)
+		was_thin = was_thin or (w.ice >= Creek.FROZEN and w.ice < Creek.SOLID)
+		peak = maxf(peak, w.flood)
+		broke = broke or w.breakup > 0.0
+	check(w.snow_cm < 20.0, "it eats the snow (%.0f cm left of 40 in 12 h)" % w.snow_cm)
+	check(was_thin and w.ice < Creek.FROZEN, "the creek ice goes thin, then out")
+	check(broke and peak >= Weather.WADE_FLOOD, "the ice going out, and meltwater raising the creeks (flood up to %.2f)" % peak)
+	check(w.wind_dir == -1 and w.wind > 0.5, "the wind roars down off the ridge")
+	# Fog on a calm morning after rain; burned off by noon.
+	clock.hours = _when(0.6, 3.0)
+	w = Weather.new(4)
+	w.damp = 1.0
+	w._fog_day = int(clock.hours / 24.0)
+	w._fog_chance = 0.9
+	w.wind = 0.1
+	for k in 16:
+		w.step(0.25, clock)
+		clock.hours += 0.25
+	check(w.fog > 0.5, "a calm autumn morning after rain: fog in the valley (%.2f)" % w.fog)
+	for k in 28:
+		w.step(0.25, clock)
+		clock.hours += 0.25
+	check(w.fog < 0.1, "burned off by noon (%.2f)" % w.fog)
+	# Rain raises the creeks; a long hard rain floods them.
+	w = Weather.new(6)
+	clock.hours = _when(0.375, 12.0)
+	w.thunder = true
+	w.kind = Weather.Kind.RAIN
+	w.next_kind = Weather.Kind.RAIN
+	w.hours_left = 100.0
+	w.precip = 1.0
+	for k in 40:
+		w.step(0.25, clock)
+	check(w.flood >= Weather.FLOOD_AT and w.floods == 1, "ten hours of thunderstorms: the creeks flood (%.2f)" % w.flood)
+	var d := w.to_dict()
+	var w2 := Weather.new(1)
+	w2.from_dict(d)
+	check(w2.flood == w.flood and w2.floods == w.floods and w2.fog == w.fog and w2.chinook == w.chinook, "floods, fog and chinooks are saved")
+
+	# In the world: summer noon at the creek.
+	GameClock.clock.hours = _when(0.375, 12.0)
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.ice = 0.0
+	GameClock.weather.snow_cm = 0.0
+	GameClock.weather.flood = 0.0
+	var cx := Terrain.CREEK_X
+	var half: float = Terrain.WATERS[0].half
+	await teleport(cx - half - 150.0)
+	var crk := Creek.at(get_tree(), cx)
+	GameClock.weather.flood = 0.8
+	await frames(3)
+	check(crk and crk.water_mat.get_shader_parameter("surface_y") < world.terrain.surface_of(0, false) - 20.0, "in flood the water's up the banks (%.0f px)" % (world.terrain.surface_of(0, false) - world.terrain.surface_of(0)))
+	check(crk and crk.water_mat.get_shader_parameter("mud") > 0.5, "and running brown")
+	player.auto_dir = 1.0
+	await frames(60 * 6)
+	player.auto_dir = 0.0
+	check(player.global_position.x < cx, "a creek in flood: the current won't let you across (%.0f)" % (player.global_position.x - cx))
+	# Stepping stones, through the build book: no materials, just the work.
+	GameClock.weather.flood = 0.0
+	await teleport(cx - half - 200.0)
+	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
+	bm.choose("stones")
+	player.aim_override = Vector2(cx - 100.0, world.terrain.height_at(cx - 100.0))
+	await frames(3)
+	var use := InputEventAction.new()
+	use.action = "use"
+	use.pressed = true
+	bm._unhandled_input(use)
+	player.aim_override = Vector2.INF
+	var bp: Blueprint = null
+	for n in get_tree().get_nodes_in_group("structure"):
+		if n is Blueprint and n.build_id == "stones":
+			bp = n
+	check(bp != null and absf(bp.global_position.x - cx) < 1.0 and bp.complete(), "stepping stones go straight across the creek, nothing to fetch")
+	var stones: SteppingStones = null
+	if bp:
+		bp.interact(player)
+		await _finish_work()
+		for n in get_tree().get_nodes_in_group("structure"):
+			if n is SteppingStones:
+				stones = n
+	check(stones != null, "the stepping stones are laid")
+	player.cond.wetness = 0.0
+	player.auto_dir = 1.0
+	var deepest := 0.0
+	for k in 60 * 10:
+		await frames(1)
+		deepest = maxf(deepest, player.wade_depth)
+		if player.global_position.x > cx + half + 100.0:
+			break
+	player.auto_dir = 0.0
+	check(player.global_position.x > cx + half and deepest < 2.0 and player.cond.wetness < 0.02, "across on the stones with dry feet (deepest %.0f px)" % deepest)
+	GameClock.weather.flood = 0.5
+	await frames(3)
+	check(stones and stones.drowned() and stones._body.disabled, "the creek comes up over them")
+	GameClock.weather.flood = 0.0
+	await frames(3)
+	check(stones and not stones._body.disabled, "and they're back when it drops")
+	# A flood takes what's left in the water.
+	seed(5)
+	var trap := world.spawn({"kind": "fish_trap", "x": cx + 60.0}) as FishTrap
+	var weir := world.spawn({"kind": "weir", "x": cx - 120.0}) as Weir
+	var trap_ref: WeakRef = weakref(trap)
+	var weir_ref: WeakRef = weakref(weir)
+	GameClock.weather.floods += 12
+	await frames(3)
+	check(trap_ref.get_ref() == null or trap_ref.get_ref().is_queued_for_deletion(), "a dozen floods: the fish trap's gone downstream")
+	check(weir_ref.get_ref() == null or weir_ref.get_ref().is_queued_for_deletion(), "and the weir")
+	var trap2 := world.spawn({"kind": "fish_trap", "x": cx + 60.0}) as FishTrap
+	await frames(3)
+	check(is_instance_valid(trap2) and not trap2.is_queued_for_deletion(), "a trap set after the flood is still there")
+	if is_instance_valid(trap2):
+		trap2.queue_free()
+
+	# Thin ice: it creaks, cracks, and you go through.
+	GameClock.clock.hours = _when(0.9, 12.0)
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.ice = 1.0
+	GameClock.weather.snow_cm = 0.0
+	await teleport(cx - 100.0)
+	await frames(60 * 6)
+	check(player.cond.plunged <= 0.0 and player.wade_depth <= 0.0, "hard ice: stand on it all you like")
+	GameClock.weather.ice = 0.64
+	player.cond.health = 100.0
+	player.cond.wetness = 0.0
+	var n := await _wait_until(func(): return player.cond.plunged > 0.0, 60 * 12)
+	check(player.cond.plunged > 0.0, "thin ice: it gives way under you (%.1f s)" % (n / 60.0))
+	check(player.cond.wetness >= 1.0 and Journal.has("plunge"), "soaked to the skin")
+	await _finish_work()
+	await frames(30)
+	check(absf(player.global_position.y - world.terrain.surface_of(0)) < 20.0 and player.wade_depth < 5.0, "hauled yourself out onto the ice")
+	check(crk and crk.hole_open(), "a hole where you went through")
+	await teleport(cx - half - 900.0) # away from the water, no fire
+	for k in 3:
+		player._on_tick(0.5)
+	check(player.cond.health < 70.0 and player.cond.health >= Condition.PLUNGE_FLOOR, "no fire in time: it hurts you badly (health %.0f)" % player.cond.health)
+	check(player.cond.plunged <= 0.0, "but it passes")
+	player.cond.health = 100.0
+	player.cond.plunged = Condition.PLUNGE_HOURS
+	var fire := world.spawn({"kind": "campfire", "x": player.global_position.x + 60.0}) as Campfire
+	fire.lit = true
+	fire.fuel = 5.0
+	player._on_tick(0.05)
+	check(player.cond.plunged <= 0.0 and player.cond.health > 98.0, "at a fire in time: you're all right")
+	fire.queue_free()
+	# The breakup: the ice goes out in floes.
+	GameClock.weather.ice = 0.0
+	GameClock.weather.breakup = 6.0
+	await teleport(cx - half - 150.0)
+	await frames(30)
+	check(crk and crk._floes.size() >= 3 and Journal.has("breakup"), "the breakup: floes of ice going out down the creek (%d)" % crk._floes.size())
+	GameClock.weather.breakup = 0.0
+
+	# Lightning.
+	GameClock.clock.hours = _when(0.375, 15.0)
+	GameClock.force_weather(Weather.Kind.RAIN)
+	GameClock.weather.thunder = true
+	GameClock.weather.ice = 0.0
+	var tx := 9000.0
+	await teleport(tx)
+	await frames(10)
+	var tree: ChoppableTree = null
+	for t: ChoppableTree in get_tree().get_nodes_in_group("choppable"):
+		if tree == null or absf(t.global_position.x - tx) < absf(tree.global_position.x - tx):
+			tree = t
+	check(GameClock.weather.thunderstorm(), "a thunderstorm")
+	_storm().strike(true, tree.global_position.x)
+	await frames(2)
+	check(Storm.flash > 0.5, "lightning lights everything up")
+	var fires := get_tree().get_nodes_in_group("heat").filter(func(h): return h is TreeFire)
+	tree = _storm()._tallest_near(tree.global_position.x)
+	check(fires.size() == 1 and absf(fires[0].global_position.x - tree.global_position.x) < 1.0, "it strikes the tallest tree about, and the crown catches")
+	await frames(10)
+	check(Journal.has("lightning"), "the storm goes in the journal")
+	if fires:
+		var f: TreeFire = fires[0]
+		await teleport(f.global_position.x + 80.0)
+		check(world.heat_at(player.global_position + Vector2(0, -60)) > 0.2, "warm at the foot of it")
+		player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 2))
+		player.stow()
+		f.interact(player)
+		check(player.holding("torch"), "light a torch from the embers")
+		player.stow()
+		var fref: WeakRef = weakref(f)
+		f._on_tick(3.0)
+		await frames(2)
+		check(fref.get_ref() == null, "the rain puts it out; nothing left burning")
+	var trees_after := get_tree().get_nodes_in_group("choppable").size()
+	check(is_instance_valid(tree) and not tree.felled, "the tree still stands (%d trees)" % trees_after)
+	_storm().strike(false)
+	check(_storm()._pending.size() >= 1, "a strike far off: the thunder comes after")
+
+	# Fog: you can hardly see past a stone's throw in the valley; up on the ridge you're above it.
+	GameClock.clock.hours = _when(0.6, 7.0)
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.fog = 0.9
+	GameClock.weather.wind = 0.1
+	var atmo: Atmosphere = get_parent().find_children("*", "Atmosphere", false, false)[0]
+	await teleport(9000.0)
+	await frames(3)
+	check(atmo.veil.get_shader_parameter("fog") > 0.6, "fog in the valley closes in around you")
+	await teleport(Terrain.LOOKOUT_X - 300.0)
+	await frames(3)
+	check(atmo.veil.get_shader_parameter("fog") < 0.1, "up on the ridge you're above it")
+	GameClock.weather.fog = 0.0
+	# A blizzard whites out the view too.
+	GameClock.clock.hours = _when(0.875, 12.0)
+	GameClock.force_weather(Weather.Kind.RAIN)
+	GameClock.weather.wind = 1.0
+	GameClock.weather.snow_frac = 1.0
+	await teleport(9000.0)
+	await frames(3)
+	check(atmo.veil.get_shader_parameter("snow") > 0.6, "a blizzard: a whiteout (%.2f)" % float(atmo.veil.get_shader_parameter("snow")))
+	GameClock.force_weather(Weather.Kind.CLEAR)
+
+	# The keeper's barometer at the fire lookout.
+	await teleport(Terrain.LOOKOUT_X)
+	await frames(10)
+	var cache: Node = null
+	for c in get_tree().get_nodes_in_group("interactable"):
+		if c is Lookout.LookoutCache:
+			cache = c
+	check(cache != null, "the keeper's cupboard")
+	if cache:
+		cache.interact(player)
+		check(player.backpack.count_of("barometer") == 1 and Journal.has("barometer"), "the keeper's barometer, with the supplies")
+		check(cache.interact_label(player) == "", "nothing left on the wall")
+	check(ResourceLoader.exists("res://assets/builds/stones.png"), "the build book has a picture of the stepping stones")
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+

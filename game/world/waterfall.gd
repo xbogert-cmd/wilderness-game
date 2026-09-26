@@ -12,7 +12,7 @@ var _t := 0.0
 
 func _ready() -> void:
 	var i := terrain.water_index(Terrain.FALLS_X)
-	position = Vector2(Terrain.FALLS_X, terrain.surface_of(i))
+	position = Vector2(Terrain.FALLS_X, terrain.surface_of(i, false))
 	z_as_relative = false
 	z_index = -14 # behind the trees along the plane
 	_mist = CPUParticles2D.new()

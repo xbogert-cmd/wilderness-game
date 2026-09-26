@@ -68,6 +68,8 @@ func _rules() -> Array:
 		["blizzard_warn", GameClock.weather.storm_warning() and GameClock.weather.air_temp_c(GameClock.clock) < -2.0, "Bitter cold and the sky's closing in: a blizzard's coming. Get to shelter or a fire."],
 		["blizzard", GameClock.weather.blizzard() > 0.3, "A blizzard. The wind cuts through your clothes and you can barely see. Shelter, a fire, and wait it out."],
 		["deep", GameClock.weather.snow_cm > 30.0 and not p.backpack.wearing("snowshoes"), "Deep snow. Snowshoes (workbench: sticks, a tanned hide, cord) keep you on top of it; a sled (build menu) hauls loads over it."],
+		["thinice", Creek.thin() and p.world.terrain.water_index(p.global_position.x, 500.0) >= 0, "The ice is only just holding: new ice, or thawing. Grey, wet-looking ice creaks and gives way. Stay off it, or keep moving and don't stop."],
+		["stones", p.world.terrain.water_index(p.global_position.x, 500.0) >= 0 and GameClock.weather.snow_cm > 2.0 and not Creek.frozen() and GameClock.weather.air_temp_c(GameClock.clock) < 2.0, "Wading a creek in the cold soaks you to the knees. Stepping stones (build menu, no materials) get you over dry."],
 		["icefish", Creek.frozen() and f is Creek and f.w().fish, "Frozen over. Chop a hole (E) and you can fish through it: the fish gather under the ice."],
 		["hatch", f is Underground.Spot and f.id == "hatch", "There's a way down here. Walk over it as usual, or press {move_down} standing on it (or {interact}) to go down."],
 		["dark", p.under > 0.6 and not (p.holding("torch") or p.holding("light")), "It's pitch dark down here. Light a torch at a fire, or find a lantern, before you go further."],

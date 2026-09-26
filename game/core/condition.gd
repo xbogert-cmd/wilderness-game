@@ -22,6 +22,10 @@ var incubating := 0.0 ## sickness still to come on (it starts a few hours after 
 var infection := 0.0 ## 0..1, from an open wound left unbandaged; fever above FEVER_AT
 var fever_relief := 0.0 ## hours of willow bark easing the fever
 const FEVER_AT := 0.35
+var plunged := 0.0 ## hours since going through the ice, still to get warm in: cold water in your clothes
+const PLUNGE_HOURS := 1.5
+const PLUNGE_DAMAGE := 32.0 ## per hour until you're by a fire...
+const PLUNGE_FLOOR := 8.0 ## ...though on its own it won't finish you
 const INCUBATE_PER_HOUR := 0.12 ## how fast queued sickness comes on
 
 func _init(tuning: Tuning = null) -> void:
@@ -56,6 +60,14 @@ func tick(dh: float, env: Dictionary) -> void:
 	else:
 		fatigue = minf(fatigue + t.fatigue_per_hour * (1.0 + 0.5 * exertion) * dh, 100.0)
 
+	if plunged > 0.0:
+		if heat > 0.25:
+			plunged = 0.0 # got to a fire in time
+		else:
+			plunged = maxf(plunged - dh, 0.0)
+			wetness = 1.0
+			if health > PLUNGE_FLOOR:
+				health = maxf(health - PLUNGE_DAMAGE * dh, PLUNGE_FLOOR)
 	var drain := 0.0
 	if hunger <= 0.0: drain += t.starving_damage_per_hour
 	if thirst <= 0.0: drain += t.dehydration_damage_per_hour
@@ -205,7 +217,7 @@ func is_dead() -> bool:
 func to_dict() -> Dictionary:
 	return {"health": health, "stamina": stamina, "hunger": hunger, "thirst": thirst,
 		"warmth": warmth, "wetness": wetness, "fatigue": fatigue, "injuries": injuries.duplicate(true),
-		"sickness": sickness, "incubating": incubating, "infection": infection, "fever_relief": fever_relief}
+		"sickness": sickness, "incubating": incubating, "infection": infection, "fever_relief": fever_relief, "plunged": plunged}
 
 func from_dict(d: Dictionary) -> void:
 	health = float(d.health)
@@ -220,3 +232,4 @@ func from_dict(d: Dictionary) -> void:
 	incubating = float(d.get("incubating", 0.0))
 	infection = float(d.get("infection", 0.0))
 	fever_relief = float(d.get("fever_relief", 0.0))
+	plunged = float(d.get("plunged", 0.0))
