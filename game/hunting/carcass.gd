@@ -40,6 +40,7 @@ func _ready() -> void:
 func _enter_tree() -> void:
 	match species:
 		"wolf": Journal.note("first_wolf", "Killed a wolf. The pelt will make winter gear, once it's cured on the frame.")
+		"coyote": Journal.note("first_coyote", "Took a coyote. Its pelt's thin, but cured it'll line a hat or a pair of mittens.")
 		"black_bear": Journal.note("first_bear", "Brought down the bear. Its hide is the warmest thing in this valley, if I can cure it.")
 		_: Journal.note("first_kill", "Took my first deer. Meat for days if I can keep it from spoiling, and a hide worth curing.")
 
@@ -105,7 +106,7 @@ static func has_knife(p: Player) -> bool:
 	return p.backpack.count_of("knife") > 0 or (p.held != null and p.held.def.has("knife"))
 
 func _name() -> String:
-	return {"wolf": "wolf", "black_bear": "bear"}.get(species, "deer")
+	return {"wolf": "wolf", "black_bear": "bear", "coyote": "coyote"}.get(species, "deer")
 
 func interact_title(_p: Player) -> String:
 	if deer():
@@ -178,7 +179,7 @@ func _take_meat(p: Player) -> void:
 func _skin(p: Player) -> void:
 	var bear := species == "black_bear"
 	p.work(5.0 if bear else 3.5, 1.5 if bear else 0.6, "Skinning the " + _name(), func():
-		_give(p, ItemStack.make("bear_hide" if bear else "wolf_pelt", hour), -1.0)
+		_give(p, ItemStack.make({"black_bear": "bear_hide", "coyote": "coyote_pelt"}.get(species, "wolf_pelt"), hour), -1.0)
 		if arrows > 0:
 			p.receive(ItemStack.make("arrows", GameClock.clock.hours, arrows))
 		skinned = true

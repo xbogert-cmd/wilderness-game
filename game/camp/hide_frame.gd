@@ -9,6 +9,7 @@ const CURE_HOURS := 18.0
 const KINDS := {
 	"deer_hide": ["hide", 18.0, "deer hide", Color("946b59"), Color("bd9e73")],
 	"wolf_pelt": ["wolf_fur", 18.0, "wolf pelt", Color("6e6860"), Color("9a938a")],
+	"coyote_pelt": ["coyote_fur", 14.0, "coyote pelt", Color("8f7a5c"), Color("c7ad87")],
 	"bear_hide": ["bear_fur", 30.0, "bear hide", Color("4a3526"), Color("5e4431")],
 }
 

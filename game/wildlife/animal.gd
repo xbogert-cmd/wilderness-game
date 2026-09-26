@@ -5,6 +5,8 @@ class_name Animal extends Node2D
 ## A deer that's been spooked leaves the area: it keeps going away from where it was scared and
 ## is let go once out of sight, and it keeps clear of camps, where people are.
 ## Hunting: shot() wounds it (it runs, bleeds, then drops); kill() takes it outright.
+## Wolves hunt it too: hunted() sets it running from them; deep snow bogs it down, and a deer a
+## chase is going to end for tires; taken() is the end, a torn carcass for the pack.
 
 enum State { GRAZE, WALK, BEDDED, ALERT, FLEE }
 const STATE_NAMES: PackedStringArray = ["graze", "walk", "bedded", "alert", "flee"]
@@ -36,6 +38,10 @@ var _rng := RandomNumberGenerator.new()
 var leaving := false ## spooked: heading away for good; Wildlife lets it go once out of sight
 var _spooked_x := 0.0
 const CAMP_BERTH := 800.0 ## deer keep this far from a camp or fire
+var _threat_x := NAN ## a wolf on its heels (NAN: it's you it's running from)
+var _threat_t := 0.0 ## seconds since the wolves last pressed it
+var _chased := 0.0 ## seconds of the chase so far
+var _doomed := false
 
 func setup(species: SpeciesDef, x: float, seed_value: int) -> void:
 	def = species
@@ -89,8 +95,16 @@ func _physics_process(delta: float) -> void:
 		State.WALK:
 			speed = def.walk_speed
 		State.FLEE:
-			speed = move_toward(speed, def.flee_speed * _limp, 900.0 * delta)
-			facing = 1 if position.x >= player.global_position.x else -1
+			var tired := 0.72 if _doomed and _chased > 4.0 else 1.0 # it can't keep ahead of them
+			speed = move_toward(speed, def.flee_speed * _limp * tired * Predator.snow_drag(true), 900.0 * delta)
+			var from := player.global_position.x if is_nan(_threat_x) else _threat_x
+			facing = 1 if position.x >= from else -1
+	if not is_nan(_threat_x):
+		_threat_t += delta
+		_chased += delta
+		if _threat_t > 2.0: # they've given up
+			_threat_x = NAN
+			_chased = 0.0
 	_timer -= delta
 	if _timer <= 0.0:
 		_routine()
@@ -244,6 +258,24 @@ func hear_call(x: float) -> void:
 ## A clean kill at close quarters.
 func kill() -> void:
 	_die()
+
+## Wolves on its heels, from x: it runs (and the herd with it). doomed: this chase ends in a kill.
+func hunted(from_x: float, doomed: bool) -> void:
+	_threat_x = from_x
+	_threat_t = 0.0
+	_doomed = doomed
+	if state != State.FLEE:
+		bolt(false)
+		_spooked_x = from_x
+
+## Pulled down by wolves: a torn carcass, blood in the snow.
+func taken(_by_x: float) -> void:
+	world.spawn({"kind": "carcass", "x": position.x, "facing": facing, "species": def.id,
+		"hour": GameClock.clock.hours, "arrows": _arrows, "torn": true, "meat": Carcass.MEAT - 1.0})
+	for k in 10:
+		tracks.add(position.x + _rng.randf_range(-120.0, 120.0), "blood", facing)
+	Journal.note("wolf_kill", "Saw wolves pull down a deer. They'll feed till they're full; drive them off it with fire and there's meat left on it.")
+	queue_free()
 
 func _die() -> void:
 	world.spawn({"kind": "carcass", "x": position.x, "facing": facing, "species": def.id,

@@ -53,7 +53,7 @@ func _advance(dh: float) -> void:
 		gnaw(1.0, "wolf")
 
 func appeals(kind: String) -> bool:
-	return caught and kind == "wolf"
+	return caught and kind in ["wolf", "coyote"]
 
 func gnaw(_amount: float, _kind: String) -> bool:
 	if caught:

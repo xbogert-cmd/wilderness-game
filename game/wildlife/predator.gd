@@ -6,21 +6,31 @@ class_name Predator extends Node2D
 ## Wolves run in a small pack and mostly at night. In winter they're out all day and range
 ## far: packs travel the country, and hunger makes them bolder. Bold ones stalk a player who
 ## is hurt or carrying meat after dark, lunge, and back off; hurt one and the pack scatters.
+## Wolves hunt deer too: the pack creeps in, then rushes; the deer bolts, and most chases end
+## with the wolves giving up, but deep snow bogs a deer down and a hurt one can't keep ahead.
+## What they pull down they eat, and what's left is there for whoever drives them off it.
+## Coyotes are small, skittish scavengers of the open country: they come to what's lying dead,
+## yip at night, and run from you.
 ## The bear keeps to the foothills, hungry and nosing far for food in spring and autumn. Come
 ## too close, or near its food, and it bluff-charges; push it (or hurt it) and the next charge
 ## is real. In winter it sleeps in the den in the cave's upper gallery: noise and light close
 ## by rouse it, and a woken bear defends its den (it never leaves the gallery).
 
-enum State { ROAM, SEEK, FEED, SHADOW, STALK, LUNGE, BACK_OFF, BLUFF, FLEE, SLEEP }
-const STATE_NAMES: PackedStringArray = ["roam", "seek", "feed", "shadow", "stalk", "lunge", "back off", "bluff", "flee", "sleep"]
+enum State { ROAM, SEEK, FEED, SHADOW, STALK, LUNGE, BACK_OFF, BLUFF, FLEE, SLEEP, CHASE }
+const STATE_NAMES: PackedStringArray = ["roam", "seek", "feed", "shadow", "stalk", "lunge", "back off", "bluff", "flee", "sleep", "chase"]
 const SAFE_R := 900.0 ## camps and fires: nothing wild comes this close
 const TORCH_R := 600.0 ## a flame in your hand
 const BRACED_R := 330.0 ## a spear or torch pointed at it: it won't come closer than this
 const KINDS := {
 	"wolf": {"hp": 1.0, "trot": 170.0, "run": 540.0, "bite": 11.0, "reach": 85.0, "region": "legs"},
+	"coyote": {"hp": 0.6, "trot": 150.0, "run": 500.0, "bite": 6.0, "reach": 70.0, "region": "legs"},
 	"black_bear": {"hp": 2.2, "trot": 85.0, "run": 470.0, "bite": 32.0, "reach": 130.0, "region": "torso"},
 }
 const EAT_PER_SEC := 0.05 ## portions of meat a feeding animal gets through
+const HUNT_R := 1800.0 ## a pack notices deer this far off
+const RUSH_R := 520.0 ## creeping in until this close, then the rush
+const HUNT_EVERY := 90.0 ## real seconds a pack rests after a chase
+const COYOTE_SHY := 650.0 ## a coyote won't let you closer
 const DEN := Vector2(830.0, 400.0) ## where the bear beds down, in the cave's layout
 const DEN_SPAN := Vector2(450.0, 1330.0) ## the gallery floor a woken bear keeps to (layout x)
 const ROUSE_R := 520.0 ## a sleeping bear can be disturbed from this close
@@ -48,6 +58,9 @@ var _hit := false ## this lunge has landed
 var strike_t := 0.0 ## seconds left of a landed bite or swipe (the rig clamps the jaws, swings the paw)
 var _since_print := 0.0
 var _howl := 0.0
+var prey: Animal ## the deer the pack is after
+var _hunt_cd := 0.0
+var _doomed := false ## this chase ends in a kill (decided when it starts)
 var travel := 0.0 ## a winter pack on the move: the way it's heading (0 = keeping to home)
 var den: Underground ## the bear asleep in its winter den (null otherwise)
 var rouse := 0.0 ## how near a sleeping bear is to waking, 0..1
@@ -80,6 +93,9 @@ func stat(k: String) -> Variant:
 
 func is_wolf() -> bool:
 	return def.id == "wolf"
+
+func is_coyote() -> bool:
+	return def.id == "coyote"
 
 ## Beds the bear down in the cave den for the winter (before it's added to the tree).
 func bed_down(u: Underground) -> void:
@@ -167,6 +183,7 @@ func _physics_process(delta: float) -> void:
 	_think -= delta
 	_timer -= delta
 	strike_t = maxf(strike_t - delta, 0.0)
+	_hunt_cd = maxf(_hunt_cd - delta, 0.0)
 	if state == State.SLEEP:
 		_doze(delta)
 		return
@@ -175,7 +192,7 @@ func _physics_process(delta: float) -> void:
 		_decide()
 	_act(delta)
 	_move(delta)
-	if is_wolf() and _night():
+	if (is_wolf() or is_coyote()) and _night():
 		_howl -= delta
 		if _howl <= 0.0:
 			_howl = _rng.randf_range(50.0, 140.0) * (0.5 if GameClock.clock.season() == 3 else 1.0)
@@ -201,6 +218,11 @@ func _decide() -> void:
 		return
 	if state in [State.LUNGE, State.BACK_OFF, State.BLUFF]:
 		return
+	if is_coyote():
+		_coyote_decide(d)
+		return
+	if state == State.CHASE:
+		return # the chase runs its course (_act)
 	if not is_wolf() and not player.dead and not _off_limits(px) and player.under < 0.3:
 		var guarding := state == State.FEED
 		if d < 420.0 or (guarding and d < 650.0):
@@ -224,8 +246,66 @@ func _decide() -> void:
 		if state != State.FEED:
 			state = State.SEEK
 		return
+	var leads: bool = pack.is_empty() or pack[0] == self or not is_instance_valid(pack[0])
+	if is_wolf() and leads and _hunt_cd <= 0.0 and (_night() or GameClock.clock.season() == 3):
+		var deer := _nearest_deer()
+		if deer:
+			_start_hunt(deer)
+			return
 	if _smells_player():
 		state = State.SHADOW
+		return
+	if state != State.ROAM:
+		state = State.ROAM
+		_target_x = position.x
+
+# --- Hunting deer (wolves) -------------------------------------------------------------
+
+func _nearest_deer() -> Animal:
+	var best: Animal = null
+	for a: Animal in get_tree().get_nodes_in_group("animals"):
+		var d := absf(a.position.x - position.x)
+		if d < HUNT_R and not a.near_camp(a.position.x) and (best == null or d < absf(best.position.x - position.x)):
+			best = a
+	return best
+
+## The pack goes after a deer. Whether this one ends in a kill is settled now: most don't,
+## unless deep snow has the deer floundering or it's already hurt.
+func _start_hunt(deer: Animal) -> void:
+	var odds := 0.25 + 0.45 * clampf(GameClock.weather.snow_cm / 60.0, 0.0, 1.0) + (0.4 if deer.wound >= 0.0 else 0.0)
+	var doomed := _rng.randf() < minf(odds, 0.9)
+	for w in (pack if pack else [self]):
+		if is_instance_valid(w) and w.state in [State.ROAM, State.SHADOW]:
+			w.prey = deer
+			w._doomed = doomed
+			w.state = State.CHASE
+			w._timer = 16.0
+
+func _end_hunt() -> void:
+	for w in (pack if pack else [self]):
+		if is_instance_valid(w) and w.state == State.CHASE:
+			w.state = State.ROAM
+			w.prey = null
+			w._hunt_cd = HUNT_EVERY
+			w._target_x = w.position.x
+
+## The snow slows everything; wolves, lighter on their feet, less than deer.
+static func snow_drag(heavy: bool) -> float:
+	return 1.0 - clampf(GameClock.weather.snow_cm / (100.0 if heavy else 260.0), 0.0, 0.4 if heavy else 0.15)
+
+# --- Coyotes ---------------------------------------------------------------------------
+
+func _coyote_decide(d: float) -> void:
+	if not player.dead and d < COYOTE_SHY and player.under < 0.3:
+		flee(player.global_position.x) # never lets you near
+		return
+	if state == State.FEED and food:
+		return
+	var f := _find_food()
+	if f:
+		food = f
+		if state != State.FEED:
+			state = State.SEEK
 		return
 	if state != State.ROAM:
 		state = State.ROAM
@@ -336,6 +416,23 @@ func _act(delta: float) -> void:
 		State.FLEE:
 			facing = int(signf(position.x - _threat_x)) if position.x != _threat_x else facing
 			speed = run
+		State.CHASE:
+			if not is_instance_valid(prey) or prey.is_queued_for_deletion() or _timer <= 0.0:
+				_end_hunt()
+				return
+			var dx := prey.position.x + _spread() * 0.5 - position.x
+			facing = int(signf(dx)) if absf(dx) > 5.0 else facing
+			var rushing := absf(dx) < RUSH_R or prey.state == Animal.State.FLEE
+			if rushing:
+				prey.hunted(position.x, _doomed)
+				speed = run * (1.12 if _timer > 9.0 else 0.8) * snow_drag(false) # a burst, then they tire
+			else:
+				speed = trot * 0.9 # creeping in, low
+			if absf(dx) < 70.0 and _doomed and prey.state == Animal.State.FLEE:
+				prey.taken(position.x)
+				Sfx.play_at(self, global_position + Vector2(facing * 60.0, -60.0), Sfx.growl(), 0.0)
+				_end_hunt()
+				_hunt_cd = HUNT_EVERY * 4.0
 
 ## Pack members spread out around a carcass instead of stacking on one spot.
 func _spread() -> float:
@@ -376,7 +473,7 @@ func hurt(amount: float, from_x: float) -> void:
 		return
 	if state == State.SLEEP:
 		_wake()
-	if is_wolf():
+	if is_wolf() or is_coyote():
 		for w in pack:
 			if is_instance_valid(w):
 				w.flee(from_x)
@@ -420,14 +517,18 @@ func die() -> void:
 	queue_free()
 
 func howl() -> void:
+	if is_coyote():
+		Sfx.play_at(self, global_position + Vector2(facing * 40.0, -80.0), Sfx.pool("coyotes", Sfx.takes("coyotes", 3), 1.05, 2.0), -3.0, 1.0, &"Calls")
+		Journal.note("coyotes", "Coyotes yipping out on the flats at night. They'll clean up anything left dead, and they run from me.")
+		return
 	Sfx.play_at(self, global_position + Vector2(facing * 50.0, -110.0), Sfx.howl(), -1.0)
 	Journal.note("wolves", "Wolves howling after dark. They'll be drawn to anything dead I leave lying out, and they won't come near a fire.")
 
 ## Where a point falls on the body: 0 miss, 1 body, 2 vitals (chest or head).
 func zone_at(p: Vector2) -> int:
-	var l := (p - position)
+	var l := (p - position) / def.size
 	l.x *= facing
-	var wolf := is_wolf()
+	var wolf := is_wolf() or is_coyote()
 	if state == State.SLEEP: # curled up low in the bedding
 		var e2 := (l - Vector2(0, -40)) / Vector2(100, 42)
 		return 0 if e2.length() > 1.0 else (2 if l.x > 20.0 else 1)

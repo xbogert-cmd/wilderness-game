@@ -246,6 +246,20 @@ func _ready() -> void:
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
 		player.bow_draw = 0.0
+	if args.has("chase"): # preview: wolves running down a deer, a coyote watching from off to the side
+		var deer := wildlife.spawn(Wildlife.SPECIES[0], x + 600.0, 3)
+		var pack := []
+		for k in 3:
+			var w := wildlife.spawn_predator(Wildlife.WOLF, x + 1150.0 + k * 110.0, 9 + k)
+			w.pack = pack
+			pack.append(w)
+		pack[0]._start_hunt(deer)
+		for w in pack:
+			w._doomed = false
+		var coy := wildlife.spawn_predator(Wildlife.COYOTE, x - 520.0, 5)
+		coy.set_physics_process(false)
+		coy.position.y = world.ground_y(coy.position.x)
+		coy.facing = 1
 	if args.has("stores"): # preview: a smokehouse going, a raised cache, a bear bag on the nearest tall tree, windy
 		var sh: Smokehouse = world.spawn({"kind": "smokehouse", "x": x + 380.0, "fuel": 10.0, "pieces": [["venison_raw", 3.0], ["trout_raw", 6.0], ["venison_raw", 9.0]]})
 		sh.queue_redraw()

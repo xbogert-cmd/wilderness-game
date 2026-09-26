@@ -12,7 +12,7 @@ var _rear := 0.0 ## bear up on its hind legs, smoothed
 var _leap := 0.0 ## wolf springing at you: 0 on the ground, 1 at the top of the spring
 
 func _process(delta: float) -> void:
-	scale = Vector2(animal.facing, 1.0)
+	scale = Vector2(animal.facing, 1.0) * animal.def.size
 	_t += delta
 	var s := animal.state
 	var gallop: bool = animal.speed > animal.stat("trot") * 1.6
@@ -32,7 +32,7 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var d := animal.def
-	if animal.is_wolf():
+	if animal.is_wolf() or animal.is_coyote(): # a coyote is a smaller, tawnier wolf
 		_wolf(d)
 	else:
 		_bear(d)
@@ -176,8 +176,8 @@ func _limb(a: Vector2, b: Vector2, wa: float, wb: float, color: Color) -> void:
 
 ## Dead, on its side (drawn by the carcass). Skinned: only the red carcass and bones.
 static func draw_dead(ci: CanvasItem, d: SpeciesDef, skinned: bool) -> void:
-	var wolf := d.id == "wolf"
-	var k := 1.0 if wolf else 1.55
+	var wolf := d.id in ["wolf", "coyote"]
+	var k := (1.0 if wolf else 1.55) * d.size
 	var body_c := Color("7a3a30") if skinned else d.body_color
 	for i in 2:
 		var hip := Vector2(-34 + i * 58, -12) * k

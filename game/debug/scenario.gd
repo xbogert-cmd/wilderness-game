@@ -41,6 +41,7 @@ func _ready() -> void:
 		"icons": _icons.call_deferred()
 		"sounds": _sounds.call_deferred()
 		"stores": _stores.call_deferred()
+		"hunts": _hunts.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -1167,6 +1168,10 @@ func _den_and_winter_wolves() -> void:
 			await _clear_wild()
 	check(packs >= 3, "winter noon: wolf packs come by day (%d in 40 checks)" % packs)
 	check(travelling >= 1, "some are passing through (%d of %d)" % [travelling, packs])
+	await _clear_wild() # (no deer to hunt, no kill to smell: this is about travelling)
+	for c in get_tree().get_nodes_in_group("food_scent"):
+		c.queue_free()
+	await frames(2)
 	var w := _wl().spawn_predator(Wildlife.WOLF, 12000.0, 9)
 	w.travel = 1.0
 	await frames(60 * 10)
@@ -2051,6 +2056,139 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "hunts": wolves run down deer (or don't), kill sites, coyotes -------------------
+
+func _pack_of(x: float, n: int, seed_value: int) -> Array:
+	var pack := []
+	for k in n:
+		var w := _wl().spawn_predator(Wildlife.WOLF, x + k * 90.0, seed_value + k)
+		w.pack = pack
+		pack.append(w)
+	return pack
+
+func _hunts() -> void:
+	await frames(10)
+	var year := GameClock.clock.season_hours() * 4.0
+	GameClock.clock.hours = floorf((ceilf(GameClock.clock.hours / year) * year + year * 0.4) / 24.0) * 24.0 + 23.0 # a winter night
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	GameClock.weather.snow_cm = 70.0
+	check(Predator.snow_drag(true) < Predator.snow_drag(false), "deep snow bogs a deer down more than a wolf (%.2f vs %.2f)" % [Predator.snow_drag(true), Predator.snow_drag(false)])
+	var x := 9000.0
+	await teleport(x)
+	await _clear_wild()
+	var deer: Animal = await _deer(x + 1500.0, 31)
+	var pack := _pack_of(x + 3000.0, 3, 40)
+	var n := await _wait_until(func(): return pack[0].state == Predator.State.CHASE, 60 * 10)
+	check(pack.all(func(w): return w.state == Predator.State.CHASE and w.prey == deer), "a winter night: the pack goes after the deer (%d s)" % (n / 60))
+	for w in pack:
+		w._doomed = true # (this one's going down)
+	var gone: WeakRef = weakref(deer)
+	n = await _wait_until(func(): return gone.get_ref() == null or gone.get_ref().is_queued_for_deletion(), 60 * 25)
+	await frames(2)
+	var kill := _carcasses().filter(func(c): return c.deer() and c.torn)
+	check(gone.get_ref() == null and kill.size() == 1, "floundering in the snow, it's pulled down (%d s)" % (n / 60))
+	check(world.tracks.prints.any(func(p): return p.s == "blood"), "blood in the snow")
+	n = await _wait_until(func(): return pack.any(func(w): return is_instance_valid(w) and w.state == Predator.State.FEED), 60 * 10)
+	check(n < 600, "the pack feeds on it")
+	if kill:
+		var meat0: float = kill[0].meat
+		await frames(60 * 5)
+		check(kill[0].meat < meat0, "eating into it")
+		player.hold(ItemStack.make("torch", GameClock.clock.hours))
+		await teleport(kill[0].global_position.x - 300.0)
+		await frames(90)
+		check(pack.all(func(w): return not is_instance_valid(w) or w.state == Predator.State.FLEE), "a torch drives them off the kill")
+		check(kill[0].meat >= 1.0 and kill[0].deer(), "there's meat left to take")
+		player.stow()
+	await _clear_wild()
+	for c in _carcasses():
+		c.queue_free()
+
+	# Summer, no snow: the deer outruns them and they give up.
+	GameClock.clock.hours = floorf((ceilf(GameClock.clock.hours / year) * year + year * 0.85) / 24.0) * 24.0 + 23.0
+	GameClock.weather.snow_cm = 0.0
+	await teleport(x)
+	deer = await _deer(x + 1500.0, 33)
+	pack = _pack_of(x + 3000.0, 2, 50)
+	await _wait_until(func(): return pack[0].state == Predator.State.CHASE, 60 * 10)
+	for w in pack:
+		w._doomed = false
+	n = await _wait_until(func(): return pack[0].state != Predator.State.CHASE, 60 * 25)
+	check(is_instance_valid(deer) and pack[0].state != Predator.State.CHASE and pack[0]._hunt_cd > 0.0, "summer: the deer gets away and the wolves give up (%d s)" % (n / 60))
+	await _clear_wild()
+
+	# Winter: a kill site turns up ahead, torn and tracked.
+	GameClock.clock.hours = floorf((ceilf(GameClock.clock.hours / year) * year + year * 0.4) / 24.0) * 24.0 + 12.0
+	GameClock.weather.snow_cm = 40.0
+	await teleport(x)
+	world.tracks.prints.clear()
+	var site: Carcass = _wl().kill_site(1100.0)
+	check(site != null and site.torn and site.meat >= 1.0, "a wolf kill turns up out ahead")
+	if site:
+		check(world.tracks.prints.filter(func(p): return p.s == "wolf" and absf(p.x - site.global_position.x) < 300.0).size() >= 5, "wolf tracks trampled round it")
+		site.queue_free()
+
+	# Coyotes: a scavenger that runs from you.
+	var sx := -18000.0
+	check(Terrain.biome(sx) == "sage", "the sage flats")
+	await teleport(sx)
+	await _clear_wild()
+	var gut := world.spawn({"kind": "gut_pile", "x": sx + 1600.0, "hour": GameClock.clock.hours}) as Node2D
+	var coy := _wl().spawn_predator(Wildlife.COYOTE, sx + 3200.0, 60)
+	n = await _wait_until(func(): return coy.state == Predator.State.FEED, 60 * 20)
+	check(coy.state == Predator.State.FEED, "a coyote comes to the gut pile (%d s)" % (n / 60))
+	check(coy.get_child(0).scale.y < 0.9, "smaller than a wolf")
+	await teleport(coy.position.x - 900.0)
+	player.auto_dir = 1.0
+	n = await _wait_until(func(): return coy.state == Predator.State.FLEE, 60 * 6)
+	player.auto_dir = 0.0
+	check(coy.state == Predator.State.FLEE and absf(coy.position.x - player.global_position.x) > 450.0, "walk toward it and it runs")
+	await _clear_wild()
+	gut.queue_free()
+	await teleport(sx)
+	coy = _wl().spawn_predator(Wildlife.COYOTE, sx + 800.0, 61)
+	coy.set_physics_process(false)
+	coy.position.y = world.ground_y(coy.position.x)
+	coy.facing = -1
+	player.receive(ItemStack.make("arrows", GameClock.clock.hours, 2))
+	player.hold(ItemStack.make("bow", GameClock.clock.hours))
+	player.facing = 1
+	var chest := coy.position + Vector2(-30.0 * 0.78, -58.0 * 0.78)
+	check(coy.zone_at(chest) == 2, "a coyote's chest is its vitals")
+	player.aim_override = _lead(chest)
+	player.bow_draw = 1.0
+	player.loose()
+	await frames(60)
+	player.aim_override = Vector2.INF
+	var dead := _carcasses().filter(func(c): return c.species == "coyote")
+	check(dead.size() == 1, "an arrow takes the coyote")
+	if dead:
+		player.stow()
+		await teleport(dead[0].global_position.x)
+		check(dead[0].interact_label(player) == "Skin the coyote", "skin it")
+		dead[0].interact(player)
+		await _finish_work()
+		check(player.backpack.count_of("coyote_pelt") == 1, "a coyote pelt")
+	check(HideFrame.KINDS.has("coyote_pelt"), "it cures on the hide frame")
+	player.backpack.add(ItemStack.make("coyote_fur", GameClock.clock.hours))
+	check(Supply.can(player, Builds.RECIPES.wolf_hat.needs, player.global_position.x), "coyote fur makes a fur hat")
+	var snared := world.spawn({"kind": "snare", "x": sx + 300.0, "caught": true}) as Snare
+	check(snared.appeals("coyote"), "a coyote will take a rabbit from a snare")
+	snared.queue_free()
+	# The spawner: coyotes turn up on the sage at night.
+	await _clear_wild()
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 23.0
+	var seen := false
+	for k in 60:
+		_wl()._manage_predators()
+		if get_tree().get_nodes_in_group("predators").any(func(p): return p.is_coyote() and not p.is_queued_for_deletion()):
+			seen = true
+			break
+	check(seen, "coyotes turn up on the sage at night")
+	await _clear_wild()
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
 
 # --- Mode "stores": the cellar, raids, the raised cache, the bear bag, the smokehouse -----
 

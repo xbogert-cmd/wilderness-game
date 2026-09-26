@@ -160,7 +160,7 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 				ci.draw_colored_polygon(PackedVector2Array([pts[0].lerp(pts[5], 0.25), pts[2].lerp(pts[7], 0.3), pts[4].lerp(pts[8], 0.35)]), a.call(Color("b06a5c")))
 			else:
 				ci.draw_polyline(pts + PackedVector2Array([pts[0]]), a.call(c.darkened(0.25)), 1.5)
-		"wolf_pelt", "wolf_fur", "bear_hide", "bear_fur":
+		"wolf_pelt", "wolf_fur", "bear_hide", "bear_fur", "coyote_pelt", "coyote_fur":
 			var pts := PackedVector2Array([Vector2(0.14, 0.2), Vector2(0.32, 0.1), Vector2(0.5, 0.16), Vector2(0.7, 0.08), Vector2(0.88, 0.22),
 				Vector2(0.8, 0.5), Vector2(0.92, 0.86), Vector2(0.66, 0.78), Vector2(0.5, 0.94), Vector2(0.3, 0.8), Vector2(0.08, 0.88), Vector2(0.2, 0.5)])
 			for i in pts.size():

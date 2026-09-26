@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SpeciesDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/wildlife/species_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "coyote"
+name = "Coyote"
+rig = "wolf"
+track = "coyote"
+walk_speed = 140.0
+flee_speed = 520.0
+stride = 62.0
+home_range = 2500.0
+sight = 1100.0
+hearing = 1700.0
+scent = 4200.0
+group_min = 1
+group_max = 2
+active_hours = PackedVector2Array(0, 8, 17, 24)
+body_color = Color(0.62, 0.52, 0.39, 1)
+belly_color = Color(0.86, 0.79, 0.66, 1)
+rump_color = Color(0.7, 0.6, 0.46, 1)
+dark_color = Color(0.3, 0.25, 0.2, 1)
+size = 0.78

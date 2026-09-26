@@ -36,8 +36,8 @@ const RECIPES := {
 	"spear": {"needs": {"sticks": 3}, "hours": 1.0, "seconds": 3.0, "bench": true},
 	# Clothing. Buckskin is fair-weather gear; wolf and bear fur are what gets you through winter.
 	"buckskin_leggings": {"needs": {"hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
-	"wolf_hat": {"needs": {"wolf_fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
-	"wolf_mittens": {"needs": {"wolf_fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	"wolf_hat": {"needs": {"#fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
+	"wolf_mittens": {"needs": {"#fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
 	"wolf_leggings": {"needs": {"wolf_fur": 2, "#cord": 1}, "hours": 2.0, "seconds": 4.0, "bench": true},
 	"bear_coat": {"needs": {"bear_fur": 1, "#cord": 1}, "hours": 3.0, "seconds": 4.5, "bench": true},
 	"snowshoes": {"needs": {"sticks": 4, "hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
@@ -62,6 +62,7 @@ const TAGS := {
 	"#cord": ["cord", "cordage"],
 	"#line": ["fishing line", "fishing_kit"],
 	"#fibre": ["vines or yucca fiber", "vine"],
+	"#fur": ["wolf or coyote fur", "wolf_fur"],
 }
 
 ## Where to get each making: shown in the books under anything you're short of.
@@ -76,6 +77,7 @@ const SOURCES := {
 	"bandage": "You start with a roll. More turn up in old camps and cellars.",
 	"hide": "Tanned hide: skin a deer (knife, at the carcass), stretch the raw hide on a hide frame, and it's cured in about 18 hours.",
 	"wolf_fur": "Kill a wolf (an arrow to the chest), skin it with the knife, and cure the pelt on a hide frame.",
+	"#fur": "Cured wolf or coyote fur: skin one (knife, at the carcass) and cure the pelt on a hide frame. Coyotes hang round the open country at night and come to anything dead.",
 	"bear_fur": "Bring down the bear (two good arrows), skin it, and cure the hide on a hide frame (about 30 hours).",
 	"berries": "Serviceberry bushes in the valley and meadows: E to pick. They grow back in about three days.",
 	"snare": "Make snares in the recipe book (Basics): cord and a stick make two.",

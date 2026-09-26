@@ -18,9 +18,12 @@ const CHECK_EVERY := 8.0
 const SPECIES := [preload("res://data/species/mule_deer.tres")]
 const WOLF := preload("res://data/species/wolf.tres")
 const BEAR := preload("res://data/species/black_bear.tres")
-const PREDATORS := [WOLF, BEAR]
+const COYOTE := preload("res://data/species/coyote.tres")
+const PREDATORS := [WOLF, BEAR, COYOTE]
+const COYOTE_COUNTRY := ["sage", "meadow", "desert", "canyon", "valley", "marsh", "river"]
 const BEAR_RANGE := Vector2(21000.0, 40000.0) ## the foothills around the rock shelter
 const PREDATOR_EVERY := 10.0
+const KILL_SITE_CHANCE := 0.02 ## per predator check in winter: an old wolf kill turns up ahead
 
 var world: World
 var player: Player
@@ -96,20 +99,25 @@ func _manage_predators() -> void:
 	var wolf_hours := clock.daylight() < 0.3 or winter
 	var wolves := 0
 	var bears := 0
+	var coyotes := 0
 	for n in get_children():
 		if not n is Predator or n.is_queued_for_deletion():
 			continue
 		var seen := cam != null and absf(n.position.x - cam.get_screen_center_position().x) < view
-		var busy: bool = n.state in [Predator.State.FEED, Predator.State.STALK, Predator.State.LUNGE, Predator.State.BLUFF]
+		var busy: bool = n.state in [Predator.State.FEED, Predator.State.STALK, Predator.State.LUNGE, Predator.State.BLUFF, Predator.State.CHASE]
 		var leave := absf(n.position.x - px) > DESPAWN_AT
 		if n.is_wolf():
 			leave = leave or (not wolf_hours and not busy)
+		elif n.is_coyote():
+			leave = leave or (n.state == Predator.State.FLEE and absf(n.position.x - px) > 2500.0)
 		else:
 			leave = leave or winter != (n.den != null) # the den bear is only there in winter
 		if leave and not seen:
 			n.queue_free()
 		elif n.is_wolf():
 			wolves += 1
+		elif n.is_coyote():
+			coyotes += 1
 		else:
 			bears += 1
 	if wolves == 0 and wolf_hours:
@@ -128,6 +136,20 @@ func _manage_predators() -> void:
 					w.travel = travel
 					w.pack = pack
 					pack.append(w)
+	if coyotes == 0 and Terrain.biome(px) in COYOTE_COUNTRY:
+		var food := _food_near(px, 6000.0, "coyote")
+		var chance := 0.3 if food else (0.1 if clock.daylight() < 0.3 else (0.04 if Terrain.biome(px) in ["sage", "desert", "canyon"] else 0.0))
+		if _rng.randf() < chance:
+			var side := signf(food.global_position.x - px) if food and food.global_position.x != px else (1.0 if _rng.randf() < 0.5 else -1.0)
+			var x := _out_of_sight(px, side, view)
+			if not is_nan(x):
+				var pack := []
+				for k in _rng.randi_range(COYOTE.group_min, COYOTE.group_max):
+					var c := spawn_predator(COYOTE, x + side * k * _rng.randf_range(50.0, 120.0), _rng.randi())
+					c.pack = pack
+					pack.append(c)
+	if winter and _rng.randf() < KILL_SITE_CHANCE:
+		kill_site(view)
 	if winter and bears == 0:
 		_den_bear()
 	var in_range := px > BEAR_RANGE.x - 2500.0 and px < BEAR_RANGE.y + 2500.0
@@ -140,6 +162,21 @@ func _manage_predators() -> void:
 			x = _out_of_sight(px, -side, view)
 		if not is_nan(x) and x > BEAR_RANGE.x - 1500.0 and x < BEAR_RANGE.y + 1500.0:
 			spawn_predator(BEAR, x, _rng.randi())
+
+## Where wolves pulled down a deer some hours ago, somewhere ahead out of sight: what's left of
+## the carcass, blood trampled into the snow, wolf tracks all round. Scavenge it if you dare.
+func kill_site(view: float) -> Node:
+	var px := player.global_position.x
+	if get_tree().get_nodes_in_group("carcass").any(func(c): return absf(c.global_position.x - px) < 8000.0):
+		return null
+	var x := _out_of_sight(px, float(player.facing), view)
+	if is_nan(x) or Predator.safe_at(get_tree(), x):
+		return null
+	var c := world.spawn({"kind": "carcass", "x": x, "facing": 1 if _rng.randf() < 0.5 else -1, "species": "mule_deer",
+		"hour": GameClock.clock.hours - _rng.randf_range(1.0, 10.0), "torn": true, "meat": _rng.randf_range(1.5, 4.0)})
+	for k in 14:
+		tracks.add(x + _rng.randf_range(-220.0, 220.0), "blood" if k % 3 == 0 else "wolf", 1 if k % 2 == 0 else -1)
+	return c
 
 ## In winter the bear is asleep in the cave den (unless it was killed there this winter).
 ## It beds down while you're elsewhere, never with you down in the cave.
