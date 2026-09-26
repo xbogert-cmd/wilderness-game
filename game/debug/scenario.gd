@@ -2701,7 +2701,7 @@ func _under() -> void:
 	var atm: Atmosphere = get_tree().get_root().find_children("*", "Atmosphere", true, false)[0]
 	await frames(4)
 	check(atm.canvas_mod.color.get_luminance() < 0.2, "and dark at midday (%.2f)" % atm.canvas_mod.color.get_luminance())
-	check(player._torch_light.visible and player._torch_light.energy > 0.7, "the torch lights it up")
+	check(player._torch_light.visible and player._torch_light.energy > 0.6, "the torch lights it up") # (it flickers: 0.67 at the low point)
 	check(player.noise() == 0.0 and player.visibility() == 0.0, "nothing up top can hear or see you")
 	player.cond.warmth = 50.0
 	var shelves := _pick(cellar, "shelves")

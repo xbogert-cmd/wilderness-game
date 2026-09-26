@@ -116,6 +116,14 @@ func _ready() -> void:
 	atmo.veil = ShaderMaterial.new()
 	atmo.veil.shader = preload("res://game/world/visibility.gdshader")
 	veil.material = atmo.veil
+	var shimmer := ColorRect.new() # heat shimmer, first: the light and fog go over it
+	shimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shimmer.material = ShaderMaterial.new()
+	(shimmer.material as ShaderMaterial).shader = preload("res://game/world/shimmer.gdshader")
+	shimmer.visible = false
+	atmo.shimmer = shimmer
+	veil_layer.add_child(shimmer)
 	var light := ColorRect.new()
 	light.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	light.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -25,7 +25,10 @@ var veil: ShaderMaterial ## fog and blizzard over the view (visibility.gdshader)
 var _aurora := 0.0
 static var force_aurora := false ## (preview)
 static var sun_dir := 0.0 ## -1 the sun's off to the left .. 1 to the right
-static var sun_k := 0.0 ## how strongly the sun's shining (0 night, cloud, underground)
+static var sun_k := 0.0
+static var moon_k := 0.0 ## the moon up in a clear night sky ## how strongly the sun's shining (0 night, cloud, underground)
+var shimmer: ColorRect ## heat shimmer over hot dry country (off unless there's heat)
+const HOT := {"desert": 1.0, "canyon": 1.0, "sage": 0.6, "meadow": 0.2}
 var beams: ShaderMaterial ## sunbeams, cloud shadows and vignette
 const BEAMS := {"valley": 1.0, "river": 0.7, "oldgrowth": 1.0, "grove": 0.9, "foothills": 0.7, "burn": 0.5, "marsh": 0.5, "meadow": 0.6}
 var _keys: Array = []
@@ -92,6 +95,10 @@ func _process(_delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("under", under)
 	RenderingServer.global_shader_parameter_set("cam_x", get_viewport().get_camera_2d().get_screen_center_position().x if get_viewport().get_camera_2d() else 0.0)
 	var tm := fposmod(h - Clock.SUNSET, 24.0) / (24.0 - (Clock.SUNSET - Clock.SUNRISE))
+	RenderingServer.global_shader_parameter_set("wind_dir", float(w.wind_dir))
+	var yp := clock.year_pos() # wildflowers: spring into early summer (lupine, balsamroot, paintbrush)
+	RenderingServer.global_shader_parameter_set("bloom", smoothstep(0.06, 0.14, yp) * (1.0 - smoothstep(0.32, 0.42, yp)) * (1.0 - smoothstep(2.0, 8.0, w.snow_cm)))
+	moon_k = (1.0 - smoothstep(0.0, 0.1, light)) * (1.0 - w.cloud) * sin(clampf(tm, 0.0, 1.0) * PI) * (1.0 - under)
 	RenderingServer.global_shader_parameter_set("frost", w.frost(clock))
 	RenderingServer.global_shader_parameter_set("wet", clampf(maxf(w.rain() * 1.5, w.damp * 0.8), 0.0, 1.0))
 	RenderingServer.global_shader_parameter_set("rain_k", w.rain())
@@ -103,7 +110,6 @@ func _process(_delta: float) -> void:
 	sky.set_shader_parameter("moon_alpha", 1.0 - smoothstep(0.0, 0.1, light))
 	sky.set_shader_parameter("stars", 1.0 - smoothstep(0.0, 0.12, light))
 	sky.set_shader_parameter("rainbow", w.rainbow(clock) * (1.0 - under))
-	var yp := clock.year_pos()
 	var summer_pm := smoothstep(0.22, 0.28, yp) * (1.0 - smoothstep(0.47, 0.53, yp)) * smoothstep(12.0, 14.5, h) * (1.0 - smoothstep(19.0, 20.5, h))
 	sky.set_shader_parameter("towers", maxf(summer_pm * 0.7 * (1.0 - smoothstep(0.6, 0.85, w.cloud)), 1.0 if w.thunder_far() and not w.thunderstorm() else 0.0))
 	var aurora_night := force_aurora or hash([clock.day(), "aurora"]) % 3 == 0 and clock.season() == 3 and (h > 21.0 or h < 4.5)
@@ -112,6 +118,11 @@ func _process(_delta: float) -> void:
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
 	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz + 1.2 * w.fog)
+	if shimmer and p:
+		var heat: float = smoothstep(22.0, 30.0, p.air_c()) * sun_k * HOT.get(Terrain.biome(p.global_position.x), 0.0) * (1.0 - w.precip)
+		shimmer.visible = heat > 0.02
+		if shimmer.visible:
+			(shimmer.material as ShaderMaterial).set_shader_parameter("amount", heat)
 	if beams and p:
 		var vp := get_viewport()
 		var view := vp.get_visible_rect().size

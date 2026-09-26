@@ -380,6 +380,15 @@ func _draw() -> void:
 			for i in 3:
 				var y := -66.0 - fmod(_t * 30.0 + i * 12.0, 36.0)
 				draw_circle(Vector2(-8 + i * 8, y), 3.0, Color(1, 1, 1, 0.35))
+	var w := GameClock.weather
+	var hang := (1.0 - smoothstep(0.12, 0.3, w.wind)) * clampf((4.0 - w.air_temp_c(GameClock.clock)) / 8.0, 0.0, 1.0) * (1.0 if lit else 0.0)
+	if hang > 0.0: # still, cold air: the smoke goes up, flattens and hangs in a layer over camp
+		for k in 6:
+			var y := -230.0 - k * 6.0
+			var wdt := 140.0 + k * 70.0 + sin(_t * 0.2 + k) * 20.0
+			draw_set_transform(Vector2(sin(_t * 0.15 + k * 1.3) * 30.0, y), 0.0, Vector2(wdt, 18.0 + k * 3.0))
+			draw_circle(Vector2.ZERO, 1.0, Color(0.62, 0.62, 0.64, 0.05 * hang))
+		draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func _exit_tree() -> void:
 	_sound.stop() # a playing stream at shutdown is reported as a leak

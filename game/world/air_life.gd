@@ -15,6 +15,8 @@ var fluff: CPUParticles2D
 var motes: CPUParticles2D
 var drips: CPUParticles2D
 var drift: CPUParticles2D
+var _slide_t := 3.0
+var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	leaves = _emitter(45, 9.0, Vector2(1400, 30), Vector2(0, -650), 1.6, 2.4)
@@ -123,3 +125,47 @@ func _process(_delta: float) -> void:
 	_on(drips, out and w.since_rain < 2.5 and w.precip < 0.15 and w.snow_frac < 0.5 and b in WOODS)
 	_on(drift, out and w.snow_cm > 5.0 and w.wind > 0.5 and w.snowfall() < 0.4)
 	drift.gravity = Vector2(wind * 700.0, -15.0)
+	# a gust shakes a load of snow off a bough: it slides, drops and puffs into powder
+	_slide_t -= _delta
+	if _slide_t <= 0.0:
+		_slide_t = _rng.randf_range(2.0, 7.0) / maxf(w.wind, 0.2)
+		if out and w.snow_cm > 5.0 and w.wind > 0.3 and w.snowfall() < 0.5:
+			_slide()
+
+func _slide() -> void:
+	var cx := get_viewport().get_camera_2d().get_screen_center_position().x
+	var trees := get_tree().get_nodes_in_group("choppable").filter(func(t): return absf(t.global_position.x - cx) < 900.0 and t.conifer)
+	if trees.is_empty():
+		return
+	var t: ChoppableTree = trees[_rng.randi() % trees.size()]
+	var at := t.global_position + Vector2(_rng.randf_range(-0.12, 0.12) * t.height, -t.height * _rng.randf_range(0.35, 0.75))
+	for fine in [false, true]: # clumps that drop, then the powder hanging after them
+		var p := CPUParticles2D.new()
+		p.one_shot = true
+		p.explosiveness = 0.6 if not fine else 0.3
+		p.amount = 14 if not fine else 40
+		p.lifetime = 1.6 if not fine else 3.5
+		p.local_coords = false
+		p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		p.emission_rect_extents = Vector2(40, 10)
+		p.direction = Vector2(GameClock.weather.wind_dir, 0.3)
+		p.spread = 50.0
+		p.initial_velocity_min = 10.0
+		p.initial_velocity_max = 60.0
+		p.gravity = Vector2(GameClock.weather.wind_dir * GameClock.weather.wind * (40.0 if fine else 10.0), 30.0 if fine else 700.0)
+		p.damping_min = 0.0 if not fine else 20.0
+		p.damping_max = 0.0 if not fine else 40.0
+		p.scale_amount_min = 1.2 if not fine else 0.8
+		p.scale_amount_max = 2.2 if not fine else 2.0
+		p.texture = _dot()
+		p.color = Color(0.96, 0.97, 1.0, 0.9 if not fine else 0.35)
+		var fade := Gradient.new()
+		fade.set_color(0, Color(1, 1, 1, 1))
+		fade.set_color(1, Color(1, 1, 1, 0))
+		p.color_ramp = fade
+		p.z_as_relative = false
+		p.z_index = 3
+		get_parent().get_parent().add_child(p) # (into the world, not the moving camera)
+		p.global_position = at
+		p.emitting = true
+		p.finished.connect(p.queue_free)

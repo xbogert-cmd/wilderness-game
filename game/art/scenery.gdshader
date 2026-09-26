@@ -4,6 +4,7 @@ shader_type canvas_item;
 // 0.5 grass/fern, 1 deciduous leaves, 2 snow cap, 3 open ground, 4 water.
 
 global uniform float wind;
+global uniform float wind_dir;
 global uniform vec4 haze_color;
 global uniform float snow; // 0..1 how snowed-in the world looks
 global uniform float autumn; // 0..1 leaves and grass turned
@@ -28,6 +29,7 @@ void vertex() {
 	vec2 world = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 	float tip = 1.0 - UV.y;
 	float gust = sin(TIME * 1.7 + world.x * 0.004) + 0.4 * sin(TIME * 3.1 + world.x * 0.011);
+	gust += 1.6 * pow(max(sin(world.x * 0.0035 - TIME * (1.2 + 2.0 * wind) * wind_dir), 0.0), 6.0) * step(0.25, UV.x) * step(UV.x, 0.75); // waves running through the grass
 	VERTEX.x += gust * wind * sway * tip * tip * (1.0 - snow * 0.6); // laden boughs sway less
 }
 

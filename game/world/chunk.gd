@@ -6,6 +6,9 @@ const DEPTH := 2400.0
 const WATER_SHADER := preload("res://game/world/water.gdshader")
 const GROUND_SHADER := preload("res://game/world/ground.gdshader")
 const MUD := Color("3f3226")
+## How thick the wildflowers come up in spring, by country.
+const FLOWERS := {"meadow": 1.0, "valley": 0.6, "sage": 0.7, "alpine": 0.9, "burn": 0.8, "river": 0.5, "foothills": 0.5, "marsh": 0.4,
+	"grove": 0.5, "ridge": 0.3, "desert": 0.25, "canyon": 0.2, "oldgrowth": 0.1, "boulders": 0.3}
 
 var index := 0
 var world: World
@@ -197,7 +200,7 @@ func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
 		for p in surface:
 			pts.append(p + Vector2(0, r[0]))
 			var wi := terrain.water_index(p.x, 60.0)
-			uvs.append(Vector2(p.x, r[0] + (maxf(p.y - terrain.banks[wi], 0.0) if wi >= 0 else 0.0))) # in a creek: from the banks' level
+			uvs.append(Vector2(FLOWERS.get(Terrain.biome(p.x), 0.3), r[0] + (maxf(p.y - terrain.banks[wi], 0.0) if wi >= 0 else 0.0))) # UV.x: how thick the wildflowers come; UV.y: below the line (in a creek, from the banks' level)
 			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x) # damp ground darker near the line
 			var c: Color = r[1]
 			c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x) * (0.2 if Terrain.biome(p.x) in ["oldgrowth", "grove"] else 1.0))

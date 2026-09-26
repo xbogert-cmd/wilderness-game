@@ -14,7 +14,10 @@ global uniform vec4 haze_color;
 global uniform float cam_x;
 global uniform float frost; // 0..1 white frost on a cold clear morning
 global uniform float wet; // 0..1 rained on: darker ground, puddles in the hollows
-global uniform float rain_k; // raining now: rings on the puddles // the view's centre: nearer ground slides past faster (parallax)
+global uniform float rain_k; // raining now: rings on the puddles
+global uniform float bloom; // spring into early summer: wildflowers (UV.x: how thick they come here)
+global uniform float wind;
+global uniform float wind_dir; // the view's centre: nearer ground slides past faster (parallax)
 uniform vec4 creeks = vec4(0.0, -1.0, 0.0, -1.0); // x and half-width of up to two creeks here
 uniform vec4 soil_top : source_color = vec4(0.36, 0.27, 0.19, 1.0);
 uniform vec4 soil_deep : source_color = vec4(0.2, 0.15, 0.11, 1.0);
@@ -81,6 +84,16 @@ void fragment() {
 	float stone = step(0.972, hash(cell)) * smoothstep(0.4, 0.28, distance(fract(sc) * vec2(1.0, 1.4), vec2(0.5, 0.7)));
 	vec3 rock = vec3(0.56, 0.54, 0.5) * (0.8 + 0.35 * hash(cell + 3.1));
 	col = mix(col, rock * mix(1.1, 0.8, fract(sc.y) ), stone);
+	// the wind going over the grass in waves, the bent blades catching the light
+	float wave = pow(max(sin(u * 0.0035 - TIME * (1.2 + 2.0 * wind) * wind_dir + fbm(vec2(u * 0.001, v * 0.01)) * 4.0), 0.0), 6.0);
+	col *= 1.0 + wave * wind * 0.22 * (1.0 - snow) * (1.0 - smoothstep(0.62, 0.72, patches));
+	// wildflowers: drifts of blue lupine, yellow balsamroot, red paintbrush, white yarrow
+	float meadow = smoothstep(0.45, 0.7, fbm(vec2(u * 0.0025, v * 0.012) + 71.0)) * bloom * UV.x * (1.0 - snow);
+	vec2 fcell = floor(vec2(u * 0.12, v * 0.2));
+	float fl = step(0.72 - meadow * 0.35, hash(fcell + 9.0)) * step(0.02, meadow) * smoothstep(0.42, 0.2, distance(fract(vec2(u * 0.12, v * 0.2)), vec2(0.5)));
+	float which = hash(fcell + 4.4) + fbm(vec2(u * 0.002, 3.0)) * 0.6; // one colour tends to hold a patch
+	vec3 petal = which < 0.5 ? vec3(0.42, 0.45, 0.85) : (which < 0.85 ? vec3(0.95, 0.8, 0.25) : (which < 1.05 ? vec3(0.85, 0.28, 0.2) : vec3(0.95, 0.94, 0.9)));
+	col = mix(col, petal, fl * (1.0 - path) * (1.0 - stone));
 	// after rain: the ground darker, puddles in the hollows showing the sky, rings when it's raining
 	col *= 1.0 - 0.28 * wet * (1.0 - snow);
 	float hollow = fbm(vec2(u * 0.011, v * 0.05) + 31.0);

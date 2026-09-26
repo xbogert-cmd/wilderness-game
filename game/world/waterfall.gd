@@ -90,6 +90,9 @@ func _draw() -> void:
 		var bands := [Color(0.9, 0.3, 0.3), Color(0.95, 0.65, 0.25), Color(0.95, 0.9, 0.35), Color(0.4, 0.8, 0.4), Color(0.35, 0.55, 0.9), Color(0.55, 0.4, 0.8)]
 		for k in bands.size():
 			draw_arc(Vector2(40, 60), 330.0 - k * 9.0, PI * 1.1, PI * 1.62, 32, Color(bands[k], 0.16 * (sun - 0.25) / 0.75 + 0.05), 9.0)
+	elif Atmosphere.moon_k > 0.3 and GameClock.weather.precip < 0.2: # a moonbow: the same bow by moonlight, pale, nearly white
+		for k in 5:
+			draw_arc(Vector2(40, 60), 330.0 - k * 10.0, PI * 1.1, PI * 1.62, 32, Color(0.9, 0.92, 1.0, 0.2 * (Atmosphere.moon_k - 0.3) / 0.7 + 0.06).lerp(Color(0.8, 0.85, 1.0, 0.0), k * 0.12), 10.0)
 
 ## The cliff steps down into rocky shoulders on both sides and a slope of fallen
 ## rock at its foot, with forest along the rim, so it sits in the land rather than standing in it

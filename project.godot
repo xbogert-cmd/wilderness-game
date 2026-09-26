@@ -210,6 +210,14 @@ fish_rise={
 "type": "float",
 "value": 0.0
 }
+wind_dir={
+"type": "float",
+"value": 1.0
+}
+bloom={
+"type": "float",
+"value": 0.0
+}
 cam_x={
 "type": "float",
 "value": 0.0

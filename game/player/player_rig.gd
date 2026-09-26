@@ -209,14 +209,19 @@ func _breath(head: Vector2) -> void:
 	var t_c := GameClock.weather.air_temp_c(GameClock.clock)
 	if t_c > 3.0:
 		return
+	var w := GameClock.weather
+	var still := (1.0 - smoothstep(0.12, 0.35, w.wind)) * clampf((1.0 - t_c) / 8.0, 0.0, 1.0) # still and bitter: it hangs
 	var period := 1.6 if body.running else 3.2
-	var k := fposmod(_time, period) / period
-	if k > 0.45:
-		return
-	var a := clampf((3.0 - t_c) / 8.0, 0.25, 0.7) * (1.0 - k / 0.45)
-	var mouth := head + Vector2(12, 4)
-	for i in 3:
-		draw_circle(mouth + Vector2(8.0 + k * 40.0 + i * 5.0, -k * 10.0 - i * 2.0), 3.0 + k * 10.0 - i, Color(0.92, 0.94, 0.97, a * (1.0 - i * 0.25)))
+	var show := lerpf(0.45, 0.95, still) # how long each breath stays in the air
+	for back in 2: # this breath, and the last one still hanging
+		var k := fposmod(_time, period) / period + back
+		if k > show:
+			continue
+		var a := clampf((3.0 - t_c) / 8.0, 0.25, 0.7) * (1.0 - k / show)
+		var mouth := head + Vector2(12, 4)
+		var drift := Vector2(8.0 + k * lerpf(40.0, 22.0, still), -k * lerpf(10.0, 26.0, still))
+		for i in 3:
+			draw_circle(mouth + drift + Vector2(i * 5.0, -i * 2.0), 3.0 + k * lerpf(10.0, 18.0, still) - i, Color(0.92, 0.94, 0.97, a * (1.0 - i * 0.25)))
 
 ## What you're wearing shows: a buckskin or bear-fur coat, fur or buckskin leggings, mittens.
 func _jacket() -> Color:
