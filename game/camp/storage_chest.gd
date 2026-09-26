@@ -10,6 +10,7 @@ func _ready() -> void:
 	add_to_group("interactable")
 	add_to_group("camp") # gets a key popup
 	add_to_group("structure")
+	add_to_group("chest")
 	z_as_relative = false
 	z_index = 2
 

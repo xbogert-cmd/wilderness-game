@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "arnica"
+name = "Arnica"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.05
+color = Color(0.878, 0.690, 0.188, 1)
+tags = PackedStringArray("herb")
+max_stack = 8
+description = "Rub it on a sprain to ease it."

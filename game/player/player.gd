@@ -39,6 +39,8 @@ var held_slot := -1 ## attachment slot it came from, to return it there
 var carrying: WorldLog ## oversized object on the shoulder or dragged
 var hauling: Carcass: ## a whole carcass dragged by the neck
 	get: return hauling if is_instance_valid(hauling) else null
+var pulling: Sled: ## a sled in tow
+	get: return pulling if is_instance_valid(pulling) else null
 ## Interactable in reach. Getters hide nodes freed since the last focus update (a finished
 ## blueprint, a fully bucked trunk) so nothing reads a dead reference.
 var focus: Node:
@@ -56,6 +58,10 @@ var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
 var hurt_t := 0.0 ## seconds of flinch left after being struck
+var errand_label := "" ## what the player's doing at a stop on an errand (rummaging in a chest)
+var _errand: Array = [] ## [{x, wait, label, do}]: walk to each x, pause, do it
+var _errand_wait := -1.0
+var _errand_t := 0.0
 var climbing := false ## on a ladder: moved along a path, hand over hand
 var climb_phase := 0.0 ## rungs climbed so far (the rig alternates hands and feet on it)
 var _climb_path: PackedVector2Array
@@ -63,9 +69,10 @@ var _climb_leg := 0
 var _climb_done: Callable
 const CLIMB_SPEED := 190.0 ## px per second up or down a ladder
 const RECIPES: PackedStringArray = ["splint", "vine_cord", "snare", "fishing_pole", "bow", "arrows", "spear", "deer_call",
-	"hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat"]
+	"hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat", "snowshoes"]
 const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never breaks
 var known_recipes := RECIPES
+var known_plants := {} ## plant species picked at least once: named from then on
 var bow_draw := -1.0 ## 0..1, -1 not drawing
 var fishing: Fishing ## set by Main
 var facing := 1
@@ -153,13 +160,15 @@ func _physics_process(delta: float) -> void:
 	var dir := 0.0
 	if working <= 0.0 and swing < 0.0 and hurt_t < 0.25: # staggered for a moment after a hit
 		dir = auto_dir if auto_dir != 0.0 else Input.get_axis("move_left", "move_right")
+	if not _errand.is_empty():
+		dir = _errand_dir(delta)
 	var was_on_floor := is_on_floor()
 	crouching = (Input.is_action_pressed("crouch") or auto_crouch) and was_on_floor and working <= 0.0
 	if cond.stamina < 1.0:
 		_can_run = false
 	elif cond.stamina > 20.0:
 		_can_run = true
-	running = (Input.is_action_pressed("run") or auto_run) and dir != 0.0 and not crouching and _can_run and carrying == null and hauling == null
+	running = (Input.is_action_pressed("run") or auto_run) and dir != 0.0 and not crouching and _can_run and carrying == null and hauling == null and pulling == null
 	wade_depth = world.terrain.water_depth_at(global_position.x, global_position.y)
 
 	if bow_draw >= 0.0:
@@ -177,10 +186,12 @@ func _physics_process(delta: float) -> void:
 		speed *= carrying.speed_mult()
 	if hauling:
 		speed *= HAUL_SPEED
+	if pulling:
+		speed *= pulling.speed_mult()
 	velocity.x = move_toward(velocity.x, dir * speed, ACCEL * delta)
 	if running:
 		cond.spend_stamina(GameClock.tuning.run_stamina_per_sec * delta)
-	elif (carrying or hauling) and dir != 0.0:
+	elif (carrying or hauling or pulling) and dir != 0.0:
 		cond.stamina = maxf(cond.stamina - CARRY_STAMINA_PER_SEC * delta, 0.0)
 	elif swing < 0.0:
 		cond.recover_stamina(delta * (0.5 if dir != 0.0 else 1.0))
@@ -188,7 +199,7 @@ func _physics_process(delta: float) -> void:
 	if not was_on_floor:
 		velocity.y += GRAVITY * delta
 		_fall_vy = maxf(_fall_vy, velocity.y)
-	elif Input.is_action_just_pressed("hop") and carrying == null and hauling == null and working <= 0.0 and cond.spend_stamina(HOP_STAMINA):
+	elif Input.is_action_just_pressed("hop") and carrying == null and hauling == null and pulling == null and working <= 0.0 and cond.spend_stamina(HOP_STAMINA):
 		velocity.y = -HOP
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
@@ -219,9 +230,12 @@ func _on_landed(vy: float) -> void:
 		message.emit("You land badly. Your ankle is sprained.")
 
 ## Deep snow drags at every step: knee-deep (50 cm) costs about 40% of your pace.
+## Snowshoes keep you on top of it (and are clumsy on bare ground).
 func snow_mult() -> float:
 	var cm := GameClock.weather.snow_cm if wade_depth <= 0.0 else 0.0
-	return 1.0 - clampf(cm / 125.0, 0.0, 0.45)
+	if backpack.wearing("snowshoes"):
+		return 0.85 if cm < 8.0 else 1.0 - clampf(cm / 125.0, 0.0, 0.45) * 0.2
+	return 1.0 - clampf(cm / 125.0, 0.0, 0.45) * (1.0 + 0.6 * GameClock.weather.blizzard())
 
 ## How far the player's activity carries: 0 silent, ~1 loud. Animals listen for this.
 func noise() -> float:
@@ -233,7 +247,7 @@ func noise() -> float:
 		n = 1.0
 	elif moving:
 		n = 0.13 if crouching else 0.42
-	if swing >= 0.0 or ((carrying or hauling) and moving):
+	if swing >= 0.0 or ((carrying or hauling or pulling) and moving):
 		n = maxf(n, 0.9)
 	if bow_draw >= 0.0:
 		n = maxf(n, 0.1)
@@ -253,7 +267,7 @@ func visibility() -> float:
 	return 1.0 if moving else 0.6
 
 func exertion() -> float:
-	if running or ((carrying or hauling) and absf(velocity.x) > 1.0): return 1.0
+	if running or ((carrying or hauling or pulling) and absf(velocity.x) > 1.0): return 1.0
 	if swing >= 0.0: return 0.8
 	if working > 0.0: return 0.4
 	return 0.3 if absf(velocity.x) > 1.0 else 0.0
@@ -270,12 +284,15 @@ func _on_tick(dh: float) -> void:
 		"sleep_quality": sleep_quality() if sleeping else 1.0,
 		"insulation_c": (GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0) \
 			+ backpack.insulation(),
-		"air_c": w.air_temp_c(GameClock.clock),
+		"air_c": w.air_temp_c(GameClock.clock) - (10.0 * w.blizzard() if not world.sheltered_at(global_position.x) else 0.0), # a blizzard's wind cuts through
 		"precip": w.rain() + w.snowfall() * 0.25, # snow wets you far less than rain
 		"sheltered": world.sheltered_at(global_position.x),
 		"heat": world.heat_at(global_position + Vector2(0, -60)),
 		"exertion": exertion(),
 		"wading": clampf(wade_depth / 100.0, 0.0, 1.0),
+		"hands_covered": backpack.worn.hands != null,
+		"legs_covered": backpack.worn.legs != null,
+		"deep_snow": w.snow_cm > 25.0 and not world.sheltered_at(global_position.x),
 	})
 	if holding("torch"):
 		held.condition -= dh / TORCH_HOURS * (1.0 + 2.0 * w.rain())
@@ -318,7 +335,7 @@ func smells_of_meat() -> bool:
 # --- Input -------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	if dead or working > 0.0 or climbing:
+	if dead or working > 0.0 or climbing or not _errand.is_empty():
 		return
 	if sleeping:
 		for a in ["move_left", "move_right", "hop", "interact", "rest", "use"]:
@@ -340,7 +357,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact") and focus:
 		open_or_interact()
 	elif event.is_action_pressed("lift"):
-		if hauling:
+		if hauling or pulling:
 			drop_haul()
 		else:
 			toggle_carry()
@@ -444,11 +461,16 @@ func use_held() -> void:
 	elif d.has("food"):
 		var fresh := held.freshness(GameClock.clock.hours)
 		cond.eat(d.food * ItemStack.FOOD_MULT[fresh])
+		if d.has("hot") and fresh != ItemStack.Fresh.SPOILED: # stew: warms you, and it's half water
+			cond.drink(12.0)
+			cond.warmth = minf(cond.warmth + 10.0, 100.0)
 		if d.has("raw"):
-			cond.health -= 6.0
-			message.emit("That was raw. It sits badly; cooking it would be better.")
+			cond.health -= 3.0
+			cond.expose(0.35, 0.45)
+			message.emit("That was raw. It sits badly; cooking it would be safer.")
 		elif fresh == ItemStack.Fresh.SPOILED:
-			cond.health -= 8.0
+			cond.health -= 4.0
+			cond.expose(0.55, 0.85)
 			message.emit("That was spoiled. Your stomach turns.")
 		_consume_one()
 	elif d.capacity > 0.0:
@@ -467,7 +489,21 @@ func use_held() -> void:
 		cond.drink(ItemStack.THIRST_PER_SIP * sip / ItemStack.SIP)
 		if not held.water_clean:
 			cond.health -= Creek.DIRTY_HEALTH_COST
-			message.emit("Gritty creek water. Boiling it first would be safer.")
+			cond.expose(Creek.SICK_AMOUNT * sip / ItemStack.SIP, Creek.SICK_CHANCE)
+			message.emit("Gritty, unboiled water. It can make you sick.")
+	elif d.has("tea"):
+		cond.drink(25.0)
+		cond.warmth = minf(cond.warmth + 8.0, 100.0)
+		var herb: String = {"mint_tea": "mint", "willow_tea": "willow_bark"}.get(d.id, "")
+		var what := cond.use_herb(herb)
+		cond.use_herb(herb) # brewed, twice the good of chewing it
+		message.emit(what if what != "" else "Hot tea.")
+		_consume_one()
+	elif d.has("herb"):
+		var what := cond.use_herb(d.id)
+		if what != "":
+			message.emit(what)
+		_consume_one()
 	elif d.has("flare"):
 		var f := Flare.new()
 		f.position = global_position + Vector2(facing * 20.0, -170.0)
@@ -678,11 +714,25 @@ func start_haul(c: Carcass) -> void:
 	c.hauler = self
 	message.emit("You take hold and start dragging. Slow going. (%s to let go)" % Keys.label("lift"))
 
+## Pulls a sled behind you (hands on the rope, nothing else carried).
+func start_pull(s: Sled) -> void:
+	stow()
+	drop_carried()
+	drop_haul()
+	pulling = s
+	s.puller = self
+	message.emit("You take up the sled's rope. (%s to let go)" % Keys.label("lift"))
+
+## Lets go of whatever you're dragging: a carcass or the sled.
 func drop_haul() -> void:
 	if hauling:
 		hauling.hauler = null
 		hauling.queue_redraw()
 	hauling = null
+	if pulling:
+		pulling.puller = null
+		pulling.queue_redraw()
+	pulling = null
 
 func toggle_carry() -> void:
 	if carrying:
@@ -722,6 +772,39 @@ func _advance_work(delta: float) -> void:
 		GameClock.time_scale = 1.0
 		work_label = ""
 		_work_done.call()
+
+# --- Errands ------------------------------------------------------------------------
+
+## Walks to each stop in turn, pauses there (rummaging), runs its action; the last one is
+## usually "back at the bench, now do the work".
+func errand(steps: Array) -> void:
+	_errand = steps.duplicate()
+	_errand_wait = -1.0
+	_errand_t = 0.0
+	menu = null
+
+func busy() -> bool:
+	return working > 0.0 or climbing or not _errand.is_empty()
+
+func _errand_dir(delta: float) -> float:
+	var s: Dictionary = _errand[0]
+	var dx: float = s.x - global_position.x
+	_errand_t += delta
+	if _errand_wait < 0.0:
+		if absf(dx) > 25.0 and _errand_t < 20.0:
+			return signf(dx)
+		if absf(dx) > 25.0: # something in the way: don't strand the player
+			global_position.x = s.x
+		_errand_wait = s.wait
+		errand_label = s.label
+	_errand_wait -= delta
+	if _errand_wait <= 0.0:
+		_errand.pop_front()
+		_errand_wait = -1.0
+		_errand_t = 0.0
+		errand_label = ""
+		s.do.call()
+	return 0.0
 
 # --- Ladders ---------------------------------------------------------------------
 
@@ -897,6 +980,7 @@ func unsafe_reason() -> String:
 	if climbing: return "Get off the ladder first."
 	if carrying: return "Set the log down first."
 	if hauling: return "Let go of the carcass first."
+	if pulling: return "Let go of the sled first."
 	if working > 0.0 or swing >= 0.0: return "Finish what you're doing first."
 	if cond.health < 15.0: return "You're in too much danger to save."
 	return ""
@@ -904,7 +988,7 @@ func unsafe_reason() -> String:
 func to_dict() -> Dictionary:
 	return {"x": global_position.x, "y": global_position.y, "facing": facing, "cond": cond.to_dict(),
 		"pack": backpack.to_dict(), "held": held.to_dict() if held else null, "held_slot": held_slot,
-		"recipes": Array(known_recipes), "camp_x": camp_x}
+		"recipes": Array(known_recipes), "camp_x": camp_x, "plants": known_plants.keys()}
 
 func from_dict(d: Dictionary) -> void:
 	global_position = Vector2(float(d.x), float(d.y))
@@ -923,3 +1007,5 @@ func from_dict(d: Dictionary) -> void:
 	if coat and backpack.worn.body == null: # before clothing slots a coat in the pack was worn
 		backpack.wear(coat)
 	camp_x = float(d.camp_x)
+	for sp in d.get("plants", []):
+		known_plants[sp] = true

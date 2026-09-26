@@ -15,6 +15,7 @@ const STRUCTURES := {
 	"bait": {"name": "Bait pile", "width": 60.0, "h": 30.0, "needs": {"berries": 4}, "hours": 0.05, "seconds": 1.0},
 	"blind": {"name": "Hunting blind", "width": 160.0, "h": 105.0, "needs": {"sticks": 6}, "hours": 0.4, "seconds": 2.5},
 	"snare": {"name": "Snare", "width": 40.0, "h": 30.0, "needs": {"snare": 1}, "hours": 0.1, "seconds": 1.0},
+	"sled": {"name": "Sled", "width": 190.0, "h": 60.0, "needs": {"medium": 1, "sticks": 6}, "hours": 1.0, "seconds": 3.5, "loose": true},
 	"bridge": {"name": "Log bridge", "width": 200.0, "h": 60.0, "needs": {"long": 4, "medium": 2}, "hours": 3.0, "seconds": 5.0, "water": true},
 	"cabin": {"name": "Log cabin", "width": 440.0, "h": 340.0, "needs": {"long": 6, "medium": 6, "sticks": 4}, "hours": 8.0, "seconds": 8.0},
 }
@@ -36,6 +37,7 @@ const RECIPES := {
 	"wolf_mittens": {"needs": {"wolf_fur": 1}, "hours": 1.0, "seconds": 3.0, "bench": true},
 	"wolf_leggings": {"needs": {"wolf_fur": 2, "#cord": 1}, "hours": 2.0, "seconds": 4.0, "bench": true},
 	"bear_coat": {"needs": {"bear_fur": 1, "#cord": 1}, "hours": 3.0, "seconds": 4.5, "bench": true},
+	"snowshoes": {"needs": {"sticks": 4, "hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
 }
 
 ## One line on what each build is for, shown in the build menu.
@@ -51,8 +53,18 @@ const WHAT := {
 	"bait": "draws deer (and the bear)",
 	"blind": "hide from deer while you hunt",
 	"snare": "catches rabbits overnight",
+	"sled": "pull logs, a deer, or gear over snow",
 	"bridge": "across a creek or the river: walk over dry",
 	"cabin": "the warmest shelter: a real home",
+}
+
+## Cooked in the pot hanging over a lit fire, from the pot's water and ingredients gathered
+## from the pack and nearby chests. Unboiled water is fine: it boils while it cooks.
+## "#meat" is any meat or fish; "#veg" is berries, rose hips or beans.
+const POT_RECIPES := {
+	"stew": {"needs": {"#meat": 2, "#veg": 1}, "water": 0.75, "hours": 1.0, "seconds": 4.0, "count": 3},
+	"mint_tea": {"needs": {"mint": 2}, "water": 0.5, "hours": 0.3, "seconds": 2.5, "count": 2},
+	"willow_tea": {"needs": {"willow_bark": 2}, "water": 0.5, "hours": 0.4, "seconds": 2.5, "count": 2},
 }
 
 static func is_log(key: String) -> bool:

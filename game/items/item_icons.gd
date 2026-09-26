@@ -169,6 +169,34 @@ static func draw(ci: CanvasItem, s: ItemStack, pos: Vector2, cell: float, rot :=
 				ci.draw_line(fp, fp + Vector2(u * 0.06, u * 0.1), a.call(c.lightened(0.18)), 1.5)
 			if d.id.ends_with("pelt") or d.id == "bear_hide":
 				ci.draw_colored_polygon(PackedVector2Array([pts[1].lerp(pts[7], 0.3), pts[3].lerp(pts[9], 0.3), pts[5].lerp(pts[10], 0.4)]), a.call(Color("a86a5c")))
+		"yarrow", "water_hemlock", "mint", "willow_bark", "rose_hips", "arnica":
+			if d.id == "willow_bark": # curls of red-brown bark
+				for i in 3:
+					ci.draw_arc(Vector2(w * (0.3 + i * 0.2), h * 0.5), u * 0.14, PI * 0.2, PI * 1.6, 8, a.call(c.darkened(0.1 * i)), u * 0.08)
+			else: # a sprig: stem, leaves, and the flower or fruit in the item's colour
+				ci.draw_line(Vector2(w * 0.5, h * 0.92), Vector2(w * 0.5, h * 0.3), a.call(Color("5d6e3a")), u * 0.06)
+				for k in 3:
+					var y := h * (0.75 - k * 0.14)
+					ci.draw_line(Vector2(w * 0.5, y), Vector2(w * (0.28 if k % 2 else 0.72), y - h * 0.06), a.call(Color("6f8a45")), u * 0.06)
+				for k in (5 if d.id in ["yarrow", "water_hemlock"] else 3):
+					ci.draw_circle(Vector2(w * (0.32 + k * 0.09), h * (0.24 if d.id != "rose_hips" else 0.26)), u * (0.06 if d.id != "rose_hips" else 0.1), a.call(c))
+				if d.id == "water_hemlock": # purple streaks, as a warning
+					ci.draw_line(Vector2(w * 0.5, h * 0.8), Vector2(w * 0.5, h * 0.6), a.call(Color("6a3a5a")), u * 0.08)
+		"snowshoes":
+			for k in 2:
+				var cx := w * (0.3 + k * 0.4)
+				ci.draw_arc(Vector2(cx, h * 0.5), u * 0.2, 0.0, TAU, 16, a.call(c), u * 0.06)
+				for j in 3:
+					ci.draw_line(Vector2(cx - u * 0.14, h * (0.4 + j * 0.1)), Vector2(cx + u * 0.14, h * (0.4 + j * 0.1)), a.call(Color("c8b89a")), 1.0)
+		"stew":
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.12, h * 0.45), Vector2(w * 0.88, h * 0.45), Vector2(w * 0.72, h * 0.85), Vector2(w * 0.28, h * 0.85)]), a.call(Color("7a6a5a")))
+			ci.draw_rect(Rect2(w * 0.16, h * 0.4, w * 0.68, h * 0.08), a.call(c))
+			for k in 3:
+				ci.draw_arc(Vector2(w * (0.35 + k * 0.15), h * 0.28), u * 0.05, PI, TAU, 6, a.call(Color(1, 1, 1, 0.5)), 1.5)
+		"mint_tea", "willow_tea":
+			ci.draw_rect(Rect2(w * 0.25, h * 0.35, w * 0.45, h * 0.5), a.call(Color("c8c4b8")))
+			ci.draw_rect(Rect2(w * 0.28, h * 0.38, w * 0.39, h * 0.1), a.call(c))
+			ci.draw_arc(Vector2(w * 0.72, h * 0.58), u * 0.1, -PI * 0.5, PI * 0.5, 6, a.call(Color("c8c4b8")), 2.0)
 		"torch":
 			ci.draw_line(Vector2(w * 0.5, h * 0.96), Vector2(w * 0.5, h * 0.3), a.call(c), u * 0.2)
 			ci.draw_rect(Rect2(w * 0.3, h * 0.26, w * 0.4, h * 0.12), a.call(Color("5a4a3a")))

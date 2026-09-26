@@ -28,6 +28,7 @@ const KINDS := {
 	"gut_pile": preload("res://game/hunting/gut_pile.gd"),
 	"snare": preload("res://game/hunting/snare.gd"),
 	"bridge": preload("res://game/camp/log_bridge.gd"),
+	"sled": preload("res://game/camp/sled.gd"),
 }
 
 var terrain := Terrain.new(WORLD_SEED)

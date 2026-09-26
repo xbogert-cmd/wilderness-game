@@ -6,11 +6,11 @@ const W := 6
 const H := 7
 const ATTACH_SLOTS := 2
 const COMFORT_KG := 14.0
-const WEAR := ["head", "body", "hands", "legs"] ## clothing slots; empty = just your own clothes
+const WEAR := ["head", "body", "hands", "legs", "feet"] ## clothing slots; empty = just your own clothes
 
 var entries: Array[Dictionary] = [] ## {stack: ItemStack, pos: Vector2i, rot: bool}
 var attachments: Array = [null, null] ## ItemStack or null
-var worn := {"head": null, "body": null, "hands": null, "legs": null} ## on you, not in the pack
+var worn := {"head": null, "body": null, "hands": null, "legs": null, "feet": null} ## on you, not in the pack
 
 ## Grid cells of a def, rotated 90° clockwise when rot.
 static func cells(def: ItemDef, rot: bool) -> Array[Vector2i]:

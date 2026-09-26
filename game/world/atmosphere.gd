@@ -47,6 +47,11 @@ func _process(_delta: float) -> void:
 	var top: Color = c[0].lerp(grey.darkened(0.15), w.cloud * 0.85)
 	var horizon: Color = c[1].lerp(grey, w.cloud * 0.75)
 	var ambient: Color = c[2] * lerpf(1.0, 0.72, w.cloud)
+	var bz := w.blizzard()
+	if bz > 0.0: # a whiteout: everything goes pale and close
+		horizon = horizon.lerp(Color(0.85, 0.87, 0.9) * lerpf(0.35, 1.0, light), bz * 0.8)
+		top = top.lerp(horizon, bz * 0.7)
+		ambient = ambient.lerp(Color(0.8, 0.82, 0.86) * lerpf(0.45, 1.0, light), bz * 0.35)
 	ambient.a = 1.0
 
 	RenderingServer.global_shader_parameter_set("haze_color", horizon)
@@ -65,5 +70,5 @@ func _process(_delta: float) -> void:
 	sky.set_shader_parameter("stars", 1.0 - smoothstep(0.0, 0.12, light))
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
-	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip)
+	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz)
 	rain.set_weather(w.rain(), w.snowfall(), w.wind)

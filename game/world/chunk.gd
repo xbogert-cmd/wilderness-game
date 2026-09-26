@@ -69,6 +69,7 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 			site.position = Vector2(sx, terrain.height_at(sx))
 			add_child(site)
 	_vines(terrain, world_seed, st)
+	_plants(terrain, world_seed, st)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
 	_trail = _trail_poly()
@@ -86,6 +87,22 @@ func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 		v.setup(self, id, st.picked.get(str(id), -INF))
 		v.position = Vector2(x, terrain.height_at(x) + 2.0)
 		add_child(v)
+
+## Wild plants (herbs), on their own seed. Water plants keep to the banks.
+func _plants(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([world_seed, index, "herbs"])
+	for k in 8:
+		var x := index * Terrain.CHUNK_W + rng.randf_range(250.0, Terrain.CHUNK_W - 250.0)
+		var wet := terrain.water_index(x, 900.0) >= 0 or Terrain.marsh(x) > 0.5
+		var sp := Plant.pick_for(Terrain.biome(x), wet, rng)
+		if terrain.water_surface_at(x) != INF or not _open(x) or absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF or absf(x - Terrain.LOOKOUT_X) < 300.0:
+			continue
+		var id := 2000 + k # clear of the tree, bush and vine ids in the "picked" table
+		var p := Plant.new()
+		p.setup(self, id, sp, st.picked.get(str(id), -INF))
+		p.position = Vector2(x, terrain.height_at(x) + 2.0)
+		add_child(p)
 
 ## Dashes of packed, hoof-worn earth along each game trail crossing this chunk.
 func _trail_poly() -> Polygon2D:

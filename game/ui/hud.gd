@@ -8,7 +8,7 @@ const COLORS := {
 	"health": Color("c8574a"), "stamina": Color("d8c060"),
 	"hunger": Color("c98a4a"), "thirst": Color("5aa0c0"),
 }
-const INJURY_TEXT := {"sprain": "Sprained", "cut": "Cut"}
+const INJURY_TEXT := {"sprain": "Sprained", "cut": "Cut", "frostbite": "Frostbitten"}
 const MSG_SECONDS := 4.5
 const TEXT := Color(0.95, 0.92, 0.85)
 
@@ -88,6 +88,10 @@ func _draw() -> void:
 	if player.world.heat_at(player.global_position + Vector2(0, -60)) > 0.1: notes.append("By the fire")
 	if cond.wetness > 0.15: notes.append("Soaked" if cond.wetness > 0.6 else "Damp")
 	if cond.fatigue > 60.0: notes.append("Exhausted" if cond.fatigue > 85.0 else "Tired")
+	if GameClock.weather.blizzard() > 0.3: notes.append("Blizzard")
+	if cond.sickness > 0.15: notes.append("Very sick" if cond.sickness > 0.5 else "Queasy")
+	if cond.infection > Condition.FEVER_AT: notes.append("Fever (infected)")
+	elif cond.infection > 0.12: notes.append("Wound festering")
 	if player.world.sheltered_at(player.global_position.x): notes.append("Sheltered")
 	for region in cond.injuries:
 		notes.append("%s %s%s" % [INJURY_TEXT.get(cond.injuries[region].kind, "Hurt"), region, " (treated)" if cond.injuries[region].treated else ""])
@@ -165,6 +169,8 @@ func _draw_fade() -> void:
 func _prompts() -> Array:
 	if player.working > 0.0:
 		return [[player.global_position + Vector2(0, -210), "", player.work_label + "…"]]
+	if player.errand_label != "":
+		return [[player.global_position + Vector2(0, -210), "", player.errand_label + "…"]]
 	if player.sleeping or player.dead or player.climbing:
 		return []
 	var out := []

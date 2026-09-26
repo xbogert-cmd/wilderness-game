@@ -57,12 +57,12 @@ func _slot_rect(i: int) -> Rect2:
 func _hands_rect() -> Rect2:
 	return Rect2(GRID_POS + Vector2(0, Backpack.H * CELL + 30.0), Vector2(CELL * 3, CELL * 2))
 
-const WEAR_SIZE := 68.0
-const WEAR_NAMES := {"head": "Head", "body": "Coat", "hands": "Mitts", "legs": "Legs"}
+const WEAR_SIZE := 56.0
+const WEAR_NAMES := {"head": "Head", "body": "Coat", "hands": "Mitts", "legs": "Legs", "feet": "Feet"}
 
 ## Clothing slots, in a row beside Hands under the grid.
 func _wear_rect(i: int) -> Rect2:
-	return Rect2(_hands_rect().end.x + 24.0 + i * (WEAR_SIZE + 6.0), _hands_rect().position.y, WEAR_SIZE, WEAR_SIZE)
+	return Rect2(_hands_rect().end.x + 18.0 + i * (WEAR_SIZE + 6.0), _hands_rect().position.y, WEAR_SIZE, WEAR_SIZE)
 
 func _wear_slot_at(p: Vector2) -> String:
 	for i in Backpack.WEAR.size():
@@ -272,6 +272,8 @@ func _refresh() -> void:
 						if err != "": player.message.emit(err))
 		if d.has("medical"):
 			_button("Use on %s" % d.treats, func(): _use_now())
+		if d.has("herb"):
+			_button("Eat it" if d.id in ["rose_hips", "water_hemlock"] else ("Chew it" if d.id in ["mint", "willow_bark"] else "Use it"), func(): _use_now())
 		if d.id == "sleeping_bag":
 			_button("Roll it out and sleep here", func():
 				toggle()
@@ -285,13 +287,14 @@ func _refresh() -> void:
 	head.add_theme_color_override("font_color", TEXT)
 	_actions.add_child(head)
 	var later: PackedStringArray = [] # recipes you have none of the makings for: one line, not a button each
+	var station := _station_x()
 	for id in player.known_recipes:
 		var r: Dictionary = Builds.RECIPES[id]
 		var have := {}
 		var ok := true
 		var some := false
 		for k in r.needs:
-			have[k] = player.backpack.count_of(k)
+			have[k] = Supply.have(player, k, station) # the pack, and chests near where you're working
 			ok = ok and have[k] >= r.needs[k]
 			some = some or (have[k] > 0 and k != "sticks" and not k.begins_with("#"))
 		if not some and not ok and r.needs.keys().any(func(k): return k != "sticks" and not k.begins_with("#")):
@@ -315,7 +318,10 @@ func _refresh() -> void:
 		more.add_theme_color_override("font_color", Color(TEXT, 0.6))
 		_actions.add_child(more)
 	var c := player.cond
-	_status.text = "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%% · Air %d °C · Clothing +%d °C\nInjuries: %s\nPack %.1f kg%s" % [
+	var ails: PackedStringArray = []
+	if c.sickness + c.incubating > 0.05: ails.append("sick %d%%" % int(c.sickness * 100))
+	if c.infection > 0.05: ails.append("infection %d%%%s" % [int(c.infection * 100), " (fever)" if c.infection > Condition.FEVER_AT else ""])
+	_status.text = ("Ailing: " + ", ".join(ails) + "\n" if ails else "") + "Health %d · Stamina %d · Hunger %d · Thirst %d\nWarmth %d · Wetness %d%% · Air %d °C · Clothing +%d °C\nInjuries: %s\nPack %.1f kg%s" % [
 		c.health, c.stamina, c.hunger, c.thirst, c.warmth, int(c.wetness * 100), roundi(GameClock.weather.air_temp_c(GameClock.clock)), int(player.backpack.insulation()),
 		", ".join(c.injuries.keys().map(func(k): return "%s %s%s" % [c.injuries[k].kind, k, " (treated)" if c.injuries[k].treated else ""])) if c.injuries else "none",
 		player.backpack.weight(), " (heavy: slower)" if player.backpack.encumbrance_mult() < 1.0 else ""]
@@ -399,13 +405,23 @@ func _repair() -> void:
 		tool.condition = 1.0
 		player.message.emit("The %s is solid again." % tool.def.name.to_lower()))
 
+## Where the work happens: the workbench you're at, else where you stand.
+func _station_x() -> float:
+	var x := player.global_position.x
+	for b in get_tree().get_nodes_in_group("workbench"):
+		if absf(b.global_position.x - x) < Workbench.REACH:
+			return b.global_position.x
+	return x
+
+## Pulls the makings from the pack and any chests nearby (walking over to fetch them), then works.
 func _craft(id: String) -> void:
 	var r: Dictionary = Builds.RECIPES[id]
-	for k in r.needs:
-		player.backpack.take(k, r.needs[k])
-	toggle()
-	player.work(r.seconds, r.hours, "Crafting " + Items.get_def(id).name.to_lower(), func():
-		player.receive(ItemStack.make(id, GameClock.clock.hours, r.get("count", 1))))
+	var station := _station_x()
+	if visible:
+		toggle()
+	Supply.gather(player, r.needs, station, func():
+		player.work(r.seconds, r.hours, "Crafting " + Items.get_def(id).name.to_lower(), func():
+			player.receive(ItemStack.make(id, GameClock.clock.hours, r.get("count", 1)))))
 
 # --- Drawing -----------------------------------------------------------------------
 

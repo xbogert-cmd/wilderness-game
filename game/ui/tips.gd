@@ -61,6 +61,14 @@ func _rules() -> Array:
 		["butcher", f is Carcass and f.deer() and not f.dressed, "Butcher it here and the meat goes in your pack, but the gut pile draws wolves. Or drag the whole deer home to camp."],
 		["wear", p.backpack.find(func(s): return s.def.slot != "") != null, "Clothing only warms you when you wear it: open the pack ({backpack}) and drag it onto a clothing slot."],
 		["chest", _pack_cells_free() < 8 and p.camp_x >= 0.0, "Your pack's filling up. A storage chest at camp keeps the rest: build one with {build}."],
+		["plants", f is Plant, "A wild plant. Pick one of a kind once and you'll know it by name from then on. Some are medicine; one by the water is poison."],
+		["sick", c.sickness > 0.15, "You're sick: bad water or bad food. Rest, drink boiled water, and wild mint (by the water) settles it. Left alone it gets worse."],
+		["infect", c.infection > 0.12, "An open wound is festering. Bandage it, and yarrow cleans it. Willow bark eases a fever. An infection left alone can kill in a couple of days."],
+		["frost", c.injuries.values().any(func(i): return i.kind == "frostbite"), "Frostbite. Cover your hands (mittens) and legs in deep snow, and warm up at a fire to bring it back."],
+		["blizzard_warn", GameClock.weather.storm_warning() and GameClock.weather.air_temp_c(GameClock.clock) < -2.0, "Bitter cold and the sky's closing in: a blizzard's coming. Get to shelter or a fire."],
+		["blizzard", GameClock.weather.blizzard() > 0.3, "A blizzard. The wind cuts through your clothes and you can barely see. Shelter, a fire, and wait it out."],
+		["deep", GameClock.weather.snow_cm > 30.0 and not p.backpack.wearing("snowshoes"), "Deep snow. Snowshoes (workbench: sticks, a tanned hide, cord) keep you on top of it; a sled (build menu) hauls loads over it."],
+		["icefish", Creek.frozen() and f is Creek and f.w().fish, "Frozen over. Chop a hole (E) and you can fish through it: the fish gather under the ice."],
 		["snare", p.backpack.count_of("snare") > 0, "Set a snare from the build menu ({build}) and check it at dawn. A rabbit left hanging too long gets taken."],
 	]
 

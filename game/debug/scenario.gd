@@ -12,6 +12,8 @@ class_name Scenario extends Node
 ## butchering and dragging, snares and rabbits, pelts and clothing.
 ## Mode "frontier": the wider world: new waters and biomes, the homestead, the trapper's camp,
 ## the plane wreck, the log bridge, flares, the far lights, and old saves' maps.
+## Mode "health": sickness, infection and fever, frostbite, wild plants and learning them,
+## pot cooking (stews, teas), crafting from nearby chests, winter travel.
 
 var player: Player
 var world: World
@@ -32,6 +34,7 @@ func _ready() -> void:
 		"winter": _winter.call_deferred()
 		"predators": _predators.call_deferred()
 		"frontier": _frontier.call_deferred()
+		"health": _health.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -561,7 +564,7 @@ func _hunt() -> void:
 	check(player.backpack.count_of("venison_raw") == int(Carcass.MEAT) and _carcasses().is_empty(), "butchered: %d venison straight into the pack" % player.backpack.count_of("venison_raw"))
 	check(get_tree().get_nodes_in_group("food_scent").any(func(n): return n is GutPile), "butchering in the field leaves a gut pile")
 	check(player.backpack.count_of("deer_hide") == 1 or (player.held and player.held.def.id == "deer_hide"), "and a raw deer hide")
-	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw")) # make room for what follows
+	player.backpack.take("#meat", player.backpack.count_of("#meat")) # (jerky counts as meat too) # make room for what follows
 	player.backpack.take("deer_hide", player.backpack.count_of("deer_hide"))
 
 	# Scent: the same still, standing player, 700 px off: smelled downwind, not upwind.
@@ -1240,7 +1243,7 @@ func _predators() -> void:
 		check(Player.first_label(deer.interact_options(player)).begins_with("Take the rest of the meat"), "come back for the rest")
 		deer.interact(player)
 		check(not is_instance_valid(deer) or deer.is_queued_for_deletion(), "took the rest; nothing left")
-	player.backpack.take("venison_raw", player.backpack.count_of("venison_raw"))
+	player.backpack.take("#meat", player.backpack.count_of("#meat")) # (jerky counts as meat too)
 	player.backpack.take("deer_hide", 1)
 	var whole := world.spawn({"kind": "carcass", "x": x + 80.0, "facing": 1, "species": "mule_deer", "hour": GameClock.clock.hours}) as Carcass
 	await frames(2)
@@ -1629,3 +1632,236 @@ func _frontier() -> void:
 
 	print("scenario failures: ", failures)
 	get_tree().quit(failures)
+
+
+# --- Mode "health" ------------------------------------------------------------------
+
+func _cond_env(extra := {}) -> Dictionary:
+	return {"air_c": 15.0, "exertion": 0.0}.merged(extra, true)
+
+func _health() -> void:
+	await frames(10)
+	GameClock.clock.hours = 12.0
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	var t := GameClock.tuning
+
+	# Sickness comes on hours after bad water, and wears off; mint helps.
+	var c := Condition.new(t)
+	c.incubating = 0.6
+	c.tick(0.5, _cond_env())
+	check(c.sickness > 0.0 and c.sickness < 0.2, "sickness comes on slowly (%.2f after half an hour)" % c.sickness)
+	for i in 6:
+		c.tick(1.0, _cond_env())
+	check(c.sickness > 0.5, "a few hours later it's bad (%.2f)" % c.sickness)
+	var sick_hunger := c.hunger
+	var well := Condition.new(t)
+	well.tick(0.5, _cond_env())
+	for i in 6:
+		well.tick(1.0, _cond_env())
+	check(sick_hunger < well.hunger - 3.0, "being sick drains you faster (hunger %d vs %d)" % [sick_hunger, well.hunger])
+	c.use_herb("mint")
+	check(c.sickness < 0.5, "wild mint settles it")
+
+	# An open wound festers; a bandage stops it, yarrow cleans it; ignored, fever can kill.
+	var w := Condition.new(t)
+	w.injure("legs", "cut", 0.6)
+	for i in 14:
+		w.tick(1.0, _cond_env({"hands_covered": true}))
+	check(w.infection > Condition.FEVER_AT, "an unbandaged bite festers into fever by the next day (%.2f)" % w.infection)
+	var hp := w.health
+	w.tick(4.0, _cond_env())
+	check(w.health < hp, "a fever wears you down")
+	w.use_herb("yarrow")
+	check(w.infection < Condition.FEVER_AT and w.injuries.legs.treated, "yarrow cleans the wound")
+	var ignored := Condition.new(t)
+	ignored.injure("torso", "cut", 1.0)
+	var died_at := -1
+	for hr in 120:
+		ignored.eat(100.0)
+		ignored.drink(100.0)
+		ignored.tick(1.0, _cond_env())
+		if ignored.is_dead() and died_at < 0:
+			died_at = hr
+	check(died_at > 36 and died_at < 110, "a bad wound left alone kills in a couple of days (%d h)" % died_at)
+	var careful := Condition.new(t)
+	careful.injure("torso", "cut", 1.0)
+	careful.treat("torso")
+	for hr in 120:
+		careful.eat(100.0)
+		careful.drink(100.0)
+		careful.tick(1.0, _cond_env())
+	check(not careful.is_dead() and careful.infection < 0.05, "bandaged, it heals clean")
+
+	# Frostbite takes bare hands in hard cold; mittens prevent it; a fire brings it back.
+	var f := Condition.new(t)
+	f.warmth = 5.0
+	f.tick(2.0, _cond_env({"air_c": -25.0}))
+	check(f.injuries.has("arms") and f.injuries.arms.kind == "frostbite", "bare hands frostbite in hard cold")
+	var m := Condition.new(t)
+	m.warmth = 5.0
+	m.tick(2.0, _cond_env({"air_c": -25.0, "hands_covered": true}))
+	check(not m.injuries.has("arms"), "mittens keep it off")
+	var sev: float = f.injuries.arms.severity
+	f.warmth = 50.0
+	f.tick(1.0, _cond_env({"air_c": 10.0, "heat": 0.8}))
+	check(not f.injuries.has("arms") or f.injuries.arms.severity < sev, "warming at a fire brings it back")
+
+	# Wild plants: unknown until picked once, then named; hemlock is poison.
+	await teleport(Terrain.CREEK_X - 1500.0)
+	await frames(5)
+	var plants := get_tree().get_nodes_in_group("plant")
+	check(plants.size() > 10, "wild plants grow about the valley (%d nearby)" % plants.size())
+	var yarrow: Plant = null
+	for pl in plants:
+		if pl.species == "yarrow" and pl.available():
+			yarrow = pl
+	if yarrow:
+		check(yarrow.interact_label(player).begins_with("Unknown plant"), "an unknown plant: \"%s\"" % yarrow.interact_label(player))
+		yarrow.interact(player)
+		check(player.backpack.count_of("yarrow") == 2 and Journal.has("plant_yarrow"), "picked it: yarrow, in the pack and the journal")
+		var other: Plant = null
+		for pl in plants:
+			if pl.species == "yarrow" and pl != yarrow and pl.available():
+				other = pl
+		if other:
+			check(other.interact_label(player) == "Pick yarrow", "the next one's named before you pick it")
+	var hem := Plant.new()
+	hem.species = "water_hemlock"
+	check(not Plant.known(player, "water_hemlock") and hem.interact_label(player).contains("purple-streaked"), "hemlock, unknown, looks a lot like yarrow")
+	hem.free()
+	player.known_plants["water_hemlock"] = true
+	var hem2 := Plant.new()
+	hem2.species = "water_hemlock"
+	check(hem2.interact_label(player).contains("poisonous"), "known, it's named as poison")
+	hem2.free()
+	var before := player.cond.health
+	player.hold(ItemStack.make("water_hemlock", GameClock.clock.hours))
+	player.use_held()
+	check(player.cond.health < before - 20.0 and player.cond.incubating > 0.5, "eating it is poison")
+	player.cond.health = 100.0
+	player.cond.incubating = 0.0
+
+	# Dirty water: some chance of sickness later instead of harm straight away.
+	var got := 0
+	for i in 40:
+		var cc := Condition.new(t)
+		if cc.expose(Creek.SICK_AMOUNT, Creek.SICK_CHANCE):
+			got += 1
+	check(got > 4 and got < 25, "unboiled water makes you sick some of the time (%d of 40)" % got)
+
+	await _health_cooking()
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+## Pot cooking, crafting that fetches from chests, and winter travel.
+func _health_cooking() -> void:
+	player.stow()
+	var x := 9000.0
+	await teleport(x)
+	await _clear_wild()
+	var h := GameClock.clock.hours
+	# A camp: fire with a hanging pot of creek water, a chest a few metres off holding meat.
+	var fire := world.spawn({"kind": "campfire", "x": x + 60.0, "fuel": 8.0, "lit": true, "tripod": true,
+		"pot": ItemStack.make("cook_pot", h).to_dict()}) as Campfire
+	fire.pot.add_water(1.5, false)
+	var chest := world.spawn({"kind": "chest", "x": x + 500.0}) as StorageChest
+	chest.store.add(ItemStack.make("venison_raw", h, 2))
+	player.backpack.take("#meat", player.backpack.count_of("#meat")) # (jerky counts as meat too)
+	player.backpack.add(ItemStack.make("berries", h, 2))
+	await frames(3)
+	var stew := Player.choices_of(fire, player).filter(func(o): return o[0].begins_with("Cook stew"))
+	check(stew.size() == 1, "the fire offers a stew: meat in the chest, berries in the pack")
+	if stew:
+		stew[0][1].call()
+		await frames(5)
+		check(player.errand_label == "" and player.busy(), "off to fetch the meat from the chest")
+		var reached := await _wait_until(func(): return player.errand_label != "", 60 * 10)
+		check(absf(player.global_position.x - chest.global_position.x) < 40.0, "walked to the chest and rummages in it (%d s)" % (reached / 60))
+		await _wait_until(func(): return player.working > 0.0, 60 * 10)
+		check(absf(player.global_position.x - fire.global_position.x) < 40.0 and chest.store.count_of("venison_raw") == 0, "back at the fire with the meat, cooking")
+		await _wait_until(func(): return player.working <= 0.0, 60 * 10)
+		check(player.backpack.count_of("stew") == 3 and fire.pot.water < 1.0, "three bowls of stew from the pot")
+		var th := player.cond.thirst
+		player.cond.thirst = 50.0
+		player.hold(player.backpack.find(func(st): return st.def.id == "stew"))
+		player.use_held()
+		check(player.cond.thirst > 55.0, "hot stew warms you and wets your throat")
+		player.cond.thirst = th
+		player.stow()
+	# Mint tea.
+	player.backpack.add(ItemStack.make("mint", h, 2))
+	fire.pot.add_water(1.0, false)
+	await frames(2)
+	var tea := Player.choices_of(fire, player).filter(func(o): return o[0].begins_with("Cook mint tea"))
+	check(tea.size() == 1, "and mint tea")
+	if tea:
+		tea[0][1].call()
+		await _wait_until(func(): return not player.busy(), 60 * 10)
+		check(player.backpack.count_of("mint_tea") == 2, "two cups of mint tea")
+
+	# Crafting at the bench takes what it needs from the chest, fetching it.
+	var bench := world.spawn({"kind": "workbench", "x": x - 300.0}) as Workbench
+	chest.store.add(ItemStack.make("sticks", h, 3))
+	player.backpack.take("sticks", player.backpack.count_of("sticks"))
+	await teleport(x - 300.0)
+	var ui: BackpackUI = get_tree().get_first_node_in_group("backpack_ui")
+	check(Supply.have(player, "sticks", bench.global_position.x) == 3, "the bench can see the chest's sticks")
+	ui._craft("spear")
+	await _wait_until(func(): return not player.busy(), 60 * 20)
+	check(player.backpack.count_of("spear") >= 1 or (player.held and player.held.def.id == "spear"), "made a spear from the chest's sticks")
+	check(chest.store.count_of("sticks") == 0, "the chest gave them up")
+	# A blueprint takes sticks from the chest too.
+	chest.store.add(ItemStack.make("sticks", h, 4))
+	var wp := world.spawn({"kind": "blueprint", "build": "woodpile", "x": x + 900.0}) as Blueprint
+	await teleport(x + 900.0)
+	wp.interact(player)
+	await _wait_until(func(): return not player.busy(), 60 * 20)
+	check(wp.complete(), "a blueprint takes its sticks from the chest nearby")
+
+	# Winter travel: snowshoes on deep snow; a sled; ice fishing; a blizzard's chill.
+	GameClock.weather.snow_cm = 60.0
+	var shoes := ItemStack.make("snowshoes", h)
+	player.backpack.add(shoes)
+	var plain := player.snow_mult()
+	player.backpack.wear(shoes)
+	check(player.snow_mult() > plain + 0.25, "snowshoes on knee-deep snow: %.2f of your pace instead of %.2f" % [player.snow_mult(), plain])
+	var sled := world.spawn({"kind": "sled", "x": x + 1300.0}) as Sled
+	await teleport(x + 1300.0)
+	var lg := world.spawn({"kind": "log", "size": "long", "x": x + 1300.0, "y": world.terrain.height_at(x + 1300.0) - 60.0}) as WorldLog
+	await frames(3)
+	player.carrying = lg
+	lg.pick_up(player)
+	Player.choices_of(sled, player).filter(func(o): return o[0].begins_with("Load the"))[0][1].call()
+	check(sled.logs == ["long"] and player.carrying == null, "a long log loaded on the sled")
+	player.start_pull(sled)
+	var start := player.global_position.x
+	player.auto_dir = 1.0
+	await frames(120)
+	player.auto_dir = 0.0
+	var went := player.global_position.x - start
+	check(player.pulling == sled and went > 150.0 and absf(sled.global_position.x - (player.global_position.x - Sled.OFFSET)) < 5.0, "pulling the loaded sled over snow (%.0f px in 2 s)" % went)
+	player.drop_haul()
+	GameClock.weather.snow_cm = 0.0
+	GameClock.weather.ice = 1.0
+	await teleport(Terrain.CREEK_X)
+	await frames(10)
+	var creek := Creek.reachable(player)
+	check(creek != null, "out on the frozen creek")
+	if creek:
+		creek.interact(player)
+		check(creek.hole_open(), "chopped a hole in the ice")
+		player.receive(ItemStack.make("fishing_pole", h))
+		player.hold(player.backpack.find(func(st): return st.def.has("rod")))
+		player.aim_override = Vector2(Terrain.CREEK_X + 300.0, 0)
+		player.fishing.press()
+		player.aim_override = Vector2.INF
+		check(player.fishing.state == Fishing.State.CAST and absf(player.fishing.bobber.x - creek.hole_x) < 1.0, "ice fishing: the line drops through the hole")
+		player.fishing.state = Fishing.State.IDLE
+		player.stow()
+	GameClock.weather.ice = 0.0
+	var calm := Condition.new(GameClock.tuning)
+	calm.tick(2.0, _cond_env({"air_c": -8.0}))
+	GameClock.force_weather(Weather.Kind.RAIN)
+	GameClock.weather.snow_frac = 1.0
+	GameClock.weather.wind = 0.9
+	check(GameClock.weather.blizzard() > 0.8, "cold, snow and a gale: a blizzard")

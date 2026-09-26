@@ -136,6 +136,8 @@ func _draw() -> void:
 
 ## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
 func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
+	if body.pulling: # both hands behind on the sled's rope
+		return [shoulder + Vector2(-18, 34), shoulder + Vector2(-12, 38)]
 	if body.hurt_t > 0.0: # arms up to fend it off
 		return [shoulder + Vector2(22, -22), shoulder + Vector2(16, -34)]
 	if body.hauling: # both hands on the neck behind, leaning into the pull
@@ -157,7 +159,7 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 		return [shoulder + Vector2(20, 14), shoulder + Vector2(12, 18)] # pole held out over the water
 	if body.holding("torch") and body.swing < 0.0 and body.working <= 0.0: # the torch held up and out
 		return [shoulder + Vector2(26, -6), shoulder + Vector2(-4, 44)]
-	if body.working > 0.0:
+	if body.working > 0.0 or body.errand_label != "":
 		var w := Vector2(sin(_time * 7.0) * 6.0, cos(_time * 7.0) * 4.0)
 		return [hip + Vector2(30, -8) + w, hip + Vector2(24, -4) - w]
 	return []
@@ -224,6 +226,12 @@ func _leg(hip: Vector2, ankle: Vector2, pants: Color, boot: Color, airborne: boo
 	_limb(knee, end, 12.0, 9.0, pants)
 	var slope := 0.0 if airborne else _ground_slope(end.x)
 	var t := Transform2D(slope, end)
+	if body.backpack.wearing("snowshoes"): # a long bent-wood frame under the boot
+		var frame := PackedVector2Array()
+		for i in 14:
+			var a := TAU * i / 14.0
+			frame.append(Vector2(4.0 + cos(a) * 26.0, 9.0 + sin(a) * 3.5))
+		draw_colored_polygon(t * frame, Color("9a7a52").darkened(0.1 if boot != Palette.BOOTS else 0.0))
 	draw_colored_polygon(t * PackedVector2Array([Vector2(-7, -3), Vector2(5, -3), Vector2(17, 5), Vector2(17, 8), Vector2(-8, 8)]), boot)
 
 func _arm(shoulder: Vector2, p: float, swing: float, bend: float, up: float, sleeve: Color, skin: Color) -> Array:

@@ -352,6 +352,8 @@ func _preview_notch() -> void:
 		best.hit(player, 0.9, Vector2.ZERO)
 
 func _process(delta: float) -> void:
+	if GameClock.weather.blizzard() > 0.5:
+		Journal.note("blizzard", "A blizzard: wind and snow so thick I could barely see my hands. The cold goes straight through whatever you're wearing.")
 	if GameClock.weather.snow_cm > 2.0:
 		Journal.note("first_snow", "First snow lying in the valley. Every track shows now, mine included, and the creek will freeze if the cold holds.")
 	var season := GameClock.clock.season()

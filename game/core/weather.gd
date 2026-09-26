@@ -86,6 +86,10 @@ func rain() -> float:
 func snowfall() -> float:
 	return precip * snow_frac
 
+## 0..1: heavy snow driven by a hard wind. Whiteout, and it cuts through your clothes.
+func blizzard() -> float:
+	return clampf((snowfall() - 0.4) / 0.35, 0.0, 1.0) * clampf((wind - 0.5) / 0.25, 0.0, 1.0)
+
 func storm_warning() -> bool:
 	return next_kind == Kind.RAIN and kind != Kind.RAIN and hours_left <= warning_hours
 

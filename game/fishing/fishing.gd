@@ -17,6 +17,7 @@ var _t := 0.0
 var _wait := 0.0
 var _species := "trout"
 var _nibble := 0.0
+var _ice := false ## fishing through a hole in the ice
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -37,6 +38,15 @@ func _cast() -> void:
 	var aim := player.aim_point().x
 	var dist := clampf((aim - player.global_position.x) * player.facing, MIN_CAST, MAX_CAST)
 	var x := player.global_position.x + player.facing * dist
+	if Creek.frozen(): # ice fishing: the line goes down your hole, whatever you aimed at
+		var here := Creek.at(get_tree(), player.global_position.x)
+		if here == null or not here.hole_open() or absf(here.hole_x - player.global_position.x) > 320.0:
+			player.message.emit("The water's frozen over. Chop a hole in the ice (E) and fish through it.")
+			return
+		if not here.w().fish:
+			player.message.emit("Nothing but minnows in this %s." % here.kind())
+			return
+		x = here.hole_x
 	var s := world.terrain.water_surface_at(x)
 	if s == INF:
 		player.message.emit("Cast toward open water.")
@@ -45,9 +55,7 @@ func _cast() -> void:
 	if creek and not creek.w().fish:
 		player.message.emit("Nothing but minnows in this %s." % creek.kind())
 		return
-	if Creek.frozen() and not (creek and creek.hole_open()):
-		player.message.emit("The %s is frozen. Chop a hole in the ice first." % (creek.kind() if creek else "water"))
-		return
+	var through_ice := Creek.frozen()
 	if player.wade_depth > 60.0:
 		player.message.emit("Too deep to cast from here.")
 		return
@@ -57,6 +65,7 @@ func _cast() -> void:
 	_from = tip()
 	bobber = Vector2(x, s)
 	var depth := world.terrain.height_at(x) - s
+	_ice = through_ice
 	_species = "trout" if _rng.randf() < (0.7 if depth > 70.0 else 0.35) else "whitefish"
 	_wait = -log(1.0 - _rng.randf() * 0.98) * GameClock.tuning.bite_mean_sec * _conditions() # exponential: most bites come soon, a few make you wait
 
@@ -69,7 +78,7 @@ func _conditions() -> float:
 	match GameClock.weather.kind:
 		Weather.Kind.OVERCAST, Weather.Kind.DRIZZLE: k *= 0.8
 		Weather.Kind.RAIN: k *= 1.15
-	return k * [0.9, 0.85, 1.0, 2.0][GameClock.clock.season()]
+	return k * [0.9, 0.85, 1.0, 1.25 if _ice else 2.0][GameClock.clock.season()] # fish gather under the ice
 
 func force_bite(species := "") -> void: ## for scripted checks
 	if species != "":

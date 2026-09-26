@@ -171,6 +171,14 @@ func interact_options(p: Player) -> Array:
 			out.append(["The pot needs a tripod over the fire (build one: %s)" % Keys.label("build"), Callable()])
 	if lit and p.held and p.held.def.cooks_into != "":
 		out.append(["Cook %s" % p.held.def.name.to_lower(), _cook.bind(p)])
+	if lit and pot and tripod: # stews and teas in the hanging pot
+		for id in Builds.POT_RECIPES:
+			var r: Dictionary = Builds.POT_RECIPES[id]
+			if Supply.can(p, r.needs, global_position.x):
+				if pot.water + 0.001 < r.water:
+					out.append(["%s needs %.2f L of water in the pot" % [Items.get_def(id).name, r.water], Callable()])
+				else:
+					out.append(["Cook %s in the pot  (%s)" % [Items.get_def(id).name.to_lower(), Builds.needs_text(r.needs, {}).replace(" 0/", " ")], _pot_cook.bind(p, id)])
 	var feeds := _fuels(p) if fuel < MAX_FUEL else []
 	var in_hand := feeds.filter(func(f): return f[2] in ["log", "held"])
 	for f in in_hand:
@@ -256,6 +264,16 @@ func _pour_in(bottle: ItemStack, p: Player) -> void:
 		boil = 0.0
 		p.message.emit("Mixed with dirty water: the pot needs to boil again.")
 	_pour(bottle, pot, p)
+
+func _pot_cook(p: Player, id: String) -> void:
+	var r: Dictionary = Builds.POT_RECIPES[id]
+	Supply.gather(p, r.needs, global_position.x, func():
+		p.work(r.seconds, r.hours, "Cooking " + Items.get_def(id).name.to_lower(), func():
+			if pot:
+				pot.water = maxf(pot.water - r.water, 0.0)
+			p.receive(ItemStack.make(id, GameClock.clock.hours, r.count))
+			Journal.note("cook_" + id, {"stew": "Made a stew in the pot. Hot food makes a cold night easier.",
+				"mint_tea": "Brewed wild-mint tea. Good for a sick stomach.", "willow_tea": "Brewed willow bark tea for a fever."}[id])))
 
 func _take_pot(p: Player) -> void:
 	p.held = pot

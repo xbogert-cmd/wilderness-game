@@ -69,6 +69,8 @@ func _deliverable(p: Player) -> String:
 				return "%s log" % k
 		elif p.backpack.count_of(k) > 0 or (p.held and p.held.def.id == k):
 			return Items.get_def(k).name.to_lower()
+		elif Supply.have(p, k, global_position.x) > 0:
+			return Items.get_def(k).name.to_lower() + " from the chest"
 	return ""
 
 func interact(p: Player) -> void:
@@ -96,6 +98,15 @@ func interact(p: Player) -> void:
 			if n > 0 and p.backpack.take(k, n):
 				delivered[k] = delivered.get(k, 0) + n
 				queue_redraw()
+				return
+	for k in def().needs: # not in the pack: fetch it from a chest nearby
+		var want: int = def().needs[k] - delivered.get(k, 0)
+		if want > 0 and not Builds.is_log(k):
+			var n := mini(want, Supply.have(p, k, global_position.x))
+			if n > 0:
+				Supply.gather(p, {k: n}, global_position.x, func():
+					delivered[k] = delivered.get(k, 0) + n
+					queue_redraw())
 				return
 	p.message.emit("You don't have what this needs: " + Builds.needs_text(def().needs, delivered))
 

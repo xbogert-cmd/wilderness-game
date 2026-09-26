@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "stew"
+name = "Stew"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.4
+color = Color(0.541, 0.353, 0.204, 1)
+tags = PackedStringArray("food", "hot")
+max_stack = 3
+food = 42.0
+spoil_hours = 48.0
+description = "Meat and whatever else, simmered in the pot. Filling, and hot: warms you and wets your throat."
