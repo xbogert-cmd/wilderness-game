@@ -39,6 +39,7 @@ var _think := 0.0
 var _threat_x := 0.0
 var _warned := -INF ## real seconds (Time) of the last bluff
 var _hit := false ## this lunge has landed
+var strike_t := 0.0 ## seconds left of a landed bite or swipe (the rig clamps the jaws, swings the paw)
 var _since_print := 0.0
 var _howl := 0.0
 var _rng := RandomNumberGenerator.new()
@@ -124,6 +125,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_think -= delta
 	_timer -= delta
+	strike_t = maxf(strike_t - delta, 0.0)
 	if _think <= 0.0:
 		_think = 0.4
 		_decide()
@@ -244,13 +246,20 @@ func _act(delta: float) -> void:
 				_start(State.LUNGE, 1.2)
 		State.LUNGE:
 			facing = toward
-			speed = run
 			var d := absf(px - position.x)
-			if not _hit and d < stat("reach") and absf(player.global_position.y - position.y) < 160.0:
-				_hit = true
-				_bite()
-			if _hit or _timer <= 0.0 or _off_limits(px):
-				_start(State.BACK_OFF, _rng.randf_range(2.0, 3.5))
+			if _hit: # hangs on (the wolf) or follows through (the bear), then breaks off
+				speed = move_toward(speed, 0.0, 3000.0 * delta)
+				if _timer <= 0.0:
+					_start(State.BACK_OFF, _rng.randf_range(2.0, 3.5))
+			else:
+				speed = run
+				if d < stat("reach") and absf(player.global_position.y - position.y) < 160.0:
+					_hit = true
+					_timer = 0.45
+					strike_t = 0.45
+					_bite()
+				elif _timer <= 0.0 or _off_limits(px):
+					_start(State.BACK_OFF, _rng.randf_range(2.0, 3.5))
 		State.BACK_OFF:
 			facing = -toward
 			speed = run * 0.45
@@ -291,12 +300,7 @@ func _move(delta: float) -> void:
 # --- Contact -------------------------------------------------------------------------
 
 func _bite() -> void:
-	var dmg: float = stat("bite")
-	if player.sleeping:
-		player.wake()
-	player.cond.health -= dmg
-	player.cond.injure(stat("region"), "cut", 0.35 if is_wolf() else 0.6)
-	player.velocity.x += facing * (220.0 if is_wolf() else 520.0)
+	player.take_hit(stat("bite"), stat("region"), 0.35 if is_wolf() else 0.6, position.x, 260.0 if is_wolf() else 700.0)
 	player.message.emit("The wolf's teeth catch your leg!" if is_wolf() else "The bear's paw knocks you sprawling!")
 	Sfx.play_at(self, player.global_position + Vector2(0, -80), Sfx.growl(), 0.0, 1.2)
 

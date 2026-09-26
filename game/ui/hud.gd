@@ -29,10 +29,13 @@ func fade_to(target: float, seconds: float) -> Tween:
 	tw.tween_property(self, "fade", target, seconds)
 	return tw
 
+var _flash := 0.0 ## red at the edges after a hit
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = get_theme_default_font()
+	player.hurt.connect(func(k: float): _flash = maxf(_flash, k))
 	player.message.connect(func(t: String): _msgs.append([t, MSG_SECONDS]))
 
 func _process(delta: float) -> void:
@@ -40,6 +43,7 @@ func _process(delta: float) -> void:
 		m[1] -= delta
 	_msgs = _msgs.filter(func(m): return m[1] > 0.0).slice(-4)
 	_tip_t = maxf(_tip_t - delta, 0.0)
+	_flash = maxf(_flash - delta * 1.3, 0.0)
 	_highlight()
 	queue_redraw()
 
@@ -136,7 +140,20 @@ func _draw() -> void:
 		box.border_color = Color(0.93, 0.85, 0.6, 0.5 * a)
 		draw_style_box(box, r)
 		draw_string(_font, r.position + Vector2(18, 25), _tip, HORIZONTAL_ALIGNMENT_LEFT, w - 36.0, 16, Color(TEXT, a))
+	_draw_hit()
 	_draw_fade()
+
+## A red vignette that fades after being struck.
+func _draw_hit() -> void:
+	if _flash <= 0.0:
+		return
+	for i in 6:
+		var w := 18.0 + i * 22.0
+		var c := Color(0.6, 0.02, 0.0, _flash * 0.16)
+		draw_rect(Rect2(0, 0, size.x, w), c)
+		draw_rect(Rect2(0, size.y - w, size.x, w), c)
+		draw_rect(Rect2(0, 0, w, size.y), c)
+		draw_rect(Rect2(size.x - w, 0, w, size.y), c)
 
 func _draw_fade() -> void:
 	if fade > 0.0:
@@ -148,7 +165,7 @@ func _draw_fade() -> void:
 func _prompts() -> Array:
 	if player.working > 0.0:
 		return [[player.global_position + Vector2(0, -210), "", player.work_label + "…"]]
-	if player.sleeping or player.dead:
+	if player.sleeping or player.dead or player.climbing:
 		return []
 	var out := []
 	if player.chop_target is FelledTrunk:

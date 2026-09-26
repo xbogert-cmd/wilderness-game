@@ -27,6 +27,9 @@ var _bird_timer := 20.0
 var auto_spawn := true ## scripted checks turn this off to place their own deer
 var _herd_timer := 1.0
 var _pred_timer := 5.0
+var _quiet_until := -INF ## game hour: after deer are spooked, no new ones turn up for a while
+const QUIET_HOURS := 1.5
+const LEAVE_AT := 2200.0 ## a spooked deer this far off and out of view has left
 var _rabbit_timer := 12.0
 var _far_howl := 60.0
 var _rng := RandomNumberGenerator.new()
@@ -55,13 +58,13 @@ func _manage_herd() -> void:
 			continue
 		var d := absf(a.position.x - px)
 		var seen := cam != null and absf(a.position.x - cam.get_screen_center_position().x) < view
-		if d > DESPAWN_AT and not seen and a.wound < 0.0:
+		if (d > DESPAWN_AT or (a.leaving and d > LEAVE_AT)) and not seen and a.wound < 0.0:
 			a.queue_free()
 		else:
 			count += 1
 	var def: SpeciesDef = SPECIES[0]
 	var want := HERD - (2 if GameClock.clock.season() == 3 else 0) # winter thins the herd
-	if count >= want:
+	if count >= want or GameClock.clock.hours < _quiet_until:
 		return
 	# Either side, whichever has room; out beyond the edge of the screen.
 	var sides := [-1.0, 1.0]
@@ -75,7 +78,7 @@ func _manage_herd() -> void:
 		var hi := maxf(t.x, t.y)
 		if absf(clampf(x, lo, hi) - px) > SPAWN_CLEARANCE:
 			x = clampf(x, lo, hi) # on the trail if that keeps it out of sight
-		for k in _rng.randi_range(def.group_min, mini(def.group_max, want - count)):
+		for k in _rng.randi_range(mini(def.group_min, want - count), mini(def.group_max, want - count)):
 			var a := spawn(def, x + side * k * _rng.randf_range(90.0, 220.0), _rng.randi())
 			a.bed_x = t.x
 			a.feed_x = t.y
@@ -127,6 +130,10 @@ func _manage_predators() -> void:
 			x = _out_of_sight(px, -side, view)
 		if not is_nan(x) and x > BEAR_RANGE.x - 1500.0 and x < BEAR_RANGE.y + 1500.0:
 			spawn_predator(BEAR, x, _rng.randi())
+
+## Deer were scared off: the area stays quiet for a while before any more wander in.
+func spooked() -> void:
+	_quiet_until = GameClock.clock.hours + QUIET_HOURS
 
 func _food_near(x: float, reach: float, kind: String) -> Node:
 	for n in get_tree().get_nodes_in_group("food_scent"):

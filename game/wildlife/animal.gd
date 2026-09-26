@@ -2,6 +2,8 @@ class_name Animal extends Node2D
 ## Generic animal brain: routine (graze, wander, bed down) plus awareness built from what it
 ## hears and sees. Enough awareness makes it stop and look; more makes it bolt away. It calms
 ## once it has put flee_distance between itself and the threat. It never chases.
+## A deer that's been spooked leaves the area: it keeps going away from where it was scared and
+## is let go once out of sight, and it keeps clear of camps, where people are.
 ## Hunting: shot() wounds it (it runs, bleeds, then drops); kill() takes it outright.
 
 enum State { GRAZE, WALK, BEDDED, ALERT, FLEE }
@@ -31,6 +33,9 @@ var _limp := 1.0 ## flee speed multiplier while wounded
 var _arrows := 0 ## arrows in it, drawn on the carcass
 var _since_blood := 0.0
 var _rng := RandomNumberGenerator.new()
+var leaving := false ## spooked: heading away for good; Wildlife lets it go once out of sight
+var _spooked_x := 0.0
+const CAMP_BERTH := 800.0 ## deer keep this far from a camp or fire
 
 func setup(species: SpeciesDef, x: float, seed_value: int) -> void:
 	def = species
@@ -59,6 +64,8 @@ static func active_at(species: SpeciesDef, h: float) -> bool:
 
 ## Where it's heading when calm: a bait pile it can smell, else its end of the game trail.
 func _goal() -> float:
+	if leaving:
+		return clampf(position.x + signf(position.x - _spooked_x) * 3000.0, EDGE, Terrain.WORLD_W - EDGE)
 	if GameClock.clock.hours < _lure_until:
 		return _lure_x
 	if _active():
@@ -89,6 +96,11 @@ func _physics_process(delta: float) -> void:
 		_routine()
 	var step := speed * facing * delta
 	var nx := clampf(position.x + step, EDGE, Terrain.WORLD_W - EDGE)
+	if state != State.FLEE and near_camp(nx) and not near_camp(position.x): # turn away from camp
+		nx = position.x
+		facing = -facing
+		if not leaving:
+			home_x = position.x + facing * def.home_range
 	if nx != position.x + step and state == State.FLEE:
 		facing = -facing # cornered against the ridge: break past rather than freeze
 	position.x = nx
@@ -155,8 +167,9 @@ func _perceive(delta: float) -> void:
 			return # hurt animals keep running until they drop
 		awareness = maxf(awareness - (0.5 if d > def.flee_distance else 0.0) * delta, 0.0)
 		if awareness < def.alert_at * 0.6:
-			state = State.WALK
-			home_x = position.x # settles into a new area instead of returning straight away
+			state = State.WALK # and keeps on going, away from where it was scared
+			leaving = true
+			home_x = position.x
 			_timer = _rng.randf_range(3.0, 6.0)
 		return
 	awareness = awareness + stim * delta if stim > 0.0 else maxf(awareness - 0.12 * delta, 0.0)
@@ -174,9 +187,18 @@ func bolt(alarm := true) -> void:
 		Sfx.play_at(self, global_position + Vector2(facing * 60.0, -140.0), Sfx.snort(), 0.0)
 	state = State.FLEE
 	awareness = def.flee_at * 1.3
+	_spooked_x = player.global_position.x
+	if get_parent() is Wildlife:
+		get_parent().spooked()
 	for other in get_tree().get_nodes_in_group("animals"): # the herd follows the first to bolt
 		if other != self and other.def == def and absf(other.position.x - position.x) < 900.0:
 			other.bolt.call_deferred(false)
+
+func near_camp(x: float) -> bool:
+	for n in get_tree().get_nodes_in_group("camp_safe"):
+		if absf(n.global_position.x - x) < CAMP_BERTH:
+			return true
+	return false
 
 ## Where a point falls on the body: 0 miss, 1 body, 2 vitals (heart-lung area or head).
 func zone_at(p: Vector2) -> int:

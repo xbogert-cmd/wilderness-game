@@ -27,6 +27,7 @@ var _gait: Dictionary = GAITS.walk
 
 func _process(delta: float) -> void:
 	scale.x = body.facing
+	modulate = Color(1.0, 0.55, 0.5).lerp(Color.WHITE, 1.0 - clampf(body.hurt_t / 0.55, 0.0, 1.0)) # flushed red when struck
 	_time += delta
 	var speed := absf(body.velocity.x)
 	_gait = GAITS.run if body.running else (GAITS.crouch if body.crouching else GAITS.walk)
@@ -36,7 +37,7 @@ func _process(delta: float) -> void:
 		for o in [0.0, 0.5]: # a foot plants when its cycle wraps back to the start of stance
 			if fposmod(prev + o, 1.0) > fposmod(phase + o, 1.0):
 				body.footsteps.step()
-	var want_lean := speed / Player.RUN * 0.2 + (0.4 if body.crouching or body.working > 0.0 else 0.0) + (0.12 if body.carrying else 0.0) + (0.3 if body.hauling else 0.0)
+	var want_lean := -0.45 * clampf(body.hurt_t / 0.3, 0.0, 1.0) + speed / Player.RUN * 0.2 + (0.4 if body.crouching or body.working > 0.0 else 0.0) + (0.12 if body.carrying else 0.0) + (0.3 if body.hauling else 0.0)
 	_lean = lerpf(_lean, want_lean, 1.0 - exp(-delta * 8.0))
 	queue_redraw()
 
@@ -76,6 +77,9 @@ static func ik(root: Vector2, target: Vector2, l1: float, l2: float, bend: float
 func _draw() -> void:
 	if body.sleeping or body.dead:
 		_draw_lying()
+		return
+	if body.climbing:
+		_draw_climb()
 		return
 	var moving := absf(body.velocity.x) > 5.0 and body.is_on_floor()
 	var airborne := not body.is_on_floor()
@@ -132,6 +136,8 @@ func _draw() -> void:
 
 ## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
 func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
+	if body.hurt_t > 0.0: # arms up to fend it off
+		return [shoulder + Vector2(22, -22), shoulder + Vector2(16, -34)]
 	if body.hauling: # both hands on the neck behind, leaning into the pull
 		var g := _to_local_space(body.hauling.grip())
 		return [g, g + Vector2(6, -4)]
@@ -330,6 +336,25 @@ func _limb(a: Vector2, b: Vector2, wa: float, wb: float, color: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([a + n * wa * 0.5, b + n * wb * 0.5, b - n * wb * 0.5, a - n * wa * 0.5]), color)
 	draw_circle(a, wa * 0.5, color)
 	draw_circle(b, wb * 0.5, color)
+
+## On a ladder: hands reach up the rungs in turn, each foot stepping up with the other hand.
+func _draw_climb() -> void:
+	var k := body.climb_phase
+	var s1 := 0.5 + 0.5 * sin(k * PI)
+	var s2 := 1.0 - s1
+	var hip := Vector2(-4, -HIP_H + 8)
+	var shoulder := hip + Vector2(6, -TORSO)
+	var head := shoulder + Vector2(3, -19)
+	var back := 0.72
+	_arm_to(shoulder, shoulder + Vector2(9, -30 - 26 * s2), _jacket().darkened(1.0 - back), _hand().darkened(1.0 - back))
+	_leg(hip, Vector2(12, -10 - 30 * s1), _pants().darkened(1.0 - back), Palette.BOOTS.darkened(0.3), true)
+	_pack(hip, shoulder)
+	draw_circle(hip, 10.0, _pants())
+	_leg(hip, Vector2(12, -10 - 30 * s2), _pants(), Palette.BOOTS, true)
+	_torso(hip, shoulder)
+	draw_circle(head, 10.5, Palette.SKIN)
+	_hat(head)
+	_arm_to(shoulder, shoulder + Vector2(9, -30 - 26 * s1), _jacket(), _hand())
 
 ## On the back, head on the pack; under the sleeping bag when asleep with one.
 func _draw_lying() -> void:

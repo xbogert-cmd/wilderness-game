@@ -1,5 +1,7 @@
 class_name Weather extends RefCounted
 ## Markov weather with a readable warning phase before rain. Pure logic.
+## Wind follows the valley: it blows up toward the ridge (east) by day and back down the valley
+## (west) at night, turning in the morning and evening; a passing front can reverse it.
 ## Below freezing the same precipitation falls as snow, which lies, deepens and melts;
 ## a long hard cold freezes the creek.
 
@@ -29,6 +31,9 @@ var cloud := 0.1
 var precip := 0.0
 var wind := 0.15
 var wind_dir := 1 ## which way it blows: +1 toward the east (right), -1 toward the west
+var front := 1 ## +1: the usual valley breeze; -1: a front has turned it round
+var _daytime := -1 ## last valley-breeze phase applied (1 day, 0 night, -1 not yet)
+const UPSLOPE_HOURS := Vector2(9.0, 19.0) ## the breeze blows up the valley between these
 var snow_frac := 0.0 ## 0 = falls as rain, 1 = as snow (eases across freezing)
 var snow_cm := 0.0 ## lying snow
 var ice := 0.0 ## creek ice, 0 open to 1 frozen hard
@@ -44,7 +49,8 @@ func step(dh: float, clock: Clock = null) -> void:
 		next_kind = _roll(kind)
 		hours_left = rng.randf_range(2.0, 8.0)
 		if rng.randf() < 0.35:
-			wind_dir = -wind_dir # a front brings the wind round
+			front = -front # a front brings the wind round
+			wind_dir = -wind_dir
 	var target_cloud := CLOUD[kind]
 	var target_wind := WIND[kind]
 	if storm_warning():
@@ -56,6 +62,11 @@ func step(dh: float, clock: Clock = null) -> void:
 	precip = move_toward(precip, PRECIP[kind], dh * 1.5)
 	if clock:
 		_ground(dh, air_temp_c(clock))
+		var h := clock.hour_of_day()
+		var day := 1 if h >= UPSLOPE_HOURS.x and h < UPSLOPE_HOURS.y else 0
+		if day != _daytime: # the breeze turns with the day
+			_daytime = day
+			wind_dir = (1 if day == 1 else -1) * front
 
 func _ground(dh: float, t: float) -> void:
 	snow_frac = clampf((1.5 - t) / 2.0, 0.0, 1.0)
@@ -94,7 +105,7 @@ func _roll(from: int) -> int:
 func to_dict() -> Dictionary:
 	return {"kind": kind, "next": next_kind, "left": hours_left, "cloud": cloud,
 		"precip": precip, "wind": wind, "rng_state": str(rng.state),
-		"snow_frac": snow_frac, "snow_cm": snow_cm, "ice": ice, "wind_dir": wind_dir}
+		"snow_frac": snow_frac, "snow_cm": snow_cm, "ice": ice, "wind_dir": wind_dir, "front": front, "daytime": _daytime}
 
 func from_dict(d: Dictionary) -> void:
 	kind = int(d.kind)
@@ -108,3 +119,5 @@ func from_dict(d: Dictionary) -> void:
 	snow_cm = float(d.get("snow_cm", 0.0))
 	ice = float(d.get("ice", 0.0))
 	wind_dir = int(d.get("wind_dir", 1))
+	front = int(d.get("front", 1))
+	_daytime = int(d.get("daytime", -1))

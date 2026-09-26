@@ -37,6 +37,22 @@ const RECIPES := {
 	"bear_coat": {"needs": {"bear_fur": 1, "#cord": 1}, "hours": 3.0, "seconds": 4.5, "bench": true},
 }
 
+## One line on what each build is for, shown in the build menu.
+const WHAT := {
+	"campfire": "heat, light, cooking; nothing wild comes near",
+	"lean_to": "shelter to sleep in: makes camp",
+	"woodpile": "stacks short logs; feeds a fire nearby",
+	"tripod": "over a campfire: hang the pot to boil water",
+	"hide_frame": "cures raw hides and pelts",
+	"drying_rack": "dries meat and fish into jerky",
+	"workbench": "bows, arrows, spear, clothing, repairs",
+	"chest": "stores gear at camp",
+	"bait": "draws deer (and the bear)",
+	"blind": "hide from deer while you hunt",
+	"snare": "catches rabbits overnight",
+	"cabin": "the warmest shelter: a real home",
+}
+
 static func is_log(key: String) -> bool:
 	return key in WorldLog.SIZES
 

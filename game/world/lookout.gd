@@ -71,10 +71,13 @@ func interact_label(p: Player) -> String:
 	return "Climb down" if on_top(p) else "Climb the lookout tower"
 
 func interact(p: Player) -> void:
-	var down := on_top(p)
-	p.work(2.5, 0.05, "Climbing down" if down else "Climbing the ladder", func():
-		p.global_position = global_position + (Vector2(LADDER_X + 40.0, -4.0) if down else Vector2(LADDER_X - 30.0, FLOOR - 4.0))
-		p.velocity = Vector2.ZERO)
+	var g := global_position
+	var foot := g + Vector2(LADDER_X, -2.0)
+	var top := g + Vector2(LADDER_X, FLOOR - 2.0)
+	if on_top(p): # step back onto the ladder, climb down, step off
+		p.climb(PackedVector2Array([p.global_position, top, foot, foot + Vector2(40, 0)]))
+	else:
+		p.climb(PackedVector2Array([p.global_position, foot, top, top + Vector2(-30, 0)]))
 
 ## Legs, braces, ladder and the cab (behind the player).
 func _draw() -> void:

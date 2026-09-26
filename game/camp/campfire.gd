@@ -150,13 +150,18 @@ func _woodpile() -> Woodpile:
 func interact_options(p: Player) -> Array:
 	var out := []
 	var h := p.held
-	if pot and h and h != pot and h.def.capacity > 0.0: # a bottle in hand, the pot hanging
-		if h.water > 0.001 and not h.water_clean and (pot.water <= 0.001 or not pot.water_clean) and pot.water < pot.def.capacity - 0.01:
-			out.append(["Pour the %s into the pot" % h.def.name.to_lower(), _pour.bind(h, pot, p)])
-		elif pot.water > 0.001 and pot.water_clean and h.water < h.def.capacity - 0.01 and (h.water <= 0.001 or h.water_clean):
-			out.append(["Fill the %s from the pot" % h.def.name.to_lower(), _pour.bind(pot, h, p)])
-		elif pot.water > 0.001 and not pot.water_clean:
-			out.append(["The pot isn't boiled yet (%d%%)" % int(boil * 100.0), Callable()])
+	# A bottle (in hand, or else in the pack) and the hanging pot: pour one into the other.
+	var bottle: ItemStack = h if h and h != pot and h.def.capacity > 0.0 else \
+		p.backpack.find(func(st): return st.def.capacity > 0.0 and not st.def.has("pot"))
+	if pot and bottle:
+		var bname := bottle.def.name.to_lower()
+		if bottle.water > 0.001 and pot.water < pot.def.capacity - 0.01:
+			out.append(["Pour the %s into the pot" % bname, _pour_in.bind(bottle, p)])
+		if pot.water > 0.001 and bottle.water < bottle.def.capacity - 0.01:
+			if not pot.water_clean:
+				out.append(["The pot isn't boiled yet (%d%%)" % int(boil * 100.0), Callable()])
+			elif bottle.water <= 0.001 or bottle.water_clean:
+				out.append(["Fill the %s from the pot" % bname, _pour.bind(pot, bottle, p)])
 	if pot and p.held == null and p.carrying == null:
 		out.append(["Take pot", _take_pot.bind(p)])
 	if pot == null and p.held and p.held.def.has("pot"):
@@ -242,6 +247,15 @@ func _pour(from: ItemStack, to: ItemStack, p: Player) -> void:
 	if to == pot and to.water > 0.0: # cold water poured in sets the boil back
 		boil *= before / to.water
 	p.message.emit("Poured %.2f L." % (to.water - before))
+
+## Any water can go into the pot. Dirty mixed with clean makes it all dirty: boil it again.
+func _pour_in(bottle: ItemStack, p: Player) -> void:
+	if pot.water > 0.001 and pot.water_clean != bottle.water_clean:
+		pot.water_clean = false
+		bottle.water_clean = false
+		boil = 0.0
+		p.message.emit("Mixed with dirty water: the pot needs to boil again.")
+	_pour(bottle, pot, p)
 
 func _take_pot(p: Player) -> void:
 	p.held = pot

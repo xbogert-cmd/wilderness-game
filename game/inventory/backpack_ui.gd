@@ -272,6 +272,10 @@ func _refresh() -> void:
 						if err != "": player.message.emit(err))
 		if d.has("medical"):
 			_button("Use on %s" % d.treats, func(): _use_now())
+		if d.id == "sleeping_bag":
+			_button("Roll it out and sleep here", func():
+				toggle()
+				player.sleep())
 		_button("Drop", func(): player.drop_stack(selected); selected = null)
 	else:
 		_info.text = "Drag to rearrange · %s rotates while dragging" % Keys.label("rotate_item") + "\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrop clothing on Head, Coat, Mitts or Legs to wear it\nDrag off the panel to drop · click to select"
@@ -297,6 +301,11 @@ func _refresh() -> void:
 		var b := _button("Craft %s — %s (%.2f h)%s" % [Items.get_def(id).name.to_lower(), Builds.needs_text(r.needs, have), r.hours,
 			"" if bench_ok else " · at a workbench"], _craft.bind(id))
 		b.disabled = not ok or not bench_ok
+	var built := Label.new()
+	built.text = "Storage chest, workbench, shelters and the rest: the build menu (%s)." % Keys.label("build")
+	built.add_theme_font_size_override("font_size", 13)
+	built.add_theme_color_override("font_color", Color(TEXT, 0.6))
+	_actions.add_child(built)
 	if later:
 		var more := Label.new()
 		more.text = "Also: " + ", ".join(later)

@@ -36,7 +36,7 @@ func _rules() -> Array:
 		["thirst", c.thirst < 45.0, "You're thirsty. Open the pack ({backpack}), select your bottle, and drink."],
 		["hunger", c.hunger < 50.0, "You're hungry. Open the pack ({backpack}) and eat something."],
 		["dusk", GameClock.clock.hour_of_day() > 18.0 and p.camp_x < 0.0, "Evening's coming. Press {build} to plan a campfire, then a lean-to to sleep in."],
-		["tired", c.fatigue > 60.0, "You're tired. Sleep under a shelter ({rest})."],
+		["tired", c.fatigue > 60.0, "You're tired. Sleep ({rest}): under a shelter is best, but your sleeping bag works anywhere."],
 		["cold", c.warmth < 35.0, "You're cold. A fire warms and dries you."],
 		["snow", GameClock.weather.snow_cm > 2.0, "Snow. Every animal leaves tracks in it now, and so do you. Deep snow slows you down."],
 		["ice", Creek.frozen() and f is Creek, "The creek has frozen over. Chop a hole ({interact}) to reach the water, or pack the pot with snow and melt it."],
@@ -60,8 +60,15 @@ func _rules() -> Array:
 		["spear", p.holding("spear"), "Click to thrust. Face a wolf or the bear with the spear and it won't close in."],
 		["butcher", f is Carcass and f.deer() and not f.dressed, "Butcher it here and the meat goes in your pack, but the gut pile draws wolves. Or drag the whole deer home to camp."],
 		["wear", p.backpack.find(func(s): return s.def.slot != "") != null, "Clothing only warms you when you wear it: open the pack ({backpack}) and drag it onto a clothing slot."],
+		["chest", _pack_cells_free() < 8 and p.camp_x >= 0.0, "Your pack's filling up. A storage chest at camp keeps the rest: build one with {build}."],
 		["snare", p.backpack.count_of("snare") > 0, "Set a snare from the build menu ({build}) and check it at dawn. A rabbit left hanging too long gets taken."],
 	]
+
+func _pack_cells_free() -> int:
+	var used := 0
+	for e in player.backpack.entries:
+		used += e.stack.def.shape.size()
+	return Backpack.W * Backpack.H - used
 
 func _near(species: String, reach: float) -> bool:
 	return get_tree().get_nodes_in_group("predators").any(func(a): return a.def.id == species and absf(a.position.x - player.global_position.x) < reach)

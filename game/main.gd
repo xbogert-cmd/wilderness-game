@@ -262,6 +262,20 @@ func _ready() -> void:
 		world.spawn({"kind": "gut_pile", "x": x - 700.0, "hour": GameClock.clock.hours - 1.0})
 		world.spawn({"kind": "snare", "x": x + 180.0, "caught": true})
 		player.hold(ItemStack.make("spear", GameClock.clock.hours))
+	if args.has("attack"): # preview: a wolf (or the bear, --attack=bear) mid-strike, you flinching
+		var bear: bool = args.attack == "bear"
+		var a := wildlife.spawn_predator(Wildlife.BEAR if bear else Wildlife.WOLF, x + (125.0 if bear else 80.0), 2)
+		a.state = Predator.State.LUNGE
+		a.strike_t = 0.2 if bear else 0.3
+		a.facing = -1
+		a.set_physics_process(false)
+		a.position.y = world.ground_y(a.position.x)
+		player.facing = 1
+		player.hurt_t = 10.0
+	if args.has("climb"): # preview: partway up the lookout ladder
+		var lk_x := Terrain.LOOKOUT_X + Lookout.LADDER_X
+		player.global_position = Vector2(lk_x, world.terrain.summit_y - 4.0)
+		_climb_lookout.call_deferred()
 	if args.has("choices"): # preview: E pressed at a lit fire, its list of choices open
 		world.spawn({"kind": "campfire", "x": x + 50.0, "fuel": 6.0, "lit": true, "tripod": true})
 		player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 3))
@@ -284,6 +298,9 @@ func _ready() -> void:
 	if args.has("sleep"): # preview: asleep under a lean-to
 		world.spawn({"kind": "lean_to", "x": x})
 		player.sleep.call_deferred()
+	if args.has("buildmenu"): # preview: the build menu open
+		build._refresh_menu.call_deferred()
+		build_menu.visible = true
 	if args.has("menu"):
 		pause.toggle.call_deferred()
 	if args.has("top"): # preview: up on the lookout catwalk
@@ -311,6 +328,13 @@ func _ready() -> void:
 		_tour()
 	elif args.has("shot"):
 		_shot(args.shot)
+
+func _climb_lookout() -> void:
+	for i in 60: # partway up by the time the shot is taken
+		await get_tree().physics_frame
+	for n in get_tree().get_nodes_in_group("landmark"):
+		if n is Lookout:
+			n.interact(player)
 
 func _open_choices() -> void:
 	for i in 10:

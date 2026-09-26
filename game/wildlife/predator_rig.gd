@@ -8,6 +8,7 @@ var _phase := 0.0
 var _t := 0.0
 var _low := 0.0 ## head and body lowered (stalking, feeding), smoothed
 var _rear := 0.0 ## bear up on its hind legs, smoothed
+var _leap := 0.0 ## wolf springing at you: 0 on the ground, 1 at the top of the spring
 
 func _process(delta: float) -> void:
 	scale = Vector2(animal.facing, 1.0)
@@ -18,7 +19,14 @@ func _process(delta: float) -> void:
 	var low := s in [Predator.State.STALK, Predator.State.FEED] or (s == Predator.State.SEEK and animal.speed < 1.0)
 	_low = move_toward(_low, 1.0 if low else 0.0, delta * 2.5)
 	var rear := s == Predator.State.BLUFF and animal.speed < 30.0
-	_rear = move_toward(_rear, 1.0 if rear else 0.0, delta * 3.0)
+	var d := absf(animal.player.global_position.x - animal.position.x)
+	var closing := s == Predator.State.LUNGE and d < 260.0
+	var want_rear := 1.0 if rear else (0.45 if closing or animal.strike_t > 0.0 else 0.0) # the bear rises to swipe
+	_rear = move_toward(_rear, want_rear, delta * 4.0)
+	var want_leap := 0.0
+	if animal.is_wolf() and s == Predator.State.LUNGE:
+		want_leap = 0.55 if animal.strike_t > 0.0 else clampf((260.0 - d) / 160.0, 0.0, 1.0) # springs, then hangs on
+	_leap = move_toward(_leap, want_leap, delta * 6.0)
 	queue_redraw()
 
 func _draw() -> void:
@@ -32,7 +40,10 @@ func _gallop() -> float:
 	return absf(sin(_phase * TAU)) if animal.speed > animal.stat("trot") * 1.6 else 0.0
 
 func _wolf(d: SpeciesDef) -> void:
-	var bound := _gallop()
+	var bound := _gallop() * (1.0 - _leap)
+	# A spring at you: the body lifts and tilts up toward your arm or leg, forelegs reaching.
+	var shake := sin(_t * 38.0) * 3.0 if animal.strike_t > 0.0 else 0.0
+	draw_set_transform(Vector2(shake, -70.0 * _leap), -0.35 * _leap, Vector2.ONE)
 	var body_y := -60.0 + 12.0 * _low - 16.0 * bound
 	var chest := Vector2(34, body_y - 2)
 	var rump := Vector2(-40, body_y)
@@ -55,8 +66,10 @@ func _wolf(d: SpeciesDef) -> void:
 	var dir := Vector2.from_angle(lerpf(0.15, 0.6, _low))
 	var muzzle := head + dir * 24.0
 	var jaw := 0.0
-	if animal.state == Predator.State.STALK or animal.state == Predator.State.LUNGE:
+	if animal.state == Predator.State.STALK:
 		jaw = 3.0 + sin(_t * 9.0) * 1.5 # a snarl
+	elif animal.state == Predator.State.LUNGE:
+		jaw = 1.0 if animal.strike_t > 0.0 else 9.0 # wide open, then clamped shut
 	draw_colored_polygon(PackedVector2Array([head + dir.orthogonal() * 8.0, muzzle + dir.orthogonal() * 3.0, muzzle - dir.orthogonal() * (4.0 + jaw), head - dir.orthogonal() * 8.0]), d.body_color)
 	draw_circle(head, 10.0, d.body_color)
 	draw_circle(muzzle, 3.2, d.dark_color)
@@ -65,6 +78,9 @@ func _wolf(d: SpeciesDef) -> void:
 		var base := head + Vector2(-4 + k * 5, -6)
 		var e := Vector2.from_angle(lerpf(-1.7, -2.6, _low) + k * 0.25)
 		draw_colored_polygon(PackedVector2Array([base - e.orthogonal() * 4.0, base + e * 13.0, base + e.orthogonal() * 4.0]), d.body_color.darkened(0.15 * k))
+	if jaw > 5.0: # teeth showing
+		draw_line(muzzle - dir * 10.0 - dir.orthogonal() * 1.0, muzzle - dir.orthogonal() * 1.0, Color("e8e2d0"), 2.0)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func _bear(d: SpeciesDef) -> void:
 	var bound := _gallop()
@@ -93,6 +109,22 @@ func _bear(d: SpeciesDef) -> void:
 	draw_circle(head + dir * 8.0 + dir.orthogonal() * 6.0, 2.4, d.dark_color)
 	for k in [0.0, 1.0]: # small round ears
 		draw_circle(head + Vector2(-8 + k * 10, -18), 7.0, d.body_color.darkened(0.12 * k))
+	if _rear > 0.2 and animal.state == Predator.State.LUNGE or animal.strike_t > 0.0:
+		# A foreleg raised and raking down: up while it closes, sweeping through on the strike.
+		var sweep := 1.0 - animal.strike_t / 0.45 if animal.strike_t > 0.0 else 0.0
+		var ang := lerpf(-1.3, 0.9, sweep)
+		var shoulder := chest + Vector2(10, -6)
+		var elbow := shoulder + Vector2.from_angle(ang) * 40.0
+		var paw := elbow + Vector2.from_angle(ang + 0.5) * 38.0
+		draw_line(shoulder, elbow, d.body_color, 20.0)
+		draw_line(elbow, paw, d.body_color, 16.0)
+		draw_circle(paw, 11.0, d.body_color.darkened(0.1))
+		for c in 4: # claws
+			var cd := Vector2.from_angle(ang + 0.5 + (c - 1.5) * 0.28)
+			draw_line(paw + cd * 8.0, paw + cd * 20.0, Color("d8cfb8"), 2.5)
+		if animal.strike_t > 0.0: # the rake of the swipe
+			for c in 3:
+				draw_arc(shoulder, 78.0 + c * 7.0, ang - 0.9, ang + 0.2, 10, Color(1, 1, 1, 0.35 * animal.strike_t / 0.45), 2.0)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func _leg(top: Vector2, offset: float, fore: bool, color: Color, paw: Color, width: float, bound: float) -> void:

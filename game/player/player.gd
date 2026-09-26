@@ -4,6 +4,7 @@ class_name Player extends CharacterBody2D
 signal message(text: String)
 signal died
 signal made_camp ## slept at or built a shelter: autosave and respawn point
+signal hurt(strength: float) ## struck by something: the HUD flashes
 
 const WALK := 150.0
 const RUN := 390.0
@@ -21,7 +22,7 @@ const SWING_STAMINA := 4.0
 const CARRY_STAMINA_PER_SEC := 2.5
 const DRAW_TIME := 0.9 ## seconds to full draw
 const ARROW_SPEED := Vector2(1100.0, 2800.0) ## px/s at a light and a full draw
-const KNIFE_REACH := 150.0
+const KNIFE_REACH := 175.0
 const SPEAR_REACH := 250.0
 const THRUST_TIME := 0.45
 const THRUST_STAMINA := 5.0
@@ -54,6 +55,13 @@ var _torch_light: PointLight2D
 var working := 0.0 ## real seconds of busy work left
 var work_label := ""
 var placing := false ## BuildMode is placing a blueprint; clicks belong to it
+var hurt_t := 0.0 ## seconds of flinch left after being struck
+var climbing := false ## on a ladder: moved along a path, hand over hand
+var climb_phase := 0.0 ## rungs climbed so far (the rig alternates hands and feet on it)
+var _climb_path: PackedVector2Array
+var _climb_leg := 0
+var _climb_done: Callable
+const CLIMB_SPEED := 190.0 ## px per second up or down a ladder
 const RECIPES: PackedStringArray = ["splint", "vine_cord", "snare", "fishing_pole", "bow", "arrows", "spear", "deer_call",
 	"hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat"]
 const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never breaks
@@ -131,6 +139,9 @@ func _starting_kit() -> void:
 # --- Movement ----------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	if climbing:
+		_advance_climb(delta)
+		return
 	if sleeping or dead:
 		velocity.x = 0.0
 		velocity.y += GRAVITY * delta
@@ -138,8 +149,9 @@ func _physics_process(delta: float) -> void:
 		if sleeping:
 			_auto_wake()
 		return
+	hurt_t = maxf(hurt_t - delta, 0.0)
 	var dir := 0.0
-	if working <= 0.0 and swing < 0.0:
+	if working <= 0.0 and swing < 0.0 and hurt_t < 0.25: # staggered for a moment after a hit
 		dir = auto_dir if auto_dir != 0.0 else Input.get_axis("move_left", "move_right")
 	var was_on_floor := is_on_floor()
 	crouching = (Input.is_action_pressed("crouch") or auto_crouch) and was_on_floor and working <= 0.0
@@ -274,6 +286,24 @@ func _on_tick(dh: float) -> void:
 	if cond.is_dead():
 		_die()
 
+## Bitten or mauled: damage and a wound, knocked back and off balance, blood on the ground.
+func take_hit(damage: float, region: String, severity: float, from_x: float, force: float) -> void:
+	if sleeping:
+		wake()
+	cond.health -= damage
+	cond.injure(region, "cut", severity)
+	var away := signf(global_position.x - from_x) if global_position.x != from_x else float(-facing)
+	facing = -int(away) # turned to face it
+	velocity = Vector2(away * force, -force * 0.3)
+	hurt_t = 0.55
+	bow_draw = -1.0
+	for k in 4:
+		world.tracks.add(global_position.x + away * k * 18.0, "blood", int(away))
+	var cam := get_viewport().get_camera_2d()
+	if cam is FollowCamera:
+		cam.shake(5.0 + force / 45.0)
+	hurt.emit(clampf(damage / 30.0, 0.35, 1.0))
+
 func holding(tag: String) -> bool:
 	return held != null and held.def.has(tag)
 
@@ -288,7 +318,7 @@ func smells_of_meat() -> bool:
 # --- Input -------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	if dead or working > 0.0:
+	if dead or working > 0.0 or climbing:
 		return
 	if sleeping:
 		for a in ["move_left", "move_right", "hop", "interact", "rest", "use"]:
@@ -438,6 +468,8 @@ func use_held() -> void:
 		if not held.water_clean:
 			cond.health -= Creek.DIRTY_HEALTH_COST
 			message.emit("Gritty creek water. Boiling it first would be safer.")
+	elif d.id == "sleeping_bag":
+		sleep()
 	elif d.has("medical"):
 		if cond.injuries.has(d.treats) and not cond.injuries[d.treats].treated:
 			cond.treat(d.treats)
@@ -518,29 +550,29 @@ func _advance_thrust(delta: float) -> void:
 	if thrust >= 1.0:
 		thrust = -1.0
 
-## Close work: only an animal that hasn't noticed you can be taken with the knife. A wolf or
-## the bear on top of you can be fought off with it.
+## A stab with the knife, always. An unaware deer (or one looking away) is taken outright; one
+## that's seen you is cut as it bolts and bleeds, so it can be tracked. A wolf or the bear on
+## top of you can be fought off with it, and a rabbit taken.
 func _knife() -> void:
-	var pr := _nearest_in("predators", KNIFE_REACH)
+	swing = 0.0
+	var pr := _nearest_in("predators", KNIFE_REACH + 40.0)
 	if pr:
-		swing = 0.0
 		pr.hurt(0.45, global_position.x)
 		return
-	var best: Animal = null
-	for a: Animal in get_tree().get_nodes_in_group("animals"):
-		var d := absf(a.position.x - global_position.x)
-		if d < KNIFE_REACH * a.def.size and (best == null or d < absf(best.position.x - global_position.x)):
-			best = a
-	if best == null:
-		message.emit("Nothing to do with that here.")
+	var small := _nearest_in("small_game", KNIFE_REACH)
+	if small:
+		small.hurt(1.0, global_position.x)
 		return
-	swing = 0.0
-	if best.wound < 0.0 and best.state in [Animal.State.GRAZE, Animal.State.WALK, Animal.State.BEDDED] and best.awareness < best.def.alert_at:
-		best.kill()
-		message.emit("Quick and quiet. It never knew you were there.")
+	var deer := _nearest_in("animals", KNIFE_REACH) as Animal
+	if deer == null:
+		return # a stab at the air
+	var away := deer.facing == int(signf(deer.position.x - global_position.x))
+	if deer.wound >= 0.0 or (deer.state != Animal.State.FLEE and (deer.awareness < deer.def.alert_at or away)):
+		deer.kill()
+		message.emit("Quick and quiet." if deer.wound < 0.0 else "You finish it.")
 	else:
-		best.bolt()
-		message.emit("It sees you coming and bolts.")
+		deer.shot(1)
+		message.emit("You catch it with the blade as it bolts. It's bleeding: follow the blood.")
 
 func _consume_one() -> void:
 	held.count -= 1
@@ -685,6 +717,54 @@ func _advance_work(delta: float) -> void:
 		work_label = ""
 		_work_done.call()
 
+# --- Ladders ---------------------------------------------------------------------
+
+## Climbs along a path of points (onto the ladder, up or down it, off onto the deck or the
+## ground), then runs done. Nothing collides on the way; the rig shows hands and feet on rungs.
+func climb(path: PackedVector2Array, done: Callable = Callable()) -> void:
+	stow()
+	drop_carried()
+	drop_haul()
+	climbing = true
+	climb_phase = 0.0
+	_climb_path = path
+	_climb_leg = 0
+	_climb_done = done
+	global_position = path[0]
+	velocity = Vector2.ZERO
+	collision_mask = 0
+
+func _advance_climb(delta: float) -> void:
+	var step := CLIMB_SPEED * delta
+	while step > 0.0 and _climb_leg < _climb_path.size() - 1:
+		var to := _climb_path[_climb_leg + 1]
+		var d := global_position.distance_to(to)
+		var vertical := absf(to.y - global_position.y) > absf(to.x - global_position.x)
+		if vertical:
+			climb_phase += minf(step, d) / 34.0 # one rung every 34 px
+		if d <= step:
+			global_position = to
+			step -= d
+			_climb_leg += 1
+		else:
+			global_position += (to - global_position) / d * step
+			step = 0.0
+	velocity = Vector2.ZERO
+	world.update_focus(global_position.x)
+	if _climb_leg >= _climb_path.size() - 1:
+		climbing = false
+		collision_mask = 1
+		if _climb_done.is_valid():
+			_climb_done.call()
+
+## On the ladder proper (not stepping on or off it).
+func on_ladder() -> bool:
+	if not climbing or _climb_leg >= _climb_path.size() - 1:
+		return false
+	var a := _climb_path[_climb_leg]
+	var b := _climb_path[_climb_leg + 1]
+	return absf(b.y - a.y) > absf(b.x - a.x)
+
 # --- Sleep ---------------------------------------------------------------------
 
 ## Better with a sleeping bag, a roof, a fire nearby, dry clothes, warmth and a fed belly.
@@ -698,15 +778,25 @@ func sleep_quality() -> float:
 	if cond.hunger < 20.0 or cond.thirst < 20.0: q -= 0.15
 	return clampf(q, 0.15, 1.0)
 
+## Under a shelter, or anywhere on dry ground with the sleeping bag: out in the open the rain
+## gets at you, the rest is poorer, and it isn't camp (no respawn point, nothing keeps animals off).
 func sleep() -> void:
-	if not world.sheltered_at(global_position.x):
-		message.emit("You need shelter to sleep. A lean-to will do.")
+	var roof := world.sheltered_at(global_position.x)
+	var bag := backpack.count_of("sleeping_bag") > 0 or (held != null and held.def.id == "sleeping_bag")
+	if not roof and not bag:
+		message.emit("You need shelter to sleep, or your sleeping bag.")
+		return
+	if not roof and (wade_depth > 0.0 or not is_on_floor()):
+		message.emit("Find dry, level ground to roll out the bag.")
 		return
 	stow()
 	drop_carried()
 	drop_haul()
 	sleeping = true
 	GameClock.time_scale = GameClock.tuning.sleep_time_scale
+	if not roof:
+		message.emit("You roll out the sleeping bag under the open sky. Any key to wake.")
+		return
 	for s in get_tree().get_nodes_in_group("shelter"):
 		if s.covers(global_position.x):
 			camp_x = s.global_position.x
@@ -798,6 +888,7 @@ func unsafe_reason() -> String:
 	if dead: return "You can't save now."
 	if not is_on_floor(): return "Get your feet on the ground first."
 	if wade_depth > 0.0: return "Get out of the water first."
+	if climbing: return "Get off the ladder first."
 	if carrying: return "Set the log down first."
 	if hauling: return "Let go of the carcass first."
 	if working > 0.0 or swing >= 0.0: return "Finish what you're doing first."

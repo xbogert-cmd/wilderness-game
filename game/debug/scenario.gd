@@ -184,7 +184,7 @@ func _run() -> void:
 	await frames(2)
 	var menu := (get_tree().get_first_node_in_group("build_mode") as BuildMode).menu
 	check(menu.visible, "B opens the build menu")
-	await click((menu.get_child(0) as Button).get_global_rect().get_center())
+	await click((menu.get_child(1) as Button).get_global_rect().get_center()) # under the title
 	check(player.placing, "clicking Campfire starts placement")
 	player.aim_override = Vector2(fire_x, world.terrain.height_at(fire_x))
 	await click()
@@ -266,7 +266,7 @@ func _run() -> void:
 	pot.add_water(bottle.water, true) # put it back for the rest of the loop
 	bottle.water = bottle_had
 	player.stow()
-	fire.interact(player)
+	Player.choices_of(fire, player).filter(func(o): return o[0] == "Take pot")[0][1].call()
 	check(player.held == pot, "took the pot back")
 	check(pot.pour_into(bottle) == "", "poured clean water into the bottle")
 	player.hold(bottle)
@@ -304,8 +304,11 @@ func _life() -> void:
 	await frames(10)
 	var main := get_parent()
 	DirAccess.remove_absolute(SaveGame.path("auto"))
+	var bag := player.backpack.find(func(st): return st.def.id == "sleeping_bag")
+	player.backpack.remove(bag)
 	player.sleep()
-	check(not player.sleeping, "can't sleep without shelter")
+	check(not player.sleeping, "can't sleep without shelter or a sleeping bag")
+	player.backpack.add(bag)
 	var lean_x := player.global_position.x + 200.0
 	world.spawn({"kind": "lean_to", "x": lean_x, "fresh": true})
 	check(absf(player.camp_x - lean_x) < 1.0, "a new lean-to becomes camp")
@@ -438,7 +441,11 @@ func _world_tour() -> void:
 			lk = n
 	check(lk != null and lk.interact_label(player) == "Climb the lookout tower", "the ladder at the foot of the tower")
 	lk.interact(player)
-	await frames(int(2.5 * 60.0) + 20)
+	await frames(30)
+	var mid := lk.global_position.y - player.global_position.y
+	check(player.climbing and player.on_ladder() and mid > 20.0 and mid < -Lookout.FLOOR, "climbing the ladder hand over hand (%.0f px up)" % mid)
+	await _wait_until(func(): return not player.climbing, 60 * 10)
+	await frames(10)
 	check(lk.on_top(player), "up on the catwalk (%.0f px up)" % (lk.global_position.y - player.global_position.y))
 	await frames(30)
 	check(Array(world.explored).count(0) == 0 and Journal.has("lookout"), "the whole map fills in from up here")
@@ -458,7 +465,8 @@ func _world_tour() -> void:
 	await frames(5)
 	check(lk.interact_label(player) == "Climb down", "the ladder back down")
 	lk.interact(player)
-	await frames(int(2.5 * 60.0) + 30)
+	await _wait_until(func(): return not player.climbing, 60 * 10)
+	await frames(20)
 	check(not lk.on_top(player) and player.is_on_floor(), "back on the ground")
 	await frames(60)
 	check(cam.view_zoom == 0.0, "and the view comes back in")
@@ -531,9 +539,11 @@ func _hunt() -> void:
 	deer = await _deer(9110.0, 22)
 	deer.state = Animal.State.ALERT
 	deer.awareness = deer.def.alert_at
+	deer.facing = -1 # looking straight at you
 	player.use_held()
 	await frames(3)
-	check(deer.state == Animal.State.FLEE and _carcasses().size() == 1, "an alert deer bolts before the knife reaches it")
+	check(deer.state == Animal.State.FLEE and deer.wound >= 0.0 and _carcasses().size() == 1, "an alert deer bolts, but the knife cuts it: it bleeds")
+	deer.queue_free()
 	await frames(int(Player.SWING_TIME * 60.0) + 2)
 
 	var carcass: Carcass = _carcasses()[0]
@@ -1308,6 +1318,152 @@ func _predators() -> void:
 	player.backpack.add(bearc)
 	check(player.backpack.wear(bearc) and player.backpack.worn.body == bearc and player.backpack.count_of("hide_coat") == 1, "putting on the bear coat puts the buckskin back in the pack")
 	check(player.backpack.insulation() > deer_c + 4.0, "fur is much warmer than buckskin (+%d vs +%d °C)" % [player.backpack.insulation(), deer_c])
+
+	# --- Playtest fixes ---------------------------------------------------------------
+	player.stow()
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 24.0 + 10.0 # a fresh morning
+	await teleport(x)
+	await _clear_wild()
+	# The hanging pot and the bottle in the pack: pour in, fill back up.
+	var pf := world.spawn({"kind": "campfire", "x": x + 40.0, "fuel": 6.0, "lit": true, "tripod": true,
+		"pot": ItemStack.make("cook_pot", GameClock.clock.hours).to_dict()}) as Campfire
+	var bottle := player.backpack.find(func(st): return st.def.id == "water_bottle")
+	bottle.water = 0.0
+	bottle.add_water(0.8, false)
+	await frames(3)
+	var labels := Player.options_of(pf, player).map(func(o): return o[0])
+	check("Pour the water bottle into the pot" in labels, "bottle in the pack: pour it into the hanging pot (%s)" % ", ".join(labels))
+	Player.choices_of(pf, player).filter(func(o): return o[0] == "Pour the water bottle into the pot")[0][1].call()
+	check(pf.pot.water > 0.7 and not pf.pot.water_clean and bottle.water < 0.01, "poured in: %.2f L of creek water in the pot" % pf.pot.water)
+	pf._on_tick(Campfire.BOIL_HOURS + 0.05)
+	labels = Player.options_of(pf, player).map(func(o): return o[0])
+	check("Fill the water bottle from the pot" in labels, "boiled: fill the bottle back up from the pot")
+	Player.choices_of(pf, player).filter(func(o): return o[0] == "Fill the water bottle from the pot")[0][1].call()
+	check(bottle.water > 0.7 and bottle.water_clean, "the bottle is full of clean water")
+	pf.queue_free()
+	await frames(2)
+
+	# The knife always strikes: an alert deer facing you is cut and bleeds.
+	player.draw_slot(1)
+	var dd: Animal = await _deer(x + 120.0, 31)
+	dd.state = Animal.State.ALERT
+	dd.awareness = dd.def.alert_at
+	dd.facing = -1
+	player.facing = 1
+	player.use_held()
+	await frames(3)
+	check(player.swing >= 0.0 and dd.wound >= 0.0, "the knife strikes an alert deer: it's cut and bleeding")
+	dd.queue_free()
+	await frames(int(Player.SWING_TIME * 60.0) + 2)
+	player.use_held()
+	check(player.swing >= 0.0, "a stab even with nothing in reach")
+	await frames(int(Player.SWING_TIME * 60.0) + 2)
+	player.stow()
+
+	# Spooked deer leave for good, and no new ones turn up straight away.
+	var wl := _wl()
+	dd = await _deer(x + 700.0, 32)
+	dd.bolt()
+	await _wait_until(func(): return dd.state != Animal.State.FLEE, 60 * 20)
+	await frames(60 * 6)
+	var gone := dd.position.x - player.global_position.x
+	check(dd.leaving and gone > 2500.0, "a spooked deer keeps going, away from you (%.0f px off)" % gone)
+	wl.auto_spawn = true
+	wl._manage_herd()
+	await frames(2)
+	check(not is_instance_valid(dd) or dd.is_queued_for_deletion(), "and once out of sight it has left")
+	check(get_tree().get_nodes_in_group("animals").filter(func(a): return not a.is_queued_for_deletion()).is_empty(), "no new deer right after a scare")
+	wl.auto_spawn = false
+	wl._quiet_until = -INF
+	# Deer keep clear of camp.
+	var cf := world.spawn({"kind": "campfire", "x": x + 1500.0}) as Campfire
+	dd = await _deer(x + 2600.0, 33)
+	dd.home_x = x + 200.0
+	dd.bed_x = x
+	dd.feed_x = x
+	dd.state = Animal.State.WALK
+	dd.facing = -1
+	await frames(60 * 12)
+	check(absf(dd.position.x - cf.global_position.x) >= Animal.CAMP_BERTH - 10.0, "a deer walking toward camp turns away (%.0f px from the fire)" % absf(dd.position.x - cf.global_position.x))
+	dd.queue_free()
+	cf.queue_free()
+
+	# The breeze turns with the day: up the valley by day, down it at night.
+	var w := GameClock.weather
+	var saved_front := w.front
+	w.front = 1
+	var c := Clock.new()
+	c.hours = 12.0
+	w._daytime = -1
+	w.step(0.0, c)
+	var day_dir := w.wind_dir
+	c.hours = 22.0
+	w.step(0.0, c)
+	check(day_dir == 1 and w.wind_dir == -1, "the breeze blows up-valley by day and down at night")
+	w.front = saved_front
+
+	# The sleeping bag: sleep out in the open (it isn't camp).
+	var camp_before := player.camp_x
+	player.sleep()
+	check(player.sleeping and player.camp_x == camp_before, "rolled out the sleeping bag in the open")
+	player.wake()
+	await frames(2)
+
+	# A storage chest through the real build menu: choose it, place it, bring the makings, build.
+	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
+	bm.menu.visible = true
+	bm._refresh_menu()
+	var chest_btn: Button = bm.menu.get_children().filter(func(b): return b is Button and b.get_meta("id") == "chest")[0]
+	check(chest_btn.text.begins_with("Storage chest  (stores gear at camp)"), "the build menu says what the chest is for: " + chest_btn.text)
+	bm._choose("chest")
+	await teleport(x + 800.0)
+	player.aim_override = Vector2(x + 900.0, world.terrain.height_at(x + 900.0))
+	await frames(3)
+	var ev2 := InputEventAction.new()
+	ev2.action = "use"
+	ev2.pressed = true
+	bm._unhandled_input(ev2)
+	player.aim_override = Vector2.INF
+	var cbp: Blueprint = null
+	for b in get_tree().get_nodes_in_group("structure"):
+		if b is Blueprint and b.build_id == "chest":
+			cbp = b
+	check(cbp != null, "chest blueprint placed")
+	if cbp:
+		await teleport(cbp.global_position.x)
+		player.backpack.add(ItemStack.make("sticks", GameClock.clock.hours, 3))
+		cbp.interact(player)
+		var med := world.spawn({"kind": "log", "size": "medium", "x": cbp.global_position.x, "y": world.terrain.height_at(cbp.global_position.x) - 40.0}) as WorldLog
+		await frames(5)
+		player.carrying = med
+		med.pick_up(player)
+		cbp.interact(player)
+		check(cbp.complete(), "chest materials in")
+		cbp.interact(player)
+		await frames(int(Builds.STRUCTURES.chest.seconds * 60.0) + 10)
+		var built_chest := get_tree().get_nodes_in_group("structure").filter(func(n): return n is StorageChest)
+		check(built_chest.size() >= 1, "the storage chest is built")
+		if built_chest:
+			built_chest[0].interact(player)
+			check(ui.visible and ui.storage == built_chest[0].store, "E opens it beside the pack")
+			var jk := player.backpack.find(func(st): return st.def.id == "jerky")
+			ui.selected = jk
+			ui._refresh()
+			for b in ui._actions.get_children():
+				if b is Button and b.text == "Move to the chest":
+					b.pressed.emit()
+			check(built_chest[0].store.count_of("jerky") > 0, "stored jerky in the chest")
+			ui.toggle()
+
+	# Being bitten looks and feels like it: knocked back, a flinch, a red flash, blood.
+	var hp0 := player.cond.health
+	var x0 := player.global_position.x
+	player.take_hit(11.0, "legs", 0.35, x0 + 60.0, 260.0)
+	await frames(4)
+	var hud: Hud = get_tree().get_root().find_children("*", "Hud", true, false)[0]
+	check(player.cond.health < hp0 and player.hurt_t > 0.0 and player.global_position.x < x0 and hud._flash > 0.0, "a bite knocks you back and flashes red (%.0f px)" % (x0 - player.global_position.x))
+	player.cond.injuries.clear()
+	player.cond.health = 100.0
 
 	# --- Clothes survive death and the save.
 	var d := player.to_dict()
