@@ -10,4 +10,4 @@ shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2
 weight = 1.2
 color = Color(0.604, 0.478, 0.322, 1)
 tags = PackedStringArray("spear", "attachable")
-description = "A straight shaft with a fire-hardened point. Longer reach than the knife: click to thrust. Wolves and bears keep their distance from a braced spear."
+description = "A straight shaft with a fire-hardened point. Longer reach than the knife: click to thrust, or press and pull back to throw it (the dotted line shows where it will land). Go and pick it up after. Wolves and bears keep their distance from a braced spear."

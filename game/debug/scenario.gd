@@ -38,6 +38,7 @@ func _ready() -> void:
 		"frontier": _frontier.call_deferred()
 		"health": _health.call_deferred()
 		"under": _under.call_deferred()
+		"icons": _icons.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -193,10 +194,17 @@ func _run() -> void:
 	key.pressed = true
 	get_viewport().push_input(key)
 	await frames(2)
-	var menu := (get_tree().get_first_node_in_group("build_mode") as BuildMode).menu
-	check(menu.visible, "B opens the build menu")
-	await click((menu.get_child(1) as Button).get_global_rect().get_center()) # under the title
-	check(player.placing, "clicking Campfire starts placement")
+	var book := (get_tree().get_first_node_in_group("build_mode") as BuildMode).book
+	check(book.visible and get_tree().paused, "B opens the build book (paused)")
+	await frames(2)
+	await click(book.entry_button("lean_to").get_global_rect().get_center())
+	check(book.chosen == "lean_to", "clicking Lean-to turns to its page")
+	var rows := book.page().find_children("*", "Label", true, false).map(func(l): return l.text)
+	check(rows.any(func(t): return t.begins_with("Long Logs") and "short" in t) and rows.any(func(t): return t.begins_with("Fell a tree")), "it shows what you're short of and where to get it")
+	await click(book.entry_button("campfire").get_global_rect().get_center())
+	await frames(2)
+	await click(book.action.get_global_rect().get_center())
+	check(not book.visible and player.placing, "Place the blueprint: the book closes and placement starts")
 	player.aim_override = Vector2(fire_x, world.terrain.height_at(fire_x))
 	await click()
 	player.aim_override = Vector2.INF
@@ -532,8 +540,8 @@ func _carcasses() -> Array:
 	return get_tree().get_nodes_in_group("persist").filter(func(n): return n is Carcass and not n.is_queued_for_deletion())
 
 ## Aim point that allows for the arrow's drop over the distance (a player learns this by eye).
-func _lead(target: Vector2) -> Vector2:
-	var t := (target - player.arrow_origin()).length() / Player.ARROW_SPEED.y
+func _lead(target: Vector2, speed := Player.ARROW_SPEED.y) -> Vector2:
+	var t := (target - player.arrow_origin()).length() / speed
 	return target - Vector2(0, 0.5 * Arrow.GRAVITY * t * t)
 
 func _hunt() -> void:
@@ -688,8 +696,9 @@ func _hunt() -> void:
 	# A chest shot from 9 m: it runs a short way, bleeding, and drops.
 	await teleport(9000.0)
 	deer = await _deer(9900.0, 23)
+	deer.facing = -1 # grazing toward you: the arrow meets its chest first (from behind it'd hit the haunch)
 	await frames(2) # let it settle onto the ground before aiming
-	player.aim_override = _lead(deer.position + Vector2(30.0, -92.0))
+	player.aim_override = _lead(deer.position + Vector2(-30.0, -92.0))
 	player.use_held()
 	await frames(int(Player.DRAW_TIME * 60.0) + 5)
 	check(player.bow_draw >= 1.0 and deer.state != Animal.State.FLEE, "full draw at 9 m without spooking it")
@@ -1259,10 +1268,49 @@ func _predators() -> void:
 	check(absf(wolf.position.x - player.global_position.x) >= Predator.BRACED_R - 20.0, "a braced spear holds it off (%.0f px)" % absf(wolf.position.x - player.global_position.x))
 	await teleport(wolf.position.x - player.facing * 180.0)
 	player.use_held()
+	check(player.throw_draw >= 0.0 and player.thrust < 0.0, "pressing with the spear: ready to pull back and throw")
+	player.release_held() # let go without pulling back: a click
 	await frames(40)
-	check(not is_instance_valid(wolf) or wolf.state == Predator.State.FLEE, "a spear thrust hurts it and it runs")
+	check(not is_instance_valid(wolf) or wolf.state == Predator.State.FLEE, "a click thrusts: it hurts the wolf and it runs")
 	player.backpack.take("venison_raw", 2)
 	player.cond.injuries.clear()
+
+	# --- Pull back and let go: the spear flies; it takes a wolf in the chest and drops beside it.
+	await _clear_wild()
+	await teleport(x)
+	player.cond.stamina = 100.0
+	player.hold(ItemStack.make("spear", GameClock.clock.hours))
+	wolf = _wl().spawn_predator(Wildlife.WOLF, x + 520.0, 11)
+	wolf.set_physics_process(false)
+	wolf.position.y = world.ground_y(wolf.position.x)
+	wolf.facing = -1
+	player.facing = 1
+	player.use_held()
+	player.aim_override = _lead(wolf.position + Vector2(30.0 * wolf.facing, -60.0), Player.SPEAR_SPEED.y)
+	player.throw_draw = 1.0
+	check(player.shot_velocity().length() > Player.SPEAR_SPEED.y * 0.9, "pulled back all the way: a hard throw")
+	player.release_held()
+	player.aim_override = Vector2.INF
+	check(player.held == null, "the spear leaves your hands")
+	await frames(60)
+	var sp := get_tree().get_nodes_in_group("interactable").filter(func(it): return it is WorldItem and it.stack.def.id == "spear" and not it.is_queued_for_deletion())
+	check(not is_instance_valid(wolf) and _carcasses().any(func(c): return c.species == "wolf"), "a thrown spear takes a wolf in the chest")
+	check(sp.size() == 1 and absf(sp[0].global_position.x - (x + 520.0)) < 150.0, "the spear lies by it, to pick up again")
+	for c in _carcasses():
+		c.queue_free()
+	for it in sp:
+		it.queue_free()
+	player.hold(ItemStack.make("spear", GameClock.clock.hours)) # a miss: thrown up high it flies long and sticks in the ground
+	player.use_held()
+	player.aim_override = player.arrow_origin() + Vector2(300, -300)
+	player.throw_draw = 0.8
+	player.release_held()
+	player.aim_override = Vector2.INF
+	await frames(150)
+	sp = get_tree().get_nodes_in_group("interactable").filter(func(it): return it is WorldItem and it.stack.def.id == "spear" and not it.is_queued_for_deletion())
+	check(sp.size() == 1 and sp[0].global_position.x - x > 900.0, "thrown high and long, it lands far off (%.0f px)" % (sp[0].global_position.x - x if sp else 0.0))
+	for it in sp:
+		it.queue_free()
 
 	# --- An arrow to the chest kills a wolf; skin it for a pelt.
 	await _clear_wild()
@@ -1405,8 +1453,19 @@ func _predators() -> void:
 	var bu := player.backpack.find(func(st): return st.def.id == "wolf_fur")
 	check(bu != null, "fur in the pack")
 	var ui: BackpackUI = get_tree().get_first_node_in_group("backpack_ui")
-	ui.toggle() # crafting happens with the pack open, and closes it
-	ui._craft("wolf_hat")
+	var bench: Workbench = get_tree().get_nodes_in_group("workbench")[0]
+	await teleport(bench.global_position.x)
+	check(player.focus == bench and bench.interact_label(player) == "Open the recipe book", "at the workbench: E opens the recipe book (focus %s, bench at %+.0f)" % [player.focus, bench.global_position.x - player.global_position.x])
+	bench.interact(player)
+	var rb: RecipeBook = get_tree().get_first_node_in_group("recipe_book")
+	check(rb.visible and get_tree().paused, "the recipe book is open (paused)")
+	rb.choose("bear_coat")
+	var said := rb.page().find_children("*", "Label", true, false).map(func(l): return l.text)
+	check(rb.action.disabled and said.any(func(t): return t.begins_with("Bring down the bear")), "the bear coat: short of bear fur, and it says where to get it")
+	rb.choose("wolf_hat")
+	check(not rb.action.disabled, "the wolf fur hat: everything's here")
+	rb.action.pressed.emit()
+	check(not rb.visible and not get_tree().paused, "Make it: the book closes and the work starts")
 	await frames(int(Builds.RECIPES.wolf_hat.seconds * 60.0) + 10)
 	var hat := player.backpack.find(func(st): return st.def.id == "wolf_hat")
 	check(hat != null, "made a wolf fur hat at the bench")
@@ -1512,11 +1571,12 @@ func _predators() -> void:
 
 	# A storage chest through the real build menu: choose it, place it, bring the makings, build.
 	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
-	bm.menu.visible = true
-	bm._refresh_menu()
-	var chest_btn: Button = bm.menu.get_children().filter(func(b): return b is Button and b.get_meta("id") == "chest")[0]
-	check(chest_btn.text.begins_with("Storage chest  (stores gear at camp)"), "the build menu says what the chest is for: " + chest_btn.text)
-	bm._choose("chest")
+	bm.book.open("chest")
+	var page_text := bm.book.page().find_children("*", "Label", true, false).map(func(l): return l.text)
+	check("Stores gear at camp." in page_text, "the build book says what the chest is for")
+	check(bm.book.find_children("*", "", true, false).any(func(pc): return pc is Book.Pic and pc.picture != null), "with a picture of it built")
+	bm.book.close()
+	bm.choose("chest")
 	await teleport(x + 800.0)
 	player.aim_override = Vector2(x + 900.0, world.terrain.height_at(x + 900.0))
 	await frames(3)
@@ -1629,7 +1689,7 @@ func _frontier() -> void:
 	# A log bridge over it, through the build menu.
 	await teleport(rx - Terrain.WATERS[river].half - 200.0)
 	var bm: BuildMode = get_tree().get_first_node_in_group("build_mode")
-	bm._choose("bridge")
+	bm.choose("bridge")
 	player.aim_override = Vector2(rx - 100.0, t.height_at(rx - 100.0))
 	await frames(3)
 	var use := InputEventAction.new()
@@ -1989,6 +2049,54 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "icons": pictures of every build for the build book (run windowed, not headless) --
+
+func _icons() -> void:
+	await frames(10)
+	var vp := SubViewport.new()
+	vp.size = Vector2i(900, 520)
+	vp.transparent_bg = true
+	vp.world_2d = World2D.new() # its own canvas: no sky, no night, no scenery behind
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	var cam := Camera2D.new()
+	vp.add_child(cam)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/builds"))
+	GameClock.clock.hours = floorf(GameClock.clock.hours / 24.0) * 24.0 + 12.0
+	for id in Builds.STRUCTURES:
+		var x := 9000.0
+		if id == "bridge":
+			x = world.terrain.WATERS[world.terrain.water_index(Terrain.CREEK_X, 2000.0)].x
+		await teleport(x)
+		var n: Node2D = world.spawn({"kind": "campfire" if id == "tripod" else id, "x": x})
+		if id == "tripod":
+			n.set("tripod", true)
+		await frames(3)
+		var ground := n.global_position.y
+		n.reparent(vp)
+		n.position = Vector2(0, n.global_position.y - ground)
+		n.process_mode = Node.PROCESS_MODE_DISABLED # stays as drawn
+		var d: Dictionary = Builds.STRUCTURES[id]
+		var w: float = maxf(d.width, 120.0) + 80.0
+		var h: float = maxf(d.h, 60.0) + 60.0
+		cam.position = Vector2(0, -h * 0.5 + 20.0)
+		cam.zoom = Vector2.ONE * minf(minf(860.0 / w, 480.0 / h), 1.6)
+		n.queue_redraw()
+		for c in n.get_children():
+			if c is CanvasItem:
+				c.queue_redraw()
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+		var img := vp.get_texture().get_image()
+		var used := img.get_used_rect()
+		if used.size.x > 4:
+			img = img.get_region(used.grow(6).intersection(Rect2i(Vector2i.ZERO, img.get_size())))
+		img.save_png("res://assets/builds/%s.png" % id)
+		print("icon ", id, " ", img.get_size())
+		n.queue_free()
+		await frames(2)
+	get_tree().quit(0)
 
 # --- Mode "under": the cellar, the cave and the mine; regrowth; the newest country -------
 

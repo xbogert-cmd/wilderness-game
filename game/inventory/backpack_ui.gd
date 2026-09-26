@@ -290,41 +290,15 @@ func _refresh() -> void:
 	else:
 		_info.text = "Drag to rearrange · %s rotates while dragging" % Keys.label("rotate_item") + "\nDrop on a side slot to strap a tool outside · on Hands to hold it\nDrop clothing on Head, Coat, Mitts or Legs to wear it\nDrag off the panel to drop · click to select"
 	_actions.add_child(HSeparator.new())
-	var head := Label.new()
-	head.text = "Recipes"
-	head.add_theme_color_override("font_color", TEXT)
-	_actions.add_child(head)
-	var later: PackedStringArray = [] # recipes you have none of the makings for: one line, not a button each
-	var station := _station_x()
-	for id in player.known_recipes:
-		var r: Dictionary = Builds.RECIPES[id]
-		var have := {}
-		var ok := true
-		var some := false
-		for k in r.needs:
-			have[k] = Supply.have(player, k, station) # the pack, and chests near where you're working
-			ok = ok and have[k] >= r.needs[k]
-			some = some or (have[k] > 0 and k != "sticks" and not k.begins_with("#"))
-		if not some and not ok and r.needs.keys().any(func(k): return k != "sticks" and not k.begins_with("#")):
-			later.append("%s (%s)" % [Items.get_def(id).name.to_lower(), ", ".join(r.needs.keys().filter(func(k): return k != "sticks" and not k.begins_with("#")).map(func(k): return Items.get_def(k).name.to_lower()))])
-			continue
-		var bench_ok: bool = not r.get("bench", false) or Workbench.near(player)
-		var b := _button("Craft %s — %s (%.2f h)%s" % [Items.get_def(id).name.to_lower(), Builds.needs_text(r.needs, have), r.hours,
-			"" if bench_ok else " · at a workbench"], _craft.bind(id))
-		b.disabled = not ok or not bench_ok
+	_button("Recipe book: what you can make, and what it takes", func():
+		toggle()
+		var book: RecipeBook = get_tree().get_first_node_in_group("recipe_book")
+		book.open())
 	var built := Label.new()
-	built.text = "Storage chest, workbench, shelters and the rest: the build menu (%s)." % Keys.label("build")
+	built.text = "Storage chest, workbench, shelters and the rest: the build book (%s)." % Keys.label("build")
 	built.add_theme_font_size_override("font_size", 13)
 	built.add_theme_color_override("font_color", Color(TEXT, 0.6))
 	_actions.add_child(built)
-	if later:
-		var more := Label.new()
-		more.text = "Also: " + ", ".join(later)
-		more.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		more.custom_minimum_size = Vector2(430, 0)
-		more.add_theme_font_size_override("font_size", 13)
-		more.add_theme_color_override("font_color", Color(TEXT, 0.6))
-		_actions.add_child(more)
 	var c := player.cond
 	var ails: PackedStringArray = []
 	if c.sickness + c.incubating > 0.05: ails.append("sick %d%%" % int(c.sickness * 100))
@@ -413,23 +387,11 @@ func _repair() -> void:
 		tool.condition = 1.0
 		player.message.emit("The %s is solid again." % tool.def.name.to_lower()))
 
-## Where the work happens: the workbench you're at, else where you stand.
-func _station_x() -> float:
-	var x := player.global_position.x
-	for b in get_tree().get_nodes_in_group("workbench"):
-		if absf(b.global_position.x - x) < Workbench.REACH:
-			return b.global_position.x
-	return x
-
-## Pulls the makings from the pack and any chests nearby (walking over to fetch them), then works.
+## Crafts a recipe (the recipe book does the work; kept here for scripted checks).
 func _craft(id: String) -> void:
-	var r: Dictionary = Builds.RECIPES[id]
-	var station := _station_x()
 	if visible:
 		toggle()
-	Supply.gather(player, r.needs, station, func():
-		player.work(r.seconds, r.hours, "Crafting " + Items.get_def(id).name.to_lower(), func():
-			player.receive(ItemStack.make(id, GameClock.clock.hours, r.get("count", 1)))))
+	RecipeBook.craft(player, id)
 
 # --- Drawing -----------------------------------------------------------------------
 

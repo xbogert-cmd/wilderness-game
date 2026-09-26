@@ -40,6 +40,54 @@ const RECIPES := {
 	"snowshoes": {"needs": {"sticks": 4, "hide": 1, "#cord": 1}, "hours": 1.5, "seconds": 3.5, "bench": true},
 }
 
+## Recipe book chapters, in order.
+const GROUPS := {
+	"Basics": ["vine_cord", "splint", "snare", "fishing_pole"],
+	"Hunting": ["bow", "arrows", "spear", "deer_call"],
+	"Clothing": ["hide_coat", "buckskin_leggings", "wolf_hat", "wolf_mittens", "wolf_leggings", "bear_coat", "snowshoes"],
+}
+## Build book chapters, in order.
+const BUILD_GROUPS := {
+	"Camp": ["campfire", "tripod", "lean_to", "woodpile", "chest", "cabin"],
+	"Work": ["workbench", "hide_frame", "drying_rack", "sled", "bridge"],
+	"Hunting": ["blind", "bait", "snare"],
+}
+
+## "#tag" makings: what they're called and which item pictures them.
+const TAGS := {
+	"#cord": ["cord", "cordage"],
+	"#line": ["fishing line", "fishing_kit"],
+	"#fibre": ["vines or yucca fiber", "vine"],
+}
+
+## Where to get each making: shown in the books under anything you're short of.
+const SOURCES := {
+	"sticks": "Fallen sticks lie all through the woods: walk over them and press E. A wagon's boards or an old fire ring give a few too.",
+	"short": "Fell a tree with the hatchet, then stand at the trunk and cut it into lengths (E). Carry logs on your shoulder (F) or pull them on a sled.",
+	"medium": "Fell a tree with the hatchet, then stand at the trunk and cut it into lengths (E). Carry logs on your shoulder (F) or pull them on a sled.",
+	"long": "Fell a tree with the hatchet, then cut a long log from the trunk (E). Heavy: carry it slowly on your shoulder, or on a sled in winter.",
+	"#cord": "The paracord in your kit. Or twist your own: three vines (or yucca fiber) make vine cord (Basics).",
+	"#line": "The line and hooks in your fishing kit, or vine cord with a carved hook.",
+	"#fibre": "Vine tangles trail over the ground in the woods and valleys (they grow back in a season). Yucca grows out in the dry country to the west.",
+	"bandage": "You start with a roll. More turn up in old camps and cellars.",
+	"hide": "Tanned hide: skin a deer (knife, at the carcass), stretch the raw hide on a hide frame, and it's cured in about 18 hours.",
+	"wolf_fur": "Kill a wolf (an arrow to the chest), skin it with the knife, and cure the pelt on a hide frame.",
+	"bear_fur": "Bring down the bear (two good arrows), skin it, and cure the hide on a hide frame (about 30 hours).",
+	"berries": "Serviceberry bushes in the valley and meadows: E to pick. They grow back in about three days.",
+	"snare": "Make snares in the recipe book (Basics): cord and a stick make two.",
+}
+
+static func source(key: String) -> String:
+	return SOURCES.get(key, "")
+
+## A making's name for the books: "medium logs", "cord", "tanned hide".
+static func nice(key: String) -> String:
+	if is_log(key):
+		return "%s logs" % key
+	if key.begins_with("#"):
+		return TAGS[key][0] if TAGS.has(key) else key.substr(1)
+	return Items.get_def(key).name.to_lower()
+
 ## One line on what each build is for, shown in the build menu.
 const WHAT := {
 	"campfire": "heat, light, cooking; nothing wild comes near",
@@ -73,6 +121,5 @@ static func is_log(key: String) -> bool:
 static func needs_text(needs: Dictionary, have: Dictionary) -> String:
 	var parts: PackedStringArray = []
 	for k in needs:
-		var nice: String = ("%s logs" % k) if is_log(k) else (k.substr(1) if k.begins_with("#") else Items.get_def(k).name.to_lower())
-		parts.append("%s %d/%d" % [nice, have.get(k, 0), needs[k]])
+		parts.append("%s %d/%d" % [nice(k), have.get(k, 0), needs[k]])
 	return ", ".join(parts)

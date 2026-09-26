@@ -212,8 +212,9 @@ func zone_at(p: Vector2) -> int:
 		return 0
 	return 2 if l.x > 8.0 else 1
 
-func shot(zone: int) -> void:
-	_arrows += 1
+func shot(zone: int, arrow := true) -> void:
+	if arrow:
+		_arrows += 1
 	if zone == 2:
 		wound = _rng.randf_range(1.8, 3.0) if wound < 0.0 else minf(wound, 1.5)
 		_limp = 0.9

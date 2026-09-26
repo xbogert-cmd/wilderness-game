@@ -132,7 +132,7 @@ func _draw() -> void:
 		hand = _arm(shoulder, phase + 0.5, swing, elbow, arm_up, _jacket(), _hand())
 	if body.held:
 		_held_item(body.held, hand[0], hand[1])
-	if body.bow_draw >= 0.5:
+	if body.shot_velocity() != Vector2.ZERO and maxf(body.bow_draw, body.throw_draw) >= 0.05:
 		_aim_arc()
 
 ## Overrides for both hands while carrying, dragging or working. Local, facing-right space.
@@ -153,8 +153,11 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 			return [g, g + Vector2(-4, 3)]
 		var g: Array = body.carrying.grips()
 		return [_to_local_space(g[0]), _to_local_space(g[1])]
+	if body.throw_draw >= 0.0: # throwing arm cocked back over the shoulder, the other pointing the way
+		var aim := _to_local_dir(body.launch_dir())
+		return [shoulder + aim * 34.0 + Vector2(0, 6), shoulder - aim * (20.0 + 26.0 * body.throw_draw) + Vector2(0, -18)]
 	if body.bow_draw >= 0.0: # bow arm out toward the aim, string hand pulled back to the chin
-		var aim := _aim_dir(shoulder)
+		var aim := _to_local_dir(body.launch_dir())
 		return [shoulder + aim * 50.0, shoulder + aim * (46.0 - 40.0 * body.bow_draw)]
 	if body.held and body.held.def.has("rod") and body.fishing and body.fishing.state != Fishing.State.IDLE:
 		return [shoulder + Vector2(20, 14), shoulder + Vector2(12, 18)] # pole held out over the water
@@ -168,18 +171,37 @@ func _hand_targets(hip: Vector2, shoulder: Vector2) -> Array:
 func _aim_dir(from: Vector2) -> Vector2:
 	return (_to_local_space(body.aim_point()) - from).normalized()
 
-## Where a loosed arrow would go for the first half second: a steadying hint at a good draw.
+## A world direction in the rig's facing-right space.
+func _to_local_dir(v: Vector2) -> Vector2:
+	return Vector2(v.x * body.facing, v.y).normalized()
+
+## Where the arrow or spear would go if you let go now: a dotted line all the way to where it
+## lands, a dot every few steps of the path, and a ring where it comes down.
 func _aim_arc() -> void:
 	var p := body.arrow_origin()
-	var v := body.arrow_velocity()
-	var alpha := (body.bow_draw - 0.5) * 0.9
-	for i in 14:
-		var dt := 0.035
+	var v := body.shot_velocity()
+	var alpha := 0.45 + 0.45 * maxf(body.bow_draw, body.throw_draw)
+	var t := body.world.terrain
+	var run := 0.0
+	var k := 0
+	for i in 600:
+		var dt := 0.006
+		var before := p
 		v.y += Arrow.GRAVITY * dt
 		p += v * dt
-		if p.y > body.world.terrain.height_at(p.x):
-			break
-		draw_circle(_to_local_space(p), 2.2, Color(1, 1, 1, alpha * (1.0 - i / 14.0)))
+		var water := t.water_surface_at(p.x)
+		if p.y > t.height_at(p.x) or (water != INF and p.y > water):
+			var at := _to_local_space(before)
+			draw_arc(at, 12.0, 0.0, TAU, 20, Color(0, 0, 0, alpha * 0.4), 4.0)
+			draw_arc(at, 12.0, 0.0, TAU, 20, Color(1, 0.95, 0.8, alpha), 2.0)
+			return
+		run += before.distance_to(p)
+		if run >= 34.0:
+			run = 0.0
+			k += 1
+			var fade := alpha * clampf(1.0 - k / 70.0, 0.25, 1.0)
+			draw_circle(_to_local_space(p), 4.2, Color(0, 0, 0, fade * 0.35))
+			draw_circle(_to_local_space(p), 2.8, Color(1, 1, 1, fade))
 
 ## Breath shows as a small cloud in the cold, quicker when you're working hard.
 func _breath(head: Vector2) -> void:
@@ -273,7 +295,7 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			draw_line(hand - up * 10.0, hand + up * 120.0, c, 3.0)
 			draw_line(hand + up * 60.0, hand + up * 120.0, c.lightened(0.2), 2.0)
 		"bow":
-			var fwd := _aim_dir(hand) if body.bow_draw >= 0.0 else Vector2(1, 0.2).normalized()
+			var fwd := _to_local_dir(body.launch_dir()) if body.bow_draw >= 0.0 else Vector2(1, 0.2).normalized()
 			var ax := fwd.orthogonal()
 			var pull := maxf(body.bow_draw, 0.0)
 			var bend := 10.0 + 10.0 * pull
@@ -294,6 +316,11 @@ func _held_item(s: ItemStack, hand: Vector2, dir: Vector2) -> void:
 			draw_colored_polygon(PackedVector2Array([tip + Vector2(-9, 0), tip + Vector2(0, -34 * f) + lean, tip + Vector2(9, 0)]), Color(0.96, 0.46, 0.12))
 			draw_colored_polygon(PackedVector2Array([tip + Vector2(-5, 0), tip + Vector2(0, -20 * f) + lean * 0.6, tip + Vector2(5, 0)]), Color(1.0, 0.85, 0.45))
 		"spear":
+			if body.throw_draw >= 0.0 and body.pull_vec().length() >= Player.PULL_CLICK: # cocked to throw, along the line it'll fly
+				var aim := _to_local_dir(body.launch_dir())
+				draw_line(hand - aim * 100.0, hand + aim * 90.0, c, 4.0)
+				draw_colored_polygon(PackedVector2Array([hand + aim * 86.0 + aim.orthogonal() * 5.0, hand + aim * 114.0, hand + aim * 86.0 - aim.orthogonal() * 5.0]), Color("9aa0a6"))
+				return
 			var fwd := Vector2(1, 0.04).normalized() if body.thrust >= 0.0 else Vector2.from_angle(-1.05)
 			var tail := hand - fwd * (60.0 if body.thrust >= 0.0 else 26.0)
 			var point := hand + fwd * (140.0 if body.thrust >= 0.0 else 118.0)

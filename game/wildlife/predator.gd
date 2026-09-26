@@ -388,8 +388,9 @@ func hurt(amount: float, from_x: float) -> void:
 		flee(from_x)
 
 ## Arrow strike: zone 2 is the heart and lungs (or head).
-func shot(zone: int) -> void:
-	arrows += 1
+func shot(zone: int, arrow := true) -> void:
+	if arrow:
+		arrows += 1
 	hurt(1.2 if zone == 2 else 0.55, player.global_position.x)
 
 func flee(from_x: float) -> void:

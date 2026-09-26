@@ -53,8 +53,8 @@ func zone_at(p: Vector2) -> int:
 	l.x *= facing
 	return 2 if ((l - Vector2(0, -14)) / Vector2(18, 13)).length() < 1.0 or l.distance_to(Vector2(15, -24)) < 8.0 else 0
 
-func shot(_zone: int) -> void:
-	die(true)
+func shot(_zone: int, arrow := true) -> void:
+	die(arrow)
 
 func hurt(_amount: float, _from_x: float) -> void:
 	die(false)

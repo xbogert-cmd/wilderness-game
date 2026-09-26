@@ -138,13 +138,9 @@ func _ready() -> void:
 	pause.player = player
 	pause.main = self
 	ui.add_child(pause) # before the pack UI so the pack gets Esc first while open
-	var build_menu := VBoxContainer.new()
-	build_menu.position = Vector2(60, 120)
-	ui.add_child(build_menu)
 	var build := BuildMode.new()
 	build.player = player
 	build.world = world
-	build.menu = build_menu
 	add_child(build)
 	var pack_ui := BackpackUI.new()
 	pack_ui.player = player
@@ -153,6 +149,14 @@ func _ready() -> void:
 	map_ui.player = player
 	map_ui.world = world
 	ui.add_child(map_ui) # after the pause menu so Esc closes the map first
+	var build_book := BuildBook.new() # the books after the pack, so they take Esc and Tab first while open
+	build_book.player = player
+	build_book.build_mode = build
+	build.book = build_book
+	ui.add_child(build_book)
+	var recipe_book := RecipeBook.new()
+	recipe_book.player = player
+	ui.add_child(recipe_book)
 	var dbg := DebugOverlay.new()
 	dbg.player = player
 	dbg.world = world
@@ -242,6 +246,14 @@ func _ready() -> void:
 		player.hold(ItemStack.make("bow", GameClock.clock.hours))
 		player.aim_override = Vector2(x + 830.0, world.terrain.height_at(x + 800.0) - 150.0)
 		player.bow_draw = 0.0
+	if args.has("throw"): # preview: the spear drawn back to throw at a deer, its path showing
+		var a := wildlife.spawn(Wildlife.SPECIES[0], x + 900.0, 1)
+		a.def = a.def.duplicate()
+		a.def.hearing = 0.0
+		a.def.sight = 0.0
+		player.hold(ItemStack.make("spear", GameClock.clock.hours))
+		player.aim_override = Vector2(x + 700.0, world.terrain.height_at(x + 700.0) - 420.0)
+		player.throw_draw = 0.8
 	if args.has("wolves"): # preview: a pack at a carcass, ravens overhead, you with a torch
 		world.spawn({"kind": "carcass", "x": x + 520.0, "facing": -1, "species": "mule_deer", "hour": GameClock.clock.hours - 2.0})
 		for k in 3:
@@ -299,9 +311,10 @@ func _ready() -> void:
 	if args.has("sleep"): # preview: asleep under a lean-to
 		world.spawn({"kind": "lean_to", "x": x})
 		player.sleep.call_deferred()
-	if args.has("buildmenu"): # preview: the build menu open
-		build._refresh_menu.call_deferred()
-		build_menu.visible = true
+	if args.has("buildmenu"): # preview: the build book open (--buildmenu=cabin opens at the cabin)
+		build_book.open.call_deferred(str(args.buildmenu))
+	if args.has("recipes"): # preview: the recipe book open (--recipes=bow opens at the bow)
+		recipe_book.open.call_deferred(str(args.recipes))
 	if args.has("menu"):
 		pause.toggle.call_deferred()
 		if args.menu == "settings":

@@ -1,60 +1,27 @@
 class_name BuildMode extends Node2D
-## B opens a list of known structures; pick one and a ghost follows the mouse along the
-## ground near the player. Left click places a blueprint where it fits; right click cancels.
+## B opens the build book; pick something and a ghost follows the mouse along the ground near
+## the player. Left click places a blueprint where it fits; right click cancels.
 
 const RANGE := 380.0
 const MAX_STEP := 40.0 ## allowed height difference across the footprint
 
 var player: Player
 var world: World
-var menu: VBoxContainer
+var book: BuildBook
 var build_id := ""
 var _ok := false
 
 func _ready() -> void:
 	add_to_group("build_mode")
 	z_index = 9
-	menu.visible = false
-	var title := Label.new()
-	title.text = "Build (%s)  ·  pick one, click the ground to place it, then bring the materials and press %s" % [Keys.label("build"), Keys.label("interact")]
-	title.add_theme_font_size_override("font_size", 15)
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.06, 0.07, 0.06, 0.85)
-	bg.set_content_margin_all(6)
-	bg.set_corner_radius_all(4)
-	title.add_theme_stylebox_override("normal", bg)
-	menu.add_child(title)
-	for id in Builds.STRUCTURES:
-		var b := Button.new()
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.pressed.connect(_choose.bind(id))
-		b.set_meta("id", id)
-		menu.add_child(b)
-
-## Button text with what you have now: pack items, and logs lying close by or on your shoulder.
-func _refresh_menu() -> void:
-	var have := {}
-	for l in get_tree().get_nodes_in_group("log"):
-		if absf(l.global_position.x - player.global_position.x) < 2500.0:
-			have[l.size] = have.get(l.size, 0) + 1
-	for b in menu.get_children():
-		if not b is Button:
-			continue
-		var id: String = b.get_meta("id")
-		var d: Dictionary = Builds.STRUCTURES[id]
-		for k in d.needs:
-			if not Builds.is_log(k):
-				have[k] = player.backpack.count_of(k)
-		b.text = "%s  (%s)  —  %s" % [d.name, Builds.WHAT.get(id, ""), Builds.needs_text(d.needs, have)]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("build"):
 		if build_id != "":
 			_cancel()
 		else:
-			menu.visible = not menu.visible
-			if menu.visible:
-				_refresh_menu()
+			book.open()
+		get_viewport().set_input_as_handled()
 	elif build_id != "":
 		if event.is_action_pressed("use"):
 			if _ok:
@@ -70,9 +37,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_cancel()
 			get_viewport().set_input_as_handled()
 
-func _choose(id: String) -> void:
+func choose(id: String) -> void:
 	build_id = id
-	menu.visible = false
 	player.placing = true
 
 func _cancel() -> void:

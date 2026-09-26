@@ -1,8 +1,9 @@
 class_name Arrow extends Node2D
-## An arrow in flight: gravity, then it strikes an animal, the ground, or water. Arrows that
-## miss usually survive and can be picked up; the thud startles animals close by.
-## The view is side-on but the shot travels in depth: an arrow passes animals nearer than
-## the aimed distance and strikes what's there, so you hit the part you aimed at.
+## An arrow (or a thrown spear) in flight: gravity, then it strikes the first animal along
+## its path (the part it touches first: a deer facing you takes it in the chest, one facing
+## away behind, unless it drops onto the front of the back), the ground, or water. Arrows that miss usually survive and can be picked up; a
+## spear always does, sticking where it lands or dropping by what it hit. The thud startles
+## animals close by.
 
 const GRAVITY := 900.0
 const BREAK_CHANCE := 0.25
@@ -10,7 +11,7 @@ const STARTLE_RADIUS := 450.0
 
 var world: World
 var velocity := Vector2.ZERO
-var arm_x := 0.0 ## the aimed distance; animals can be struck from here on
+var stack := {} ## a thrown spear (its item, saved as it was); empty for an arrow
 var _life := 5.0
 
 func _ready() -> void:
@@ -28,11 +29,11 @@ func _physics_process(delta: float) -> void:
 	for i in steps: # sample the path so fast arrows can't skip through a deer
 		var p := from.lerp(position, float(i + 1) / steps)
 		for a in _targets():
-			if (p.x - arm_x) * signf(velocity.x) < -6.0:
-				break
 			var z: int = a.zone_at(p)
 			if z > 0:
-				a.shot(z)
+				a.shot(z, stack.is_empty())
+				if stack:
+					world.spawn({"kind": "item", "x": p.x, "stack": stack})
 				queue_free()
 				return
 		var ground := world.terrain.height_at(p.x)
@@ -52,11 +53,17 @@ func _land(p: Vector2, on_ground: bool) -> void:
 	for a: Animal in get_tree().get_nodes_in_group("animals"):
 		if absf(a.position.x - p.x) < STARTLE_RADIUS:
 			a.awareness += a.def.alert_at * 1.2
-	if on_ground and randf() > BREAK_CHANCE:
+	if stack: # the spear: stuck in the ground (or floated to the bank)
+		world.spawn({"kind": "item", "x": p.x, "stack": stack})
+	elif on_ground and randf() > BREAK_CHANCE:
 		world.spawn({"kind": "item", "x": p.x, "stack": ItemStack.make("arrows", GameClock.clock.hours).to_dict()})
 	queue_free()
 
 func _draw() -> void:
+	if stack:
+		draw_line(Vector2(-150, 0), Vector2(30, 0), Color("8a6a4a"), 4.0)
+		draw_colored_polygon(PackedVector2Array([Vector2(26, -5), Vector2(58, 0), Vector2(26, 5)]), Color("9aa0a6"))
+		return
 	draw_line(Vector2(-34, 0), Vector2(8, 0), Color("b0966b"), 2.0)
 	draw_colored_polygon(PackedVector2Array([Vector2(8, -3), Vector2(16, 0), Vector2(8, 3)]), Color("3a3028"))
 	draw_line(Vector2(-34, 0), Vector2(-24, 0), Color("d8d0c0"), 5.0)

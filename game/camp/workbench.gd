@@ -1,6 +1,6 @@
 class_name Workbench extends Node2D
-## A split-log bench with a peg vise. The bigger crafting (bow, arrows, hide coat, deer call)
-## and handle repairs need one close by; E opens the pack to work at it.
+## A split-log bench with a peg vise. The bigger crafting (bow, arrows, spear, clothing) and
+## handle repairs need one close by; E opens the recipe book.
 
 const REACH := 260.0
 
@@ -37,12 +37,20 @@ func interact_pos() -> Vector2:
 	return global_position
 
 func interact_label(_p: Player) -> String:
-	return "Work at the bench"
+	return "Open the recipe book"
 
-func interact(p: Player) -> void:
-	var ui: BackpackUI = get_tree().get_first_node_in_group("backpack_ui")
-	if ui and not ui.visible:
-		ui.toggle()
+func interact(_p: Player) -> void:
+	var book: RecipeBook = get_tree().get_first_node_in_group("recipe_book")
+	if book:
+		book.open()
+
+## Where the work happens: the workbench you're at, else where you stand.
+static func station_x(p: Player) -> float:
+	var x := p.global_position.x
+	for b in p.get_tree().get_nodes_in_group("workbench"):
+		if absf(b.global_position.x - x) < REACH:
+			return b.global_position.x
+	return x
 
 func _draw() -> void:
 	var top := Palette.BARK.lightened(0.18)

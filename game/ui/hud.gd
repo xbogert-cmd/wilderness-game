@@ -151,7 +151,7 @@ func _draw() -> void:
 
 ## Top left, small and quiet: what to do in the first days, ticked off as you go.
 func _draw_goals() -> void:
-	if goals.is_empty() or player.sleeping or get_tree().get_nodes_in_group("build_mode").any(func(b): return b.menu.visible):
+	if goals.is_empty() or player.sleeping or get_tree().get_nodes_in_group("build_mode").any(func(b): return b.book.visible):
 		return
 	var at := Vector2(24, 96)
 	var w := 380.0

@@ -14,7 +14,7 @@ const GRAVITY := 1900.0
 const ACCEL := 1100.0
 const FALL_INJURY_SPEED := 1150.0
 const HOP_STAMINA := 6.0
-const REACH := 120.0
+const REACH := 140.0 ## E reaches this far past the edge of something (its width counts too)
 const CHOP_REACH := 110.0
 const SWING_TIME := 0.6
 const SWING_IMPACT := 0.62 ## fraction of the swing where the blade lands
@@ -22,6 +22,9 @@ const SWING_STAMINA := 4.0
 const CARRY_STAMINA_PER_SEC := 2.5
 const DRAW_TIME := 0.9 ## seconds to full draw
 const ARROW_SPEED := Vector2(1100.0, 2800.0) ## px/s at a light and a full draw
+const SPEAR_SPEED := Vector2(650.0, 1500.0) ## a thrown spear, a soft and a hard throw
+const PULL_MAX := 300.0 ## screen px of pull-back for full power (bow draw or spear throw)
+const PULL_CLICK := 25.0 ## less pull than this and letting go is a click: the spear thrusts
 const KNIFE_REACH := 175.0
 const SPEAR_REACH := 250.0
 const THRUST_TIME := 0.45
@@ -76,6 +79,8 @@ const WEAR_PER_SWING := 0.0012 ## handle wear; a worn tool bites weaker, never b
 var known_recipes := RECIPES
 var known_plants := {} ## plant species picked at least once: named from then on
 var bow_draw := -1.0 ## 0..1, -1 not drawing
+var throw_draw := -1.0 ## spear drawn back to throw, 0..1; -1 not
+var pull_from := Vector2.INF ## screen point where the pull-back started (mouse held down)
 var fishing: Fishing ## set by Main
 var facing := 1
 var running := false
@@ -178,13 +183,25 @@ func _physics_process(delta: float) -> void:
 
 	if bow_draw >= 0.0:
 		running = false
-		bow_draw = minf(bow_draw + delta / DRAW_TIME, 1.0)
+		if pull_from != Vector2.INF and aim_override == Vector2.INF:
+			bow_draw = clampf(pull_vec().length() / PULL_MAX, 0.0, 1.0) # drawn as far as you pull back
+		else:
+			bow_draw = minf(bow_draw + delta / DRAW_TIME, 1.0)
 		if held == null or not held.def.has("bow"):
 			bow_draw = -1.0
-		else:
-			facing = 1 if aim_point().x >= global_position.x else -1
+			pull_from = Vector2.INF
+		elif launch_dir().x != 0.0:
+			facing = 1 if launch_dir().x > 0.0 else -1
+	if throw_draw >= 0.0:
+		running = false
+		throw_draw = clampf(pull_vec().length() / PULL_MAX, 0.0, 1.0) if aim_override == Vector2.INF else throw_draw
+		if held == null or not held.def.has("spear"):
+			throw_draw = -1.0
+			pull_from = Vector2.INF
+		elif pull_vec().length() >= PULL_CLICK or aim_override != Vector2.INF:
+			facing = 1 if launch_dir().x > 0.0 else -1
 	var speed := CROUCH if crouching else (RUN if running else WALK)
-	if bow_draw >= 0.0:
+	if bow_draw >= 0.0 or throw_draw >= 0.0:
 		speed *= 0.4
 	speed *= cond.move_speed_mult() * (1.0 - clampf(wade_depth / 130.0, 0.0, 0.65)) * backpack.encumbrance_mult() * snow_mult()
 	if carrying:
@@ -368,7 +385,9 @@ func take_hit(damage: float, region: String, severity: float, from_x: float, for
 	facing = -int(away) # turned to face it
 	velocity = Vector2(away * force, -force * 0.3)
 	hurt_t = 0.55
-	bow_draw = -1.0
+	bow_draw = -1.0 # knocked out of your aim
+	throw_draw = -1.0
+	pull_from = Vector2.INF
 	for k in 4:
 		world.tracks.add(global_position.x + away * k * 18.0, "blood", int(away))
 	var cam := get_viewport().get_camera_2d()
@@ -424,8 +443,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		draw_slot(1)
 	elif event.is_action_pressed("use") and not placing:
 		use_held()
-	elif event.is_action_released("use") and bow_draw >= 0.0:
-		loose()
+	elif event.is_action_released("use"):
+		release_held()
 
 ## Everything E could do with n right now: [[label, Callable]], best first. An invalid
 ## Callable is a note (why something can't be done yet) rather than a choice.
@@ -469,10 +488,14 @@ func aim_point() -> Vector2:
 func _update_focus() -> void:
 	focus = null
 	var best := REACH
+	var best_score := INF
 	for n in get_tree().get_nodes_in_group("interactable"):
-		var d: float = (n.interact_pos() - global_position).length()
-		if d < best and n.interact_label(self) != "":
-			best = d
+		var off: Vector2 = n.interact_pos() - global_position
+		var half: float = n.width() * 0.5 if n.has_method("width") else 0.0 # anywhere across it counts, not just its middle
+		var d := Vector2(maxf(absf(off.x) - half, 0.0), off.y).length()
+		var score := d + absf(off.x) * 0.1 # standing over two things: the one you're nearer the middle of
+		if d < best and score < best_score and n.interact_label(self) != "":
+			best_score = score
 			focus = n
 	chop_target = null
 	if held and held.def.has("axe") and carrying == null:
@@ -500,11 +523,13 @@ func use_held() -> void:
 			message.emit("No arrows. Craft some from sticks.")
 		else:
 			bow_draw = 0.0
+			pull_from = get_viewport().get_mouse_position()
 	elif d.has("knife"):
 		_knife()
 	elif d.has("spear"):
-		if thrust < 0.0 and cond.spend_stamina(THRUST_STAMINA):
-			thrust = 0.0
+		if thrust < 0.0: # click to thrust; pull back and let go to throw
+			throw_draw = 0.0
+			pull_from = get_viewport().get_mouse_position()
 	elif d.has("torch"):
 		_wave_torch()
 	elif d.has("light"):
@@ -582,25 +607,88 @@ func use_held() -> void:
 	else:
 		message.emit("Nothing to do with that here.")
 
-## The bow hand holds; the arrow leaves from about shoulder height toward the aim.
+## Letting go of the mouse: loose the arrow, throw the spear, or (a click, no pull) thrust it.
+func release_held() -> void:
+	if bow_draw >= 0.0:
+		loose()
+	elif throw_draw >= 0.0:
+		var click := pull_vec().length() < PULL_CLICK and aim_override == Vector2.INF
+		if click:
+			throw_draw = -1.0
+			pull_from = Vector2.INF
+			if cond.spend_stamina(THRUST_STAMINA):
+				thrust = 0.0
+		else:
+			throw_spear()
+	pull_from = Vector2.INF
+
+## How far and which way the mouse has been pulled back since you pressed (screen px): the shot
+## flies the opposite way, like a slingshot.
+func pull_vec() -> Vector2:
+	if pull_from == Vector2.INF:
+		return Vector2.ZERO
+	return pull_from - get_viewport().get_mouse_position()
+
+## Which way a shot or throw would fly: back along the pull (scripted checks aim at a point).
+func launch_dir() -> Vector2:
+	if aim_override != Vector2.INF:
+		return (aim_override - arrow_origin()).normalized()
+	var v := pull_vec()
+	return v.normalized() if v.length() >= PULL_CLICK else Vector2(facing, -0.2).normalized()
+
+## The bow hand holds; the arrow leaves from about shoulder height.
 func arrow_origin() -> Vector2:
 	return global_position + Vector2(facing * 24.0, -150.0 + (30.0 if crouching else 0.0))
 
 func arrow_velocity() -> Vector2:
-	var dir := (aim_point() - arrow_origin()).normalized()
-	return dir * lerpf(ARROW_SPEED.x, ARROW_SPEED.y, maxf(bow_draw, 0.0))
+	return launch_dir() * lerpf(ARROW_SPEED.x, ARROW_SPEED.y, maxf(bow_draw, 0.0))
+
+## A spear thrown as hard as you've pulled back.
+func spear_velocity() -> Vector2:
+	return launch_dir() * lerpf(SPEAR_SPEED.x, SPEAR_SPEED.y, maxf(throw_draw, 0.0))
+
+## Whatever's drawn back right now would fly off at this velocity (Vector2.ZERO: nothing drawn).
+func shot_velocity() -> Vector2:
+	if bow_draw >= 0.0:
+		return arrow_velocity()
+	if throw_draw >= 0.0 and (pull_vec().length() >= PULL_CLICK or aim_override != Vector2.INF):
+		return spear_velocity()
+	return Vector2.ZERO
 
 func loose() -> void:
 	var v := arrow_velocity()
 	var power := bow_draw
 	bow_draw = -1.0
+	pull_from = Vector2.INF
 	if power < 0.2 or not backpack.take("arrows", 1):
 		return # let down gently
 	var a := Arrow.new()
 	a.world = world
 	a.position = arrow_origin()
 	a.velocity = v
-	a.arm_x = aim_point().x
+	world.add_child(a)
+
+## The spear leaves your hands and flies; it sticks where it lands (or drops by what it hit).
+func throw_spear() -> void:
+	var v := spear_velocity()
+	var power := throw_draw
+	throw_draw = -1.0
+	pull_from = Vector2.INF
+	if power < 0.15 or held == null or not held.def.has("spear"):
+		return
+	if under > 0.3:
+		message.emit("No room to throw down here.")
+		return
+	if not cond.spend_stamina(THRUST_STAMINA * 1.5):
+		message.emit("Too winded to throw.")
+		return
+	var a := Arrow.new()
+	a.world = world
+	a.stack = held.to_dict()
+	a.position = arrow_origin()
+	a.velocity = v
+	held = null
+	held_slot = -1
 	world.add_child(a)
 
 const CALL_REACH := 3000.0
@@ -673,7 +761,7 @@ func _knife() -> void:
 		deer.kill()
 		message.emit("Quick and quiet." if deer.wound < 0.0 else "You finish it.")
 	else:
-		deer.shot(1)
+		deer.shot(1, false) # a knife cut, no arrow in it
 		message.emit("You catch it with the blade as it bolts. It's bleeding: follow the blood.")
 
 func _consume_one() -> void:

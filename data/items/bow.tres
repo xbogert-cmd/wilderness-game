@@ -10,4 +10,4 @@ shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2
 weight = 0.6
 color = Color(0.580, 0.451, 0.290, 1)
 tags = PackedStringArray("tool", "bow", "attachable")
-description = "A green-wood stave strung with paracord. Hold click to draw, release to loose."
+description = "A green-wood stave strung with paracord. Press and pull the mouse back (like a slingshot): the farther, the harder the shot. The dotted line shows where it will fly; let go to loose."
