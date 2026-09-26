@@ -161,15 +161,15 @@ static func bush(rng: RandomNumberGenerator, w: float, color: Color, mat: Materi
 	n.add_child(multi(caps, Color.WHITE, mat, w * 0.8, SNOW))
 	return n
 
-static func rock(rng: RandomNumberGenerator, w: float, mat: Material) -> Node2D:
+static func rock(rng: RandomNumberGenerator, w: float, mat: Material, base := Palette.ROCK, light := Palette.ROCK_LIGHT) -> Node2D:
 	var n := Node2D.new()
 	var h := w * rng.randf_range(0.45, 0.7)
 	var pts := PackedVector2Array([Vector2(-w * 0.5, 6), Vector2(w * 0.5, 6)])
 	for i in 5:
 		var a := PI * (i + 0.5) / 5.0
 		pts.append(Vector2(cos(a) * w * 0.5 * rng.randf_range(0.8, 1.05), -sin(a) * h * rng.randf_range(0.75, 1.1)))
-	n.add_child(poly(pts, Palette.ROCK, mat))
-	n.add_child(poly(PackedVector2Array([Vector2(-w * 0.3, -h * 0.75), Vector2(w * 0.15, -h * 0.95), Vector2(w * 0.35, -h * 0.6), Vector2(-w * 0.1, -h * 0.55)]), Palette.ROCK_LIGHT, mat))
+	n.add_child(poly(pts, base, mat))
+	n.add_child(poly(PackedVector2Array([Vector2(-w * 0.3, -h * 0.75), Vector2(w * 0.15, -h * 0.95), Vector2(w * 0.35, -h * 0.6), Vector2(-w * 0.1, -h * 0.55)]), light, mat))
 	n.add_child(poly(_cap(Vector2(0, -h * 0.3), w * 0.62), Color.WHITE, mat, 0.0, SNOW))
 	return n
 
@@ -257,4 +257,48 @@ static func fireweed(rng: RandomNumberGenerator, w: float, mat: Material) -> Nod
 			flowers.append(blob(Vector2(x + rng.randf_range(-3, 3), -h + k * 9.0), 4.5 - k * 0.6, rng, 6, 0.2))
 	n.add_child(multi(stems, Color("5d6e3a"), mat, 130.0, GRASS))
 	n.add_child(multi(flowers, Color("c0569a"), mat, 130.0, LEAF))
+	return n
+
+## Red sandstone of the canyon country.
+const SANDSTONE := Color("9a5a3e")
+const SANDSTONE_LIGHT := Color("c07a52")
+
+## Cholla: a jointed cactus, stubby arms with a pale haze of spines.
+static func cholla(rng: RandomNumberGenerator, h: float, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var segs := []
+	var tips := []
+	var trunk := Vector2(0, -h * 0.45)
+	segs.append(PackedVector2Array([Vector2(-6, 4), Vector2(6, 4), trunk + Vector2(5, 0), trunk + Vector2(-5, 0)]))
+	for i in rng.randi_range(3, 5):
+		var side := -1.0 if i % 2 else 1.0
+		var from := trunk + Vector2(0, rng.randf_range(0, h * 0.2))
+		var to := from + Vector2(side * rng.randf_range(h * 0.15, h * 0.3), -rng.randf_range(h * 0.2, h * 0.5))
+		var off := (to - from).orthogonal().normalized() * 5.0
+		segs.append(PackedVector2Array([from + off, to + off, to - off, from - off]))
+		tips.append(blob(to, 6.0, rng, 6, 0.2))
+	n.add_child(multi(segs, Color("6a7a4a"), mat, h * 0.2))
+	n.add_child(multi(tips, Color("c8c8a0"), mat, h * 0.2))
+	return n
+
+## A fallen giant gone soft with moss, ferns and seedlings growing along its back.
+static func nurse_log(rng: RandomNumberGenerator, l: float, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var r := rng.randf_range(34, 50)
+	n.add_child(poly(PackedVector2Array([Vector2(-l * 0.5, 6), Vector2(l * 0.5, 6), Vector2(l * 0.5 - 10, -r * 1.7), Vector2(-l * 0.5 + 12, -r * 1.8)]), Color("3e3024"), mat))
+	n.add_child(poly(PackedVector2Array([Vector2(-l * 0.5 + 10, -r * 1.6), Vector2(l * 0.5 - 14, -r * 1.55), Vector2(l * 0.5 - 30, -r * 2.0), Vector2(-l * 0.5 + 24, -r * 2.05)]), Color("4d6a32"), mat, 0.0, SNOW))
+	n.add_child(poly(blob(Vector2(-l * 0.5 + 8, -r * 0.9), r * 0.85, rng, 12, 0.08), Color("7a5e40"), mat))
+	for i in rng.randi_range(2, 4):
+		var f := fern(rng, rng.randf_range(50, 90), Palette.FERN, mat)
+		f.position = Vector2(rng.randf_range(-l * 0.4, l * 0.4), -r * 1.8)
+		n.add_child(f)
+	return n
+
+## A mesa or butte for the far country: a flat top, sheer banded sides, a skirt of talus.
+static func mesa(rng: RandomNumberGenerator, w: float, h: float, color: Color, mat: Material) -> Node2D:
+	var n := Node2D.new()
+	var top := w * rng.randf_range(0.45, 0.7)
+	var pts := PackedVector2Array([Vector2(-w * 0.5, 10), Vector2(-top * 0.55, -h * 0.35), Vector2(-top * 0.5, -h), Vector2(top * 0.5, -h * rng.randf_range(0.96, 1.0)), Vector2(top * 0.55, -h * 0.35), Vector2(w * 0.5, 10)])
+	n.add_child(poly(pts, color, mat))
+	n.add_child(poly(PackedVector2Array([Vector2(-top * 0.5, -h), Vector2(top * 0.5, -h), Vector2(top * 0.5, -h * 0.9), Vector2(-top * 0.5, -h * 0.88)]), color.lightened(0.15), mat))
 	return n

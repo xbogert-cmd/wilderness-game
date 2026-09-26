@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "matches"
+name = "Matches"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.05
+color = Color(0.72,0.58,0.36, 1)
+tags = PackedStringArray("lighter")
+max_stack = 1
+uses = 12
+description = "A box of old strike-anywhere matches, still dry. Each fire uses one."

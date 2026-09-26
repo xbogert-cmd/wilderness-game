@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "flint"
+name = "Flint"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.2
+color = Color(0.29,0.30,0.33, 1)
+tags = PackedStringArray("lighter")
+max_stack = 1
+uses = 40
+description = "Grey-black flint from the cave. Struck against the back of your knife it throws sparks: slower than a lighter, but it lasts. (Needs a knife.)"

@@ -52,6 +52,10 @@ func _process(_delta: float) -> void:
 		horizon = horizon.lerp(Color(0.85, 0.87, 0.9) * lerpf(0.35, 1.0, light), bz * 0.8)
 		top = top.lerp(horizon, bz * 0.7)
 		ambient = ambient.lerp(Color(0.8, 0.82, 0.86) * lerpf(0.45, 1.0, light), bz * 0.35)
+	var p: Player = get_tree().get_first_node_in_group("player")
+	var under := p.under if p else 0.0
+	if under > 0.0: # underground it's dark whatever the hour: bring a light
+		ambient = ambient.lerp(Color(0.11, 0.105, 0.12), under * 0.95)
 	ambient.a = 1.0
 
 	RenderingServer.global_shader_parameter_set("haze_color", horizon)
@@ -71,4 +75,4 @@ func _process(_delta: float) -> void:
 
 	var morning := exp(-pow((h - 6.5) / 1.8, 2.0))
 	backdrop.fog_material.set_shader_parameter("density", 0.12 + 0.55 * morning + 0.3 * w.precip + 0.9 * bz)
-	rain.set_weather(w.rain(), w.snowfall(), w.wind)
+	rain.set_weather(w.rain() * (1.0 - under), w.snowfall() * (1.0 - under), w.wind)

@@ -3,6 +3,7 @@ class_name WorldItem extends Node2D
 
 var world: World
 var stack: ItemStack
+var _below := false ## lies underground, not on the ground up top
 
 func _ready() -> void:
 	add_to_group("persist")
@@ -14,11 +15,18 @@ func load_state(d: Dictionary, _elapsed: float) -> void:
 	stack = ItemStack.from_dict(d.stack)
 	if stack.def.has("food"):
 		add_to_group("food_scent") # meat on the ground draws wolves; the bear eats anything
-	global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)) + 2.0)
+	if d.has("y"): # down in a cellar or cave: on the floor there
+		_below = true
+		global_position = Vector2(float(d.x), world.floor_y(float(d.x), float(d.y)) + 2.0)
+	else:
+		global_position = Vector2(float(d.x), world.terrain.height_at(float(d.x)) + 2.0)
 	queue_redraw()
 
 func to_state() -> Dictionary:
-	return {"kind": "item", "x": global_position.x, "stack": stack.to_dict()}
+	var d := {"kind": "item", "x": global_position.x, "stack": stack.to_dict()}
+	if _below:
+		d.y = global_position.y - 2.0
+	return d
 
 func can_unload() -> bool:
 	return true

@@ -91,9 +91,15 @@ func interact_label(p: Player) -> String:
 		return ""
 	if frozen() and not hole_open():
 		return "Chop a hole in the ice"
+	if clean():
+		return ("Fill %s (spring water, clean)" % p.held.def.name.to_lower()) if p.held and p.held.def.capacity > 0.0 else "Drink from the spring (clean)"
 	if p.held and p.held.def.capacity > 0.0:
 		return "Fill %s (%s water is dirty)" % [p.held.def.name.to_lower(), kind()]
 	return "Drink from the %s (dirty)" % kind()
+
+## A spring: water straight out of the ground, safe to drink.
+func clean() -> bool:
+	return w().get("clean", false)
 
 func interact(p: Player) -> void:
 	if frozen() and not hole_open():
@@ -107,15 +113,18 @@ func interact(p: Player) -> void:
 		fill(p, p.held)
 		return
 	p.cond.drink(ItemStack.THIRST_PER_SIP)
+	if clean():
+		p.message.emit("Cold and sweet, straight out of the rock.")
+		return
 	p.cond.health -= DIRTY_HEALTH_COST
 	p.cond.expose(SICK_AMOUNT, SICK_CHANCE)
 	p.message.emit("Cold and silty. Unboiled water can make you sick.")
 
 func fill(p: Player, s: ItemStack) -> void:
-	var took := s.add_water(s.def.capacity, false)
+	var took := s.add_water(s.def.capacity, clean())
 	if took > 0.0:
-		p.message.emit("Filled with %.2f L of %s water. Boil it before drinking." % [took, kind()])
-	elif s.water_clean and s.water > 0.001:
-		p.message.emit("It holds clean water. Empty or drink it first so they don't mix.")
+		p.message.emit(("Filled with %.2f L of clean spring water." % took) if clean() else ("Filled with %.2f L of %s water. Boil it before drinking." % [took, kind()]))
+	elif s.water > 0.001 and s.water_clean != clean():
+		p.message.emit("It holds %s water. Empty or drink it first so they don't mix." % ("dirty" if clean() else "clean"))
 	else:
 		p.message.emit("It's already full.")

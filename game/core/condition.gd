@@ -150,6 +150,10 @@ func use_herb(id: String) -> String:
 					injuries[r].severity = maxf(injuries[r].severity - 0.3, 0.05)
 					any = true
 			return "You rub arnica into the sprain. It eases." if any else "Arnica: for sprains and bruises."
+		"fly_agaric":
+			health -= 15.0
+			incubating = minf(incubating + 0.5, 1.0)
+			return "Your mouth goes numb and the world tilts. That was poison."
 		"water_hemlock":
 			health -= 30.0
 			incubating = minf(incubating + 0.7, 1.0)

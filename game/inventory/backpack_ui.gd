@@ -273,7 +273,15 @@ func _refresh() -> void:
 		if d.has("medical"):
 			_button("Use on %s" % d.treats, func(): _use_now())
 		if d.has("herb"):
-			_button("Eat it" if d.id in ["rose_hips", "water_hemlock"] else ("Chew it" if d.id in ["mint", "willow_bark"] else "Use it"), func(): _use_now())
+			_button("Eat it" if d.id in ["rose_hips", "water_hemlock", "fly_agaric"] else ("Chew it" if d.id in ["mint", "willow_bark"] else "Use it"), func(): _use_now())
+		if d.has("light") and selected.condition < 0.99:
+			var oil := player.backpack.find(func(o): return o.def.id == "lamp_oil")
+			var lamp := selected
+			var ob := _button("Fill with lamp oil" if oil else "Fill with lamp oil (you have none)", func():
+				if player.backpack.take("lamp_oil", 1):
+					lamp.condition = 1.0
+					player.message.emit("You fill the lantern. Good for about twelve hours."))
+			ob.disabled = oil == null
 		if d.id == "sleeping_bag":
 			_button("Roll it out and sleep here", func():
 				toggle()

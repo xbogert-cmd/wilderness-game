@@ -3,9 +3,8 @@ class_name Plant extends Node2D
 ## with a description of its look; once picked you know it, and after that the prompt names it
 ## before you gather, so you can leave what you don't want. Water hemlock looks a lot like
 ## yarrow, and is deadly to eat. Most die back in winter; rose hips and willow bark don't.
-## Regrows a few days after picking (per-chunk "picked" table, like berry bushes).
+## Grows back over a season of growing weather (per-chunk "picked" table, like berry bushes).
 
-const REGROW_HOURS := 96.0
 ## id -> [name, what it looks like before you know it, where, winter-hardy, journal entry]
 const SPECIES := {
 	"yarrow": ["Yarrow", "feathery leaves, flat clusters of tiny white flowers", "dry", false,
@@ -20,10 +19,20 @@ const SPECIES := {
 		"Wild rose: the hips stay on through winter. Tart, a little food, good for you."],
 	"arnica": ["Arnica", "a single yellow daisy on a hairy stem", "high", false,
 		"Arnica: yellow daisies in the high country. Rubbed on a sprain it takes the swelling down."],
+	"chanterelle": ["Chanterelles", "golden trumpet-shaped mushrooms in the moss", "forest", false,
+		"Chanterelles: golden, trumpet-shaped, ridges running down the stem instead of gills, smelling of apricots. Good eating."],
+	"fly_agaric": ["Fly agaric", "a red mushroom cap flecked with white", "forest", false,
+		"Fly agaric: the red mushroom with white flecks from the storybooks. Poisonous. Leave it be."],
+	"prickly_pear": ["Prickly pear", "a low cactus of flat spiny pads, red-purple fruit on the rims", "dry", true,
+		"Prickly pear: flat spiny pads in the dry country. The fruit is sweet once the spines are rubbed off."],
+	"yucca": ["Yucca", "a spiky rosette of stiff, sword-like leaves", "dry", true,
+		"Yucca: stiff sword-shaped leaves full of strong fibers. Strip them and twist the fiber into cord."],
 }
 const ACTION := {"yarrow": "Pick yarrow", "water_hemlock": "Pick water hemlock  (poisonous)", "mint": "Pick wild mint",
-	"willow": "Strip willow bark", "rose": "Pick rose hips", "arnica": "Pick arnica"}
-const ITEM := {"yarrow": "yarrow", "water_hemlock": "water_hemlock", "mint": "mint", "willow": "willow_bark", "rose": "rose_hips", "arnica": "arnica"}
+	"willow": "Strip willow bark", "rose": "Pick rose hips", "arnica": "Pick arnica", "chanterelle": "Pick chanterelles",
+	"fly_agaric": "Pick fly agaric  (poisonous)", "prickly_pear": "Pick prickly pears", "yucca": "Strip yucca fiber"}
+const ITEM := {"yarrow": "yarrow", "water_hemlock": "water_hemlock", "mint": "mint", "willow": "willow_bark", "rose": "rose_hips", "arnica": "arnica",
+	"chanterelle": "chanterelle", "fly_agaric": "fly_agaric", "prickly_pear": "prickly_pear", "yucca": "yucca_fiber"}
 
 var chunk: Chunk
 var n := 0
@@ -52,11 +61,14 @@ static func pick_for(biome: String, near_water: bool, rng: RandomNumberGenerator
 		"sage", "meadow", "valley": pool += ["yarrow", "yarrow", "rose", "rose", "yarrow"]
 		"marsh", "river": pool += ["willow", "mint", "water_hemlock", "rose"]
 		"foothills", "ridge", "burn": pool += ["arnica", "yarrow", "rose"]
-		"alpine": pool += ["arnica", "arnica", "yarrow"]
+		"alpine", "boulders": pool += ["arnica", "arnica", "yarrow"]
+		"desert", "canyon": pool = ["prickly_pear", "prickly_pear", "yucca", "yucca", "rose"] if not near_water else pool + ["willow", "mint"]
+		"oldgrowth": pool += ["chanterelle", "chanterelle", "fly_agaric", "fly_agaric", "mint"]
+		"grove": pool += ["yarrow", "rose", "chanterelle", "arnica"]
 	return pool[rng.randi() % pool.size()]
 
 func available() -> bool:
-	if GameClock.clock.hours - picked_hour < REGROW_HOURS:
+	if GameClock.clock.growing_hours(picked_hour) < GameClock.clock.season_hours(): # a season of growing weather
 		return false
 	if not SPECIES[species][3] and (GameClock.clock.season() == 3 or GameClock.weather.snow_cm > 10.0):
 		return false # died back for winter
@@ -154,6 +166,34 @@ func _draw() -> void:
 						draw_circle(tip, 3.6, Color("b83a2a"))
 					else:
 						draw_circle(tip, 4.0, Color("e8a0b8"))
+		"chanterelle":
+			for i in 4:
+				var x := -16.0 + i * 10.0
+				var h := rng.randf_range(14, 24)
+				draw_line(Vector2(x, 2), Vector2(x, -h), Color("d8a040"), 5.0)
+				draw_colored_polygon(PackedVector2Array([Vector2(x - 9, -h - 2), Vector2(x + 9, -h - 4), Vector2(x + 3, -h + 6), Vector2(x - 3, -h + 6)]), Color("e0a83a"))
+		"fly_agaric":
+			for i in 2:
+				var x := -10.0 + i * 20.0
+				var h := rng.randf_range(20, 32)
+				draw_line(Vector2(x, 2), Vector2(x, -h), Color("ece2c8"), 5.0)
+				draw_colored_polygon(PackedVector2Array([Vector2(x - 15, -h + 2), Vector2(x - 11, -h - 9), Vector2(x, -h - 13), Vector2(x + 11, -h - 9), Vector2(x + 15, -h + 2)]), Color("c42a1e"))
+				for k in 4:
+					draw_circle(Vector2(x - 8 + k * 5, -h - 5 - (k % 2) * 4), 1.8, Color.WHITE)
+		"prickly_pear":
+			var pads := [Vector2(0, -18), Vector2(-16, -40), Vector2(14, -44), Vector2(-2, -64)]
+			for i in pads.size():
+				var c: Vector2 = pads[i]
+				draw_colored_polygon(Transform2D(rng.randf_range(-0.4, 0.4), Vector2(1, 1.35), 0.0, c) * SceneryArt.blob(Vector2.ZERO, 14.0, rng, 10, 0.08), Color("6a8a4a").darkened(0.06 * i))
+				for k in 3:
+					draw_circle(c + Vector2(rng.randf_range(-8, 8), rng.randf_range(-12, 12)), 1.2, Color("e8e0b0"))
+				if available() and i > 0:
+					draw_circle(c + Vector2(6, -18), 5.0, Color("a02a5a"))
+		"yucca":
+			for i in 11:
+				var a := lerpf(-2.7, -0.45, i / 10.0)
+				var l := rng.randf_range(50, 80)
+				draw_line(Vector2(0, 0), Vector2.from_angle(a) * l, Color("7a8a5a").darkened(0.08 * (i % 2)), 4.0)
 		"arnica":
 			for i in 2:
 				var x := -6.0 + i * 12.0

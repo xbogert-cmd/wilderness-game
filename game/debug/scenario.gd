@@ -14,6 +14,8 @@ class_name Scenario extends Node
 ## the plane wreck, the log bridge, flares, the far lights, and old saves' maps.
 ## Mode "health": sickness, infection and fever, frostbite, wild plants and learning them,
 ## pot cooking (stews, teas), crafting from nearby chests, winter travel.
+## Mode "under": the root cellar, the cave and the mine (drop-through hatches, ladders, ropes,
+## the dark, flint and coal), the newest country, finds, springs, the falls, and regrowth.
 
 var player: Player
 var world: World
@@ -35,6 +37,7 @@ func _ready() -> void:
 		"predators": _predators.call_deferred()
 		"frontier": _frontier.call_deferred()
 		"health": _health.call_deferred()
+		"under": _under.call_deferred()
 		_: _run.call_deferred()
 
 func check(ok: bool, what: String) -> void:
@@ -288,7 +291,7 @@ func _run() -> void:
 	player.stow()
 	await teleport(camp_x + 3.0 * Terrain.CHUNK_W)
 	await frames(10)
-	check(get_tree().get_nodes_in_group("shelter").is_empty(), "camp unloaded when far away")
+	check(get_tree().get_nodes_in_group("shelter").filter(func(n): return not n is Underground).is_empty(), "camp unloaded when far away")
 	GameClock.clock.hours += 1.0 # time passes while away
 	await teleport(camp_x + 300.0)
 	await frames(10)
@@ -456,8 +459,8 @@ func _world_tour() -> void:
 	await frames(10)
 	check(lk.on_top(player), "up on the catwalk (%.0f px up)" % (lk.global_position.y - player.global_position.y))
 	await frames(30)
-	check(world.seen(0.0) and world.seen(Terrain.CREEK_X) and world.seen(Terrain.CRASH_X) and world.seen(Terrain.WORLD_MAX - 300.0) and not world.seen(Terrain.HOMESTEAD_X) and Journal.has("lookout"),
-		"the valley and the country east fill in from up here (the far west is too far)")
+	check(world.seen(0.0) and world.seen(Terrain.CREEK_X) and world.seen(Terrain.CRASH_X) and world.seen(73500.0) and not world.seen(Terrain.WORLD_MAX - 300.0) and not world.seen(Terrain.HOMESTEAD_X) and Journal.has("lookout"),
+		"the valley and the country east to the basin rim fill in from up here (the far west, and past the falls, are too far)")
 	var cam := get_viewport().get_camera_2d() as FollowCamera
 	check(cam.view_zoom == Lookout.VIEW_ZOOM, "the view pulls back over the valley")
 	var cupboard: Node2D = null
@@ -1517,7 +1520,7 @@ func _frontier() -> void:
 	while x < Terrain.WORLD_MAX - 1000.0:
 		seen_biomes[Terrain.biome(x)] = true
 		x += 500.0
-	check(seen_biomes.size() == 9, "nine kinds of country west to east: %s" % ", ".join(seen_biomes.keys()))
+	check(seen_biomes.size() == 14, "fourteen kinds of country west to east: %s" % ", ".join(seen_biomes.keys()))
 
 	# The river: drink and fill like the creek; wading it soaks you.
 	var rx: float = Terrain.WATERS[river].x
@@ -1584,7 +1587,7 @@ func _frontier() -> void:
 	await frames(5)
 	var hs := _site("homestead")
 	check(hs != null and Journal.has("homestead"), "found the old homestead")
-	hs.interact(player)
+	_run_option(_pick(_under_place("cellar"), "shelves"), "Search") # (the cellar has its own check in "under")
 	await frames(60 * 4)
 	check(Journal.has("diary_1") and Journal.has("diary_2") and player.backpack.count_of("tinned_beans") >= 2, "the root cellar: tins and a diary")
 	Player.choices_of(hs, player)[0][1].call()
@@ -1602,7 +1605,7 @@ func _frontier() -> void:
 	Player.choices_of(cr, player)[0][1].call()
 	await frames(60 * 4)
 	check((player.backpack.count_of("sealed_case") == 1 or (player.held and player.held.def.id == "sealed_case") or get_tree().get_nodes_in_group("interactable").any(func(n): return n is WorldItem and n.stack.def.id == "sealed_case")) and Journal.has("survivor_note"), "the cargo: a sealed case, and M's note")
-	check(world.seen(Terrain.WORLD_MAX - 1000.0), "the survey map fills in the basin")
+	check(world.seen(73000.0), "the survey map fills in the basin")
 
 	# A flare scatters wolves.
 	var wolf := _wl().spawn_predator(Wildlife.WOLF, player.global_position.x + 900.0, 9)
@@ -1897,3 +1900,350 @@ func _polish() -> void:
 	amb._cue("dawn", -6.0)
 	check(amb.music.stream == amb._cues.night, "and music stays rare: no cue on top of another")
 	amb.music.stop()
+
+# --- Mode "under": the cellar, the cave and the mine; regrowth; the newest country -------
+
+func _under_place(kind: String) -> Underground:
+	for u in get_tree().get_nodes_in_group("underground"):
+		if u.kind == kind:
+			return u
+	return null
+
+## Walks the player (auto_dir) until cond holds or frames run out.
+func _walk(dir: float, cond: Callable, max_frames := 900) -> bool:
+	player.auto_dir = dir
+	var ok := await _wait_until(cond, max_frames) < max_frames
+	player.auto_dir = 0.0
+	await frames(4)
+	return ok
+
+func _pick(u: Underground, id: String) -> Node:
+	for c in u.get_children():
+		if c is Underground.Spot and c.id == id:
+			return c
+	return null
+
+func _run_option(n: Node, label_has: String) -> bool:
+	for o in Player.choices_of(n, player):
+		if label_has in o[0]:
+			o[1].call()
+			return true
+	return false
+
+func _finish_work() -> void:
+	await _wait_until(func(): return player.working <= 0.0 and not player.climbing and player._errand.is_empty(), 1200)
+	await frames(4)
+
+func _under() -> void:
+	await frames(10)
+	GameClock.clock.hours = 12.0
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	var t := world.terrain
+
+	# The newest country, both ends, and every hollow carved cleanly with ground over it.
+	var seen_biomes := {}
+	var x := Terrain.WORLD_MIN + 1000.0
+	while x < Terrain.WORLD_MAX - 1000.0:
+		seen_biomes[Terrain.biome(x)] = true
+		x += 500.0
+	for b in ["desert", "canyon", "boulders", "oldgrowth", "grove"]:
+		check(seen_biomes.has(b), "the %s is out there" % b)
+	check(t.height_at(-35000.0) - t.height_at(-29000.0) > 500.0, "the canyon floor lies well below the desert")
+	check(t.height_at(84000.0) - t.height_at(70000.0) > 1200.0, "the forest lies far below the basin")
+	for ux in Underground.PLACES:
+		var kind: String = Underground.PLACES[ux]
+		var o := Underground.origin_of(ux, t)
+		var h: Array = Underground.HATCH[kind]
+		var worst := INF
+		for v in Underground.CAVITY[kind]:
+			if v[0] >= minf(h[0], h[1]) - 5.0 and v[0] <= maxf(h[0], h[1]) + 5.0:
+				continue
+			worst = minf(worst, o.y + v[1] - t.height_at(ux + v[0] * Underground.DIR[kind]))
+		check(worst > 50.0, "%s: ground over the whole hollow (thinnest %.0f px)" % [kind, worst])
+		var i := t.chunk_of(ux)
+		var ground := PackedVector2Array()
+		var gx := i * Terrain.CHUNK_W - 40.0
+		while gx <= (i + 1) * Terrain.CHUNK_W + 40.0:
+			ground.append(Vector2(gx, t.height_at(gx)))
+			gx += 40.0
+		ground.append(Vector2(gx, Chunk.DEPTH))
+		ground.append(Vector2(i * Terrain.CHUNK_W - 40.0, Chunk.DEPTH))
+		check(Geometry2D.clip_polygons(ground, Underground.cavity_world(kind, ux, t)).size() == 1, "%s: the ground stays one piece" % kind)
+
+	# The root cellar: walk right over its door; S takes you down the steps.
+	var door_x := Terrain.HOMESTEAD_X + 180.0
+	await teleport(door_x + 400.0)
+	await frames(20)
+	var cellar := _under_place("cellar")
+	check(cellar != null, "the homestead has a root cellar")
+	check(await _walk(-1.0, func(): return player.global_position.x < door_x - 200.0), "walked across the cellar door")
+	check(player.underground == null and absf(player.global_position.y - t.height_at(player.global_position.x)) < 20.0, "and stayed on top of it")
+	await teleport(door_x)
+	await frames(10)
+	player.go_down()
+	await frames(40)
+	check(player.global_position.y > t.height_at(player.global_position.x) + 5.0, "S drops you through the door onto the steps")
+	player.held = ItemStack.make("torch", GameClock.clock.hours)
+	check(await _walk(-1.0, func(): return player.under > 0.9, 600), "down the steps into the cellar")
+	check(player.underground == cellar and world.sheltered_at(player.global_position.x), "it's shelter")
+	var atm: Atmosphere = get_tree().get_root().find_children("*", "Atmosphere", true, false)[0]
+	await frames(4)
+	check(atm.canvas_mod.color.get_luminance() < 0.2, "and dark at midday (%.2f)" % atm.canvas_mod.color.get_luminance())
+	check(player._torch_light.visible and player._torch_light.energy > 0.7, "the torch lights it up")
+	check(player.noise() == 0.0 and player.visibility() == 0.0, "nothing up top can hear or see you")
+	player.cond.warmth = 50.0
+	var shelves := _pick(cellar, "shelves")
+	var before_beans := player.backpack.count_of("tinned_beans")
+	await teleport_under(shelves.global_position.x, shelves.global_position.y)
+	check(player.focus == shelves, "at the shelves")
+	check(_run_option(shelves, "Search"), "search the shelves")
+	await _finish_work()
+	check(player.backpack.count_of("preserves") == 2 and player.backpack.count_of("tinned_beans") == before_beans + 2 and Journal.has("diary_1"), "preserves, beans and the diary")
+	player.drop_stack(player.backpack.find(func(st): return st.def.id == "preserves"))
+	await frames(4)
+	var dropped: WorldItem = null
+	for n in get_tree().get_nodes_in_group("persist"):
+		if n is WorldItem and n.stack.def.id == "preserves":
+			dropped = n
+	check(dropped != null and dropped.global_position.y > t.height_at(dropped.global_position.x) + 100.0, "a dropped jar lands on the cellar floor, not up top")
+	var saved := dropped.to_state() if dropped else {}
+	check(saved.has("y"), "and it keeps its place down there when saved")
+	if dropped:
+		player.receive(dropped.stack)
+		dropped.queue_free()
+	check(await _walk(1.0, func(): return player.underground == null and player.global_position.x > door_x + 80.0, 900), "walked back up the steps and out")
+	player.held = null
+
+	# The cave: a fallen log over a sinkhole, a scree slope, a gallery, a rope down a shaft.
+	var cave_x := Terrain.ECHO_CAVE_X
+	await teleport(cave_x - 400.0)
+	await frames(20)
+	var cave := _under_place("cave")
+	check(cave != null, "the foothills have a cave")
+	check(await _walk(1.0, func(): return player.global_position.x > cave_x + 400.0), "walked over the log across the sinkhole")
+	check(player.underground == null, "and didn't fall in")
+	await teleport(cave_x + 100.0)
+	player.held = ItemStack.make("torch", GameClock.clock.hours)
+	player.go_down()
+	await frames(30)
+	check(await _walk(1.0, func(): return player.global_position.x > cave_x + 1375.0, 1200), "down the scree into the gallery")
+	check(player.under > 0.9, "deep underground (%.2f)" % player.under)
+	await frames(10)
+	check(absf(player.global_position.y - (cave.global_position.y + 400.0)) < 20.0, "standing on the ledge over the shaft")
+	player.go_down()
+	check(player.climbing, "S at the ledge: down the rope")
+	await _finish_work()
+	check(player.global_position.y > cave.global_position.y + 800.0, "at the bottom of the shaft")
+	var pool := _pick(cave, "pool")
+	await teleport_under(pool.global_position.x, pool.global_position.y)
+	player.hold(player.backpack.find(func(st): return st.def.id == "water_bottle"))
+	player.held.water = 0.0
+	check(_run_option(pool, "Fill"), "fill the bottle at the pool")
+	check(player.held.water > 0.5 and player.held.water_clean, "cave water is clean")
+	player.stow()
+	var tin := _pick(cave, "tin")
+	await teleport_under(tin.global_position.x, tin.global_position.y)
+	_run_option(tin, "Open")
+	await _finish_work()
+	check(player.backpack.count_of("matches") >= 1, "an old tin of matches")
+	var glyphs := _pick(cave, "glyphs")
+	await teleport_under(glyphs.global_position.x, glyphs.global_position.y)
+	_run_option(glyphs, "marks")
+	check(Journal.has("glyphs"), "the paintings go in the journal")
+	var flint: Node = null
+	for c in cave.get_children():
+		if c is Underground.Deposit:
+			flint = c
+			break
+	await teleport_under(flint.global_position.x - 60.0, flint.global_position.y)
+	player.facing = 1
+	player.draw_slot(0) # the axe
+	await frames(4)
+	check(player.chop_target == flint, "the axe finds the flint")
+	for k in 20:
+		if not is_instance_valid(flint):
+			break
+		await swing()
+	check(player.backpack.count_of("flint") >= 2, "broke out flint (%d)" % player.backpack.count_of("flint"))
+	player.stow()
+	var up := _pick(cave, "up_0")
+	await teleport_under(up.global_position.x, up.global_position.y)
+	check(_run_option(up, "Climb"), "climb the rope")
+	await _finish_work()
+	check(player.global_position.y < cave.global_position.y + 420.0, "back up in the gallery")
+	check(await _walk(-1.0, func(): return player.underground == null and player.global_position.x < cave_x - 90.0, 1500), "up the scree and out into daylight")
+	player.held = null
+
+	# The mine: planks over a shaft under a headframe; the ladder down; a collapse to clear.
+	await teleport(Terrain.MINE_X + 400.0)
+	await frames(20)
+	var mine := _under_place("mine")
+	check(mine != null, "the Lucky Boy mine is in the canyon")
+	check(await _walk(-1.0, func(): return player.global_position.x < Terrain.MINE_X - 200.0), "walked across the planks over the shaft")
+	await teleport(Terrain.MINE_X + 20.0)
+	await frames(6)
+	var hatch := _pick(mine, "hatch")
+	check(player.focus == hatch, "the shaft has a prompt (%s)" % (player.focus.interact_label(player) if player.focus else "none"))
+	player.go_down()
+	check(player.climbing, "down the ladder")
+	await _finish_work()
+	check(player.global_position.y > mine.global_position.y + 650.0, "at the bottom of the shaft")
+	var block: Node = null
+	for c in mine.get_children():
+		if c is Underground.Block:
+			block = c
+	check(block != null, "the drift is blocked by a collapse")
+	check(await _walk(1.0, func(): return player.global_position.x > Terrain.MINE_X + 900.0, 400) == false, "can't get past it")
+	player.facing = 1
+	player.draw_slot(0)
+	await frames(4)
+	for k in 20:
+		if not is_instance_valid(block):
+			break
+		await swing()
+	check(not is_instance_valid(block), "cleared the fallen timbers with the axe")
+	player.stow()
+	var cache := _pick(mine, "cache")
+	check(await _walk(1.0, func(): return player.focus == cache, 900), "through to the miners' cache")
+	_run_option(cache, "Search")
+	await _finish_work()
+	check(player.backpack.count_of("lantern") == 1 and player.backpack.count_of("lamp_oil") == 2 and Journal.has("mine_log"), "a lantern, lamp oil and the shift book")
+	player.hold(player.backpack.find(func(st): return st.def.id == "lantern"))
+	await frames(4)
+	check(player._torch_light.visible, "the lantern lights the drift")
+	var oil := player.held.condition
+	GameClock.force_weather(Weather.Kind.RAIN)
+	player._on_tick(3.0)
+	check(player.held != null and player.held.def.id == "lantern" and absf(player.held.condition - (oil - 0.25)) < 0.01, "it burns its oil steadily, rain or not")
+	GameClock.force_weather(Weather.Kind.CLEAR)
+	player.stow()
+	var ladder := _pick(mine, "up_0")
+	await teleport_under(ladder.global_position.x, ladder.global_position.y)
+	_run_option(ladder, "Climb")
+	await _finish_work()
+	check(player.underground == null and absf(player.global_position.y - t.height_at(player.global_position.x)) < 30.0, "up the ladder into daylight")
+
+	# Flint lights a fire when the lighter's gone (it needs the knife); matches too.
+	for s in player.backpack.all_stacks():
+		if s.def.id in ["lighter", "matches"]:
+			s.uses_left = 0
+	var fire: Campfire = world.spawn({"kind": "campfire", "x": player.global_position.x + 60.0, "fuel": 2.0, "lit": false})
+	await frames(4)
+	var lit_opt := Player.choices_of(fire, player).filter(func(o): return "flint" in o[0])
+	check(lit_opt.size() == 1, "the fire offers the flint")
+	if lit_opt:
+		lit_opt[0][1].call()
+		await _finish_work()
+	check(fire.lit, "sparks from the flint catch")
+	fire.queue_free()
+
+	# Juniper Spring: clean water in the dry country.
+	var si := -1
+	for k in Terrain.WATERS.size():
+		if Terrain.WATERS[k].get("clean", false):
+			si = k
+	await teleport(Terrain.WATERS[si].x - 60.0)
+	await frames(10)
+	var spring := Creek.reachable(player)
+	player.hold(player.backpack.find(func(st): return st.def.id == "water_bottle"))
+	player.held.water = 0.0
+	spring.interact(player)
+	check(player.held.water > 0.5 and player.held.water_clean, "spring water is clean")
+	player.stow()
+
+	# New plants where they belong; things to come across everywhere.
+	var kinds := {}
+	for cx in [-40000.0, -34000.0, -28000.0, 80000.0, 86000.0, 92000.0]:
+		await teleport(cx)
+		await frames(10)
+		for p in get_tree().get_nodes_in_group("plant"):
+			kinds[p.species] = true
+	for sp in ["prickly_pear", "yucca", "chanterelle", "fly_agaric"]:
+		check(kinds.has(sp), "%s grows out there" % sp)
+	var finds := get_tree().get_root().find_children("*", "Find", true, false)
+	check(finds.size() > 0, "things to come across (%d here)" % finds.size())
+	var fly := ItemStack.make("fly_agaric", GameClock.clock.hours)
+	player.held = fly
+	var hp := player.cond.health
+	player.use_held()
+	check(player.cond.health < hp - 10.0, "fly agaric is poison")
+	player.held = null
+	player.cond.health = 100.0
+	player.cond.incubating = 0.0
+	var searched := 0
+	for k in 12:
+		await teleport(Terrain.WORLD_MIN + 3000.0 + k * 11000.0)
+		await frames(6)
+		for f in get_tree().get_root().find_children("*", "Find", true, false):
+			if f.interact_label(player) != "" and f.kind in ["bottle", "wagon", "fire_ring", "hollow_log"] and not f.found():
+				f.interact(player)
+				check(f.found() and f.interact_label(player) == "", "searched %s once" % f.kind)
+				searched += 1
+				break
+		if searched >= 2:
+			break
+	check(searched >= 1, "found something to search")
+
+	# The falls.
+	await teleport(Terrain.FALLS_X - 500.0)
+	await frames(10)
+	check(get_tree().get_root().find_children("*", "Waterfall", true, false).size() == 1, "the falls pour into their pool")
+
+	# Regrowth: a tree comes back from its stump in about three seasons; berries in a season
+	# of growing weather (winter doesn't count).
+	var season := GameClock.clock.season_hours()
+	GameClock.clock.hours = 24.0 * 3.0 # early autumn
+	await teleport(3000.0)
+	await frames(10)
+	var tree: ChoppableTree = null
+	for n in get_tree().get_nodes_in_group("choppable"):
+		if n is ChoppableTree and absf(n.global_position.x - player.global_position.x) < 1500.0:
+			tree = n
+			break
+	await teleport(tree.global_position.x - 70.0)
+	player.facing = 1
+	player.draw_slot(0)
+	await frames(4)
+	for k in 40:
+		if tree.felled:
+			break
+		await swing()
+	await frames(140)
+	check(tree.felled and tree.felled_at >= 0.0 and not tree.art.visible, "felled: just a stump")
+	GameClock.clock.hours += season * 1.5
+	tree._grow_check = 0.0
+	await frames(3)
+	check(tree.art.visible and tree.art.scale.x < 0.9 and tree.felled, "a season and a half on: a sapling (%.2f)" % tree.art.scale.x)
+	GameClock.clock.hours += season * 1.6
+	tree._grow_check = 0.0
+	await frames(3)
+	check(not tree.felled and tree.is_in_group("choppable") and not world.chunk_state(tree.chunk.index).felled.has(str(tree.n)), "three seasons on: a full tree again")
+	player.stow()
+	var clock := GameClock.clock
+	clock.hours = 24.0 * 3.0 # early autumn
+	var picked := clock.hours
+	clock.hours += season * 0.8
+	check(clock.growing_hours(picked) < season, "not a season yet")
+	clock.hours = picked + season * 2.2 # through autumn and winter to spring
+	check(clock.growing_hours(picked) < season * 1.3 and clock.growing_hours(picked) > season * 1.1, "winter doesn't count toward growing (%.2f seasons)" % (clock.growing_hours(picked) / season))
+	check(clock.growing_hours(-INF) == INF, "never picked is always ready")
+
+	# Maps from the last world (one size smaller) pad out to this one.
+	var old := PackedByteArray()
+	old.resize(int((Terrain.OLD_MAX - Terrain.OLD_MIN) / World.MAP_CELL))
+	old.fill(0)
+	old[world._cell(Terrain.CREEK_X) - world._cell(Terrain.OLD_MIN)] = 1
+	var keep := world.explored
+	world.set_explored(old)
+	check(world.explored.size() == World.MAP_CELLS and world.seen(Terrain.CREEK_X), "an older map lines up with the bigger world")
+	world.explored = keep
+
+	print("scenario failures: ", failures)
+	get_tree().quit(failures)
+
+## Puts the player on the floor down in a hollow at x (teleport only knows the ground up top).
+func teleport_under(x: float, near_y := NAN) -> void:
+	var y := world.floor_y(x, (player.global_position.y if is_nan(near_y) else near_y) - 60.0)
+	player.global_position = Vector2(x, y - 4.0)
+	player.velocity = Vector2.ZERO
+	await frames(8)

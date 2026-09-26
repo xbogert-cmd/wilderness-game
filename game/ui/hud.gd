@@ -197,7 +197,7 @@ func _prompts() -> Array:
 	if player.sleeping or player.dead or player.climbing:
 		return []
 	var out := []
-	if player.chop_target is FelledTrunk:
+	if player.chop_target is FelledTrunk or player.chop_target is Underground.Deposit or player.chop_target is Underground.Block:
 		out.append([_anchor(player.chop_target), "use", player.chop_target.chop_label(player)])
 	var f := player.focus
 	if f and f.is_in_group("camp"):

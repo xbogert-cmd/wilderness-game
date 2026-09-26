@@ -58,7 +58,7 @@ func _process(_delta: float) -> void:
 	if cam:
 		cam.view_zoom = VIEW_ZOOM if up else 0.0
 	if up: # the valley, the ridges and the country east lie open; the far west is too far
-		world.explore_range(-3000.0, Terrain.WORLD_MAX)
+		world.explore_range(-3000.0, 74000.0) # as far as the basin rim; the falls drop out of sight beyond
 		Journal.note("lookout", "Climbed the fire lookout on the east ridge. From the catwalk the whole valley lies open: the creek, the foothills, the rock shelter, and my own smoke, if the fire is lit. The cab is dry and out of the wind.")
 	elif absf(p.global_position.x - global_position.x) < 1600.0:
 		Journal.note("ridge", "Reached the summit ridge. The lookout tower stands right above me, taller than it looked from the valley.")

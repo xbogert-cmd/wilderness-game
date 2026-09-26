@@ -45,6 +45,8 @@ func label(now: float) -> String:
 		s += " — empty" if water <= 0.001 else " — %.2f L %s" % [water, "clean" if water_clean else "DIRTY"]
 	if def.uses > 0:
 		s += " (%d left)" % uses_left
+	if def.has("light"):
+		s += " — oil %d%%" % int(condition * 100)
 	return s
 
 ## Adds water; refuses (returns 0) rather than silently mixing clean and dirty.

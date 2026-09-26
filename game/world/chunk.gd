@@ -31,6 +31,9 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	var ground := surface.duplicate()
 	ground.append(Vector2(x1, DEPTH))
 	ground.append(Vector2(x0, DEPTH))
+	for ux in Underground.PLACES: # the cellar, the cave, the mine: hollows in the ground
+		if _contains(ux):
+			ground = Underground.carve(ground, Underground.PLACES[ux], ux, terrain)
 	var body := StaticBody2D.new()
 	var shape := CollisionPolygon2D.new()
 	shape.polygon = ground
@@ -68,8 +71,21 @@ func build(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 			site.kind = Site.PLACES[sx]
 			site.position = Vector2(sx, terrain.height_at(sx))
 			add_child(site)
+	for ux in Underground.PLACES:
+		if _contains(ux):
+			var u := Underground.new()
+			u.world = world
+			u.chunk_index = index
+			u.kind = Underground.PLACES[ux]
+			u.position = Vector2(ux, terrain.height_at(ux))
+			add_child(u)
+	if _contains(Terrain.FALLS_X):
+		var f := Waterfall.new()
+		f.terrain = terrain
+		add_child(f)
 	_vines(terrain, world_seed, st)
 	_plants(terrain, world_seed, st)
+	_finds(terrain, world_seed)
 	_snow = _snow_poly(2)
 	_lip = _snow_poly(8)
 	_trail = _trail_poly()
@@ -80,7 +96,7 @@ func _vines(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 	rng.seed = hash([world_seed, index, "vines"])
 	for k in 5:
 		var x := index * Terrain.CHUNK_W + rng.randf_range(300.0, Terrain.CHUNK_W - 300.0)
-		if _near_creek(x, 150.0) or not _open(x):
+		if _near_creek(x, 150.0) or not _open(x) or Underground.in_opening(x):
 			continue
 		var v := VineTangle.new()
 		var id := 1000 + k # clear of the tree/bush ids in the same "picked" table
@@ -96,13 +112,31 @@ func _plants(terrain: Terrain, world_seed: int, st: Dictionary) -> void:
 		var x := index * Terrain.CHUNK_W + rng.randf_range(250.0, Terrain.CHUNK_W - 250.0)
 		var wet := terrain.water_index(x, 900.0) >= 0 or Terrain.marsh(x) > 0.5
 		var sp := Plant.pick_for(Terrain.biome(x), wet, rng)
-		if terrain.water_surface_at(x) != INF or not _open(x) or absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF or absf(x - Terrain.LOOKOUT_X) < 300.0:
+		if terrain.water_surface_at(x) != INF or not _open(x) or absf(x - Terrain.CAVE_X) < Terrain.CAVE_HALF or absf(x - Terrain.LOOKOUT_X) < 300.0 or Underground.in_opening(x):
 			continue
 		var id := 2000 + k # clear of the tree, bush and vine ids in the "picked" table
 		var p := Plant.new()
 		p.setup(self, id, sp, st.picked.get(str(id), -INF))
 		p.position = Vector2(x, terrain.height_at(x) + 2.0)
 		add_child(p)
+
+## Things to come across (bones, an old fire ring, a bottle...), on their own seed.
+func _finds(terrain: Terrain, world_seed: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([world_seed, index, "finds"])
+	for k in 5:
+		var x := index * Terrain.CHUNK_W + rng.randf_range(300.0, Terrain.CHUNK_W - 300.0)
+		var kind := Find.pick_for(Terrain.biome(x), rng)
+		var keep := rng.randf() < 0.7 # not every stretch has something
+		if kind == "" or not keep or not _open(x) or _near_creek(x, 200.0) or Underground.in_opening(x, 250.0) \
+				or Site.PLACES.keys().any(func(sx): return absf(x - sx) < 800.0) \
+				or absf(x - Terrain.CAVE_X) < 900.0 or absf(x - Terrain.LOOKOUT_X) < 600.0 or absf(x - Terrain.FALLS_X) < 700.0 \
+				or absf(x - 900.0) < 700.0: # nothing at the trailhead
+			continue
+		var f := Find.new()
+		f.setup(self, 3000 + k, kind)
+		f.position = Vector2(x, terrain.height_at(x) + 2.0)
+		add_child(f)
 
 ## Dashes of packed, hoof-worn earth along each game trail crossing this chunk.
 func _trail_poly() -> Polygon2D:
@@ -187,7 +221,11 @@ func _soil_bands(surface: PackedVector2Array, terrain: Terrain) -> Polygon2D:
 			var mud: bool = r[0] < 20.0 and terrain.soft_at(p.x)
 			var c: Color = r[1]
 			if r[0] < 20.0: # drier, stonier topsoil going east
-				c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x))
+				c = c.lerp(Palette.ROCK.darkened(0.25), 0.45 * Terrain.foothills(p.x) * (0.2 if Terrain.biome(p.x) in ["oldgrowth", "grove"] else 1.0))
+				if p.x < -25000.0: # red sand in the dry country
+					c = c.lerp(Color("a0704a") if r[0] < 5.0 else Color("8a5a3a"), smoothstep(-25000.0, -27500.0, p.x))
+				elif p.x > 78000.0 and p.x < 89000.0: # dark duff under the big trees
+					c = c.lerp(Color("3a2e20"), 0.6 * smoothstep(78000.0, 80000.0, p.x))
 			cols.append(MUD if mud else c)
 	for row in rows.size() - 1:
 		for i in n - 1:
@@ -210,11 +248,21 @@ func _near_creek(x: float, margin: float) -> bool:
 func legacy() -> bool:
 	return index >= 0 and index <= 7
 
-## Clear of the world's edges (and of where the old edges were, in the original chunks).
+## Clear of the world's edges (and of where the old edges were, in the chunks that had them:
+## their scatter must not shift, or the trees in older saves would stop lining up).
 func _open(x: float) -> bool:
 	if index == 0 and x < 400.0: return false
 	if index == 7 and x > 47600.0: return false
+	if index == -4 and x < Terrain.OLD_MIN + 400.0: return false
+	if index == 11 and x > Terrain.OLD_MAX - 400.0: return false
 	return Terrain.inside(x, 400.0)
+
+## Adds scenery, unless it would stand across an opening into the ground.
+func _add(node: Node2D) -> void:
+	if Underground.in_opening(node.position.x):
+		node.free()
+	else:
+		add_child(node)
 
 func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, low_mat: Material, st: Dictionary) -> void:
 	var x := index * Terrain.CHUNK_W + rng.randf_range(0, 300)
@@ -239,23 +287,28 @@ func _scatter_trees(terrain: Terrain, rng: RandomNumberGenerator, mat: Material,
 				var art := SceneryArt.conifer(rng, h, Palette.FIR_DARK, Palette.FIR_LIGHT, Palette.BARK, mat) if conifer \
 					else SceneryArt.broadleaf(rng, h, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT, Palette.ASPEN_BARK, mat)
 				var tree := ChoppableTree.new()
-				tree.setup(self, n, h, conifer, art, st.felled.has(str(n)))
+				tree.setup(self, n, h, conifer, art, float(st.felled.get(str(n), -1.0)))
 				tree.position = pos
 				tree.z_index = -10
-				add_child(tree)
+				_add(tree)
 			elif roll < bush_cut:
 				var w := rng.randf_range(90, 170)
 				var bush := BerryBush.new()
 				bush.setup(self, n, SceneryArt.bush(rng, w, Palette.BUSH, low_mat), w, rng.randf() < 0.4, st.picked.get(str(n), -INF))
 				bush.position = pos
-				add_child(bush)
+				_add(bush)
 			else:
 				var rock := SceneryArt.rock(rng, rng.randf_range(60, 150) * (1.0 + 0.9 * fh), low_mat)
 				rock.position = pos
-				add_child(rock)
+				_add(rock)
 		x += rng.randf_range(180, 520)
 
 const GRASS_COLORS := {
+	"desert": [Color("a09a6a"), Color("b8a878")],
+	"canyon": [Color("9a8a5a"), Color("b09870")],
+	"boulders": [Color("6f7d52"), Color("8a8a5a")],
+	"oldgrowth": [Color("4a6a36"), Color("5a7a40")],
+	"grove": [Color("7d9a45"), Palette.GRASS_DRY],
 	"sage": [Color("8a8a5a"), Palette.GRASS_DRY],
 	"meadow": [Color("7d8a45"), Palette.GRASS_DRY],
 	"marsh": [Color("5e7a3a"), Color("6f8a42")],
@@ -275,6 +328,8 @@ func _scatter_wild(terrain: Terrain, world_seed: int, mat: Material, low_mat: Ma
 		var b := Terrain.biome(x)
 		var pos := Vector2(x, terrain.height_at(x) + 6)
 		var clear := Site.PLACES.keys().any(func(sx): return absf(x - sx) < 700.0)
+		if index < -4 or index > 11: # the newest country: room around the mine's headframe and the falls
+			clear = clear or absf(x - Terrain.MINE_X) < 450.0 or absf(x - Terrain.FALLS_X) < 650.0
 		var roll := rng.randf()
 		var gap := rng.randf_range(160, 480)
 		if _near_creek(x, 90.0) or clear or not _open(x):
@@ -344,16 +399,63 @@ func _scatter_wild(terrain: Terrain, world_seed: int, mat: Material, low_mat: Ma
 				elif roll < 0.75:
 					node = SceneryArt.rock(rng, rng.randf_range(90, 240), low_mat)
 				gap *= 1.2
+			"desert": # junipers, sage and rabbitbrush, cholla, red rock
+				if roll < 0.14:
+					node = _tree(rng, n, rng.randf_range(320, 520), true, Color("2f4a3e"), Color("41604c"), Palette.BARK, mat, st)
+				elif roll < 0.5:
+					node = SceneryArt.bush(rng, rng.randf_range(45, 85), Color("8a9a7a") if roll < 0.35 else Color("9a9a5a"), low_mat)
+				elif roll < 0.68:
+					node = SceneryArt.cholla(rng, rng.randf_range(70, 130), low_mat)
+				elif roll < 0.85:
+					node = SceneryArt.rock(rng, rng.randf_range(50, 130), low_mat, SceneryArt.SANDSTONE, SceneryArt.SANDSTONE_LIGHT)
+				gap *= 1.15
+			"canyon": # red boulders fallen from the walls, a few junipers and cottonwoods by the wash
+				if roll < 0.12:
+					node = _tree(rng, n, rng.randf_range(360, 560), true, Color("2f4a3e"), Color("41604c"), Palette.BARK, mat, st)
+				elif roll < 0.2 and absf(x + 36300.0) < 900.0:
+					node = _tree(rng, n, rng.randf_range(900, 1200), false, Color("6f8a45"), Color("8a9e55"), Color("a8a090"), mat, st) # cottonwood by the wash
+				elif roll < 0.55:
+					node = SceneryArt.rock(rng, rng.randf_range(80, 280), low_mat, SceneryArt.SANDSTONE, SceneryArt.SANDSTONE_LIGHT)
+				elif roll < 0.75:
+					node = SceneryArt.bush(rng, rng.randf_range(45, 80), Color("9a9a5a"), low_mat)
+				elif roll < 0.85:
+					node = SceneryArt.cholla(rng, rng.randf_range(60, 110), low_mat)
+				gap *= 1.2
+			"boulders": # talus: boulders the size of cabins, a few twisted firs
+				if roll < 0.6:
+					node = SceneryArt.rock(rng, rng.randf_range(150, 420), low_mat)
+				elif roll < 0.78:
+					node = _tree(rng, n, rng.randf_range(300, 560), true, Color("2a4032"), Color("3a5540"), Palette.BARK, mat, st)
+				gap *= 0.9
+			"oldgrowth": # giants, ferns, fallen logs gone to moss
+				if roll < 0.42:
+					node = _tree(rng, n, rng.randf_range(1800, 2600), true, Color("1f3a2c"), Color("2e4c38"), Color("5a3a2a"), mat, st) # cedar and fir
+				elif roll < 0.72:
+					node = SceneryArt.fern(rng, rng.randf_range(70, 140), Palette.FERN, low_mat)
+				elif roll < 0.82:
+					node = SceneryArt.nurse_log(rng, rng.randf_range(300, 600), low_mat)
+				elif roll < 0.92:
+					node = SceneryArt.bush(rng, rng.randf_range(100, 170), Color("3e5a32"), low_mat)
+				gap *= 0.85
+			"grove": # a grove of aspens, all one root; berries at the edges
+				if roll < 0.62:
+					node = _tree(rng, n, rng.randf_range(750, 1150), false, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT, Palette.ASPEN_BARK, mat, st)
+				elif roll < 0.8:
+					var w := rng.randf_range(90, 160)
+					var bush := BerryBush.new()
+					bush.setup(self, n, SceneryArt.bush(rng, w, Palette.BUSH, low_mat), w, rng.randf() < 0.5, st.picked.get(str(n), -INF))
+					node = bush
+				gap *= 0.8
 		if node:
 			if node.position == Vector2.ZERO:
 				node.position = pos
-			add_child(node)
+			_add(node)
 		x += gap
 
 func _tree(rng: RandomNumberGenerator, n: int, h: float, conifer: bool, dark: Color, light: Color, bark: Color, mat: Material, st: Dictionary) -> ChoppableTree:
 	var art := SceneryArt.conifer(rng, h, dark, light, bark, mat) if conifer else SceneryArt.broadleaf(rng, h, dark, light, bark, mat)
 	var tree := ChoppableTree.new()
-	tree.setup(self, n, h, conifer, art, st.felled.has(str(n)))
+	tree.setup(self, n, h, conifer, art, float(st.felled.get(str(n), -1.0)))
 	tree.z_index = -10
 	return tree
 
@@ -366,8 +468,12 @@ func _grass(terrain: Terrain, rng: RandomNumberGenerator, mat: Material, x0: flo
 	var cols: Array = GRASS_COLORS.get(Terrain.biome((x0 + x1) * 0.5), [Palette.GRASS, Palette.GRASS_DRY]) if not legacy() else [Palette.GRASS, Palette.GRASS_DRY]
 	while x < x1:
 		if terrain.water_surface_at(x) == INF:
-			if terrain.soft_at(x) and Terrain.marsh(x) < 0.5 and rng.randf() < 0.85:
+			if Underground.in_opening(x, 10.0):
+				pass # nothing grows over a hole in the ground
+			elif terrain.soft_at(x) and Terrain.marsh(x) < 0.5 and rng.randf() < 0.85:
 				pass # bare mud (the marsh is all sedge and grass instead)
+			elif not legacy() and Terrain.biome(x) in ["desert", "canyon", "boulders"] and rng.randf() < 0.55:
+				pass # bare sand and rock between the tufts
 			elif not legacy() and Terrain.biome(x) == "burn" and rng.randf() < 0.5:
 				pass # burnt ground, only patchy regrowth
 			elif rng.randf() < 0.7:

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "yucca_fiber"
+name = "Yucca Fiber"
+shape = Array[Vector2i]([Vector2i(0, 0)])
+weight = 0.1
+color = Color(0.70,0.70,0.48, 1)
+tags = PackedStringArray("fibre")
+max_stack = 9
+description = "Strong fibers stripped from yucca leaves. Twist three together into cord, like vines."

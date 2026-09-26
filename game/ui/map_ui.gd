@@ -144,6 +144,17 @@ func _draw() -> void:
 			draw_line(g + Vector2(8, 0), g + Vector2(0, -14), INK, 2.0)
 			draw_line(g + Vector2(-8, 0), g + Vector2(8, 0), INK, 2.0)
 			_label(g + Vector2(0, -22), {"homestead": "Old homestead", "trapper": "Trapper's camp", "crash": "Plane wreck"}[Site.PLACES[sx]])
+	for ux in Underground.PLACES: # ways underground
+		if world.seen(ux) and Underground.PLACES[ux] != "cellar":
+			var g := _ground(ux)
+			draw_arc(g + Vector2(0, 4), 10.0, PI, TAU, 10, INK, 3.0)
+			draw_line(g + Vector2(0, 4), g + Vector2(0, 16), INK, 2.0)
+			_label(g + Vector2(0, -20), {"cave": "Cave", "mine": "Lucky Boy mine"}[Underground.PLACES[ux]])
+	if world.seen(Terrain.FALLS_X):
+		var g := _ground(Terrain.FALLS_X - 400.0)
+		for k in 3:
+			draw_line(g + Vector2(-3 + k * 3, -24), g + Vector2(-3 + k * 3, 0), Color(0.3, 0.5, 0.62), 2.0)
+		_label(g + Vector2(0, -32), "The falls")
 	# What you've built.
 	for d in _structures():
 		var sx := float(d.get("x", 0.0))

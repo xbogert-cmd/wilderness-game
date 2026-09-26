@@ -31,6 +31,22 @@ func day() -> int:
 func year_pos() -> float:
 	return fposmod(START_YEAR + hours / 24.0 / (days_per_season * 4.0), 1.0)
 
+func season_hours() -> float:
+	return days_per_season * 24.0
+
+## Hours of growing weather since `since`: winter doesn't count (nothing grows under snow).
+func growing_hours(since: float) -> float:
+	if since == -INF:
+		return INF
+	return _grown(hours) - _grown(since)
+
+## Growing hours from the start of year zero up to game hour h.
+func _grown(h: float) -> float:
+	var year := season_hours() * 4.0
+	var u := START_YEAR * year + h
+	var y := floorf(u / year)
+	return y * season_hours() * 3.0 + minf(u - y * year, season_hours() * 3.0)
+
 func season() -> int:
 	return int(year_pos() * 4.0) % 4
 

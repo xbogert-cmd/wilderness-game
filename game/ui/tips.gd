@@ -11,7 +11,7 @@ var _t := 0.0
 var _age := 0.0
 
 ## [id, condition, text]; text may use {interact}, {use}, {lift}, {backpack}, {build}, {rest},
-## {crouch}, {slot_1}, {slot_2} which become the player's actual keys.
+## {crouch}, {slot_1}, {slot_2}, {move_down} which become the player's actual keys.
 func _rules() -> Array:
 	var p := player
 	var c := p.cond
@@ -69,6 +69,14 @@ func _rules() -> Array:
 		["blizzard", GameClock.weather.blizzard() > 0.3, "A blizzard. The wind cuts through your clothes and you can barely see. Shelter, a fire, and wait it out."],
 		["deep", GameClock.weather.snow_cm > 30.0 and not p.backpack.wearing("snowshoes"), "Deep snow. Snowshoes (workbench: sticks, a tanned hide, cord) keep you on top of it; a sled (build menu) hauls loads over it."],
 		["icefish", Creek.frozen() and f is Creek and f.w().fish, "Frozen over. Chop a hole (E) and you can fish through it: the fish gather under the ice."],
+		["hatch", f is Underground.Spot and f.id == "hatch", "There's a way down here. Walk over it as usual, or press {move_down} standing on it (or {interact}) to go down."],
+		["dark", p.under > 0.6 and not (p.holding("torch") or p.holding("light")), "It's pitch dark down here. Light a torch at a fire, or find a lantern, before you go further."],
+		["ledge", p.underground != null and p.underground.kind == "cave", "Ledges down here work like ground: walk along them, or press {move_down} to drop through. Ropes climb with {interact}."],
+		["mine", f is Underground.Deposit or f is Underground.Block, "Hold the axe and swing ({use}) to break it."],
+		["lantern", p.backpack.count_of("lantern") > 0 or p.holding("light"), "A lantern: hold it for steady light that rain can't put out. Refill it from lamp oil in the pack."],
+		["flint", p.backpack.count_of("flint") > 0, "Flint: when the lighter runs dry, strike it on your knife to light a fire. Slower, but it lasts."],
+		["spring", f is Creek and f.clean(), "A spring: water straight out of the ground. Safe to drink without boiling."],
+		["regrow", p.chop_target is ChoppableTree and p.world.chunk_state(p.chop_target.chunk.index).felled.size() > 3, "Cut trees come back: a sapling from the stump, full grown in about three seasons. Berries and plants take a season (not counting winter)."],
 		["snare", p.backpack.count_of("snare") > 0, "Set a snare from the build menu ({build}) and check it at dawn. A rabbit left hanging too long gets taken."],
 	]
 
@@ -126,6 +134,6 @@ func _process(delta: float) -> void:
 			return # one at a time
 
 static func _keys(text: String) -> String:
-	for a in ["interact", "use", "lift", "backpack", "build", "rest", "crouch", "slot_1", "slot_2"]:
+	for a in ["interact", "use", "lift", "backpack", "build", "rest", "crouch", "slot_1", "slot_2", "move_down"]:
 		text = text.replace("{%s}" % a, "[%s]" % Keys.label(a))
 	return text

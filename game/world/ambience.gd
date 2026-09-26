@@ -59,12 +59,12 @@ func _place_creek() -> void:
 	var best := -1
 	for i in Terrain.WATERS.size():
 		var w: Dictionary = Terrain.WATERS[i]
-		if w.kind in ["creek", "river"] and (best < 0 or absf(w.x - player.global_position.x) < absf(Terrain.WATERS[best].x - player.global_position.x)):
+		if w.kind in ["creek", "river", "pool"] and (best < 0 or absf(w.x - player.global_position.x) < absf(Terrain.WATERS[best].x - player.global_position.x)):
 			best = i
 	var wd: Dictionary = Terrain.WATERS[best]
 	creek.position = Vector2(wd.x, terrain.surface_of(best))
-	creek.volume_db = 4.0 if wd.kind == "river" else 0.0
-	creek.max_distance = 4200.0 if wd.kind == "river" else 3200.0
+	creek.volume_db = {"river": 4.0, "pool": 9.0}.get(wd.kind, 0.0) # the pool is the falls: a roar
+	creek.max_distance = {"river": 4200.0, "pool": 5200.0}.get(wd.kind, 3200.0)
 	creek.stream_paused = Creek.frozen() and GameClock.weather.ice > 0.9 # frozen hard: silence
 
 func _process(delta: float) -> void:
@@ -77,11 +77,14 @@ func _process(delta: float) -> void:
 	var night := 1.0 - smoothstep(0.0, 0.15, day)
 	var hush := 1.0 - (0.85 if w.storm_warning() else 0.0) # wildlife goes quiet before rain
 	var rain_mask := 1.0 - w.precip * 0.8 # snow hushes the forest too
-	_gain("forest_day", smoothstep(0.05, 0.4, day) * hush * rain_mask * 0.9, delta)
-	_gain("dusk", clampf(twilight, 0.0, 1.0) * hush * rain_mask * 0.7, delta)
-	_gain("night_crickets", night * rain_mask * (1.0 if w.air_temp_c(c) > 4.0 else 0.2) * 0.6, delta)
-	_gain("wind_trees", clampf(w.wind * 1.1, 0.05, 1.0), delta)
-	_gain("rain", w.rain(), delta)
+	var below := 1.0 - 0.85 * player.under # underground the world up top goes faint
+	var b := Terrain.biome(player.global_position.x)
+	var birds: float = {"desert": 0.4, "canyon": 0.4, "boulders": 0.3, "alpine": 0.5}.get(b, 1.0) * below # fewer birds in the dry and the high country
+	_gain("forest_day", smoothstep(0.05, 0.4, day) * hush * rain_mask * 0.9 * birds, delta)
+	_gain("dusk", clampf(twilight, 0.0, 1.0) * hush * rain_mask * 0.7 * below, delta)
+	_gain("night_crickets", night * rain_mask * (1.0 if w.air_temp_c(c) > 4.0 else 0.2) * 0.6 * below, delta)
+	_gain("wind_trees", clampf(w.wind * (0.5 if b == "oldgrowth" else 1.1), 0.05, 1.0) * below, delta) # the big timber breaks the wind
+	_gain("rain", w.rain() * below, delta)
 
 	# Music is rare so it means something: a storm building, some nightfalls and dawns, and
 	# the first time the lights are seen (or the wreck found).

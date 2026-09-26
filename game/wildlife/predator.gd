@@ -111,12 +111,12 @@ func _smells_player() -> bool:
 	if not is_wolf() or player.dead:
 		return false
 	var d := absf(player.global_position.x - position.x)
-	return d < def.scent * 0.8 and player.smells_of_meat()
+	return d < def.scent * 0.8 and player.smells_of_meat() and player.under < 0.3
 
 ## Wolves only close in after dark on someone who's hurt or carrying meat, and not at a camp.
 func _bold() -> bool:
 	return is_wolf() and _night() and (player.cond.health < 55.0 or player.smells_of_meat()) \
-		and not _off_limits(player.global_position.x) and not player.sleeping
+		and not _off_limits(player.global_position.x) and not player.sleeping and player.under < 0.3
 
 # --- Brain -------------------------------------------------------------------------
 
@@ -141,7 +141,7 @@ func _physics_process(delta: float) -> void:
 func _decide() -> void:
 	var px := player.global_position.x
 	var d := absf(px - position.x)
-	if player.sleeping and d < 900.0 and not _off_limits(px):
+	if player.sleeping and d < 900.0 and not _off_limits(px) and player.under < 0.3:
 		player.wake("Something is moving close by. You're awake at once.")
 	if state == State.FLEE:
 		if _timer <= 0.0 and absf(position.x - _threat_x) > 1600.0 and not _off_limits(position.x):
@@ -154,7 +154,7 @@ func _decide() -> void:
 		return
 	if state in [State.LUNGE, State.BACK_OFF, State.BLUFF]:
 		return
-	if not is_wolf() and not player.dead and not _off_limits(px):
+	if not is_wolf() and not player.dead and not _off_limits(px) and player.under < 0.3:
 		var guarding := state == State.FEED
 		if d < 420.0 or (guarding and d < 650.0):
 			var pushed := Time.get_ticks_msec() / 1000.0 - _warned < 25.0 # came back after the warning

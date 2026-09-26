@@ -1,8 +1,8 @@
 class_name Site extends Node2D
 ## Places people left behind, each with things to search and pages for the journal:
-## the old homestead in the western meadow (root cellar, a grave), the trapper's camp on the
-## Sweetwater (a cache, a carving), and the bush plane down in the burn past the lookout
-## (cockpit, cargo, and footprints walking away east). The wreck is shelter to sleep in.
+## the old homestead in the western meadow (a grave, and its root cellar: see Underground),
+## the trapper's camp on the Sweetwater (a cache, a carving), and the bush plane down in the
+## burn past the lookout (cockpit, cargo, and footprints walking away east). The wreck is shelter to sleep in.
 ## Everything found is kept in the chunk's state, so each spot is searched once.
 
 const PLACES := {Terrain.HOMESTEAD_X: "homestead", Terrain.TRAPPER_X: "trapper", Terrain.CRASH_X: "crash"}
@@ -49,6 +49,8 @@ func covers(x: float) -> bool: # the wreck's fuselage keeps the weather off
 	return kind == "crash" and absf(x - (global_position.x - 40.0)) < 150.0
 
 func interact_pos() -> Vector2:
+	if kind == "homestead": # only the grave is left to read here (the cellar door has its own prompt)
+		return global_position + Vector2(-400, 0)
 	var p: Player = get_tree().get_first_node_in_group("player")
 	var h: float = HALF[kind] - 60.0
 	return Vector2(clampf(p.global_position.x, global_position.x - h, global_position.x + h), global_position.y)
@@ -59,9 +61,7 @@ func interact_title(_p: Player) -> String:
 func interact_options(p: Player) -> Array:
 	var out := []
 	match kind:
-		"homestead":
-			if not _found("cellar"):
-				out.append(["Search the root cellar", _search.bind(p, "cellar")])
+		"homestead": # (the root cellar is under the cabin: go down through its door)
 			out.append(["Read the grave marker", _read.bind(p, "grave")])
 		"trapper":
 			if not _found("cache"):
@@ -92,11 +92,6 @@ func _search(p: Player, spot: String) -> void:
 	p.work(3.0, 0.3, "Searching", func():
 		_mark(spot)
 		match spot:
-			"cellar":
-				_give(p, [["tinned_beans", 2], ["cordage", 1], ["bandage", 1]])
-				p.message.emit("Under the collapsed door: two old tins of beans, a coil of rope, a roll of bandage, and a diary.")
-				Journal.note("diary_1", "Homesteader's diary, found in the root cellar. \"June 3, 1921. Lights over the east ridge again tonight, three of them, moving slow along the top like lanterns carried by someone walking. Pa says it's swamp gas. There's no swamp up there.\"")
-				Journal.note("diary_2", "The diary, last page: \"Aug 30. The cattle won't graze the east end anymore. Pa went up the ridge to see for himself. He said don't come looking. I will give it three days.\"")
 			"cache":
 				_give(p, [["snare", 3], ["arrows", 4], ["jerky", 2]])
 				p.message.emit("A tin trunk wired shut against the animals: snares, arrows, jerky, and a notebook.")
@@ -107,7 +102,7 @@ func _search(p: Player, spot: String) -> void:
 				Journal.note("pilot_log", "The pilot's log: \"Oct 18. N4471K, cargo for the survey camp. Weather closing on the ridge. 23:40, every instrument dead at once, radio too. Lights off the nose, pacing us. Not aircraft. Going down in the burn.\" The same night the lookout keeper saw the lights.")
 			"cargo":
 				_give(p, [["sealed_case", 1], ["tinned_beans", 3]])
-				world.explore_range(Terrain.LOOKOUT_X, Terrain.WORLD_MAX)
+				world.explore_range(Terrain.LOOKOUT_X, 74000.0)
 				p.message.emit("Crates of tins, a survey map of the basin, and one steel case, sealed. There's a gap where a second case was lashed.")
 				Journal.note("survivor_note", "A note tucked under the cargo straps: \"If anyone finds this: Dale didn't make it. I'm taking the other case east to the survey camp like we were paid to. The lights came down to the treeline after we crashed and just... waited. Don't open the case. — M.\"")
 				Journal.note("case", "The sealed case is stencilled U.S. GEOLOGICAL SURVEY. Locked tight, and oddly warm to the touch, even in the cold.")
@@ -148,8 +143,8 @@ func _homestead(rng: RandomNumberGenerator) -> void:
 		for c in 2:
 			var cc := Vector2(-40 + c * 30.0 + (row % 2) * 12.0, -10.0 - row * 22.0)
 			draw_colored_polygon(SceneryArt.blob(cc, 15.0, rng, 7, 0.2), Palette.ROCK.darkened(0.1 + 0.12 * rng.randf()))
-	for k in 5: # split-rail fence, gone grey
-		var x := 220.0 + k * 60.0
+	for k in 5: # split-rail fence, gone grey (east of the cellar door)
+		var x := 340.0 + k * 60.0
 		draw_line(Vector2(x, 4), Vector2(x, -70), log_c, 6.0)
 		if k < 4:
 			draw_line(Vector2(x, -55), Vector2(x + 60.0, -52 + (12.0 if k == 2 else 0.0)), log_c.lightened(0.1), 5.0)

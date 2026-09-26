@@ -184,7 +184,10 @@ func interact_options(p: Player) -> Array:
 	for f in in_hand:
 		out.append([f[0], _add_fuel.bind(p, f)])
 	if not lit and fuel > 0.0:
-		out.append(["Light fire" if _lighter(p) else "Need a lighter", _light_fire.bind(p)])
+		if p.holding("torch"):
+			out.append(["Light the fire from your torch", _light_from_torch.bind(p)])
+		var l := _lighter(p)
+		out.append([("Strike sparks with the flint" if l.def.id == "flint" else "Light fire") if l else "Need a lighter, matches or flint", _light_fire.bind(p)])
 	for f in feeds:
 		if f not in in_hand:
 			out.append([f[0], _add_fuel.bind(p, f)])
@@ -241,11 +244,6 @@ func _douse(p: Player) -> void:
 	lit = false
 	p.message.emit("You kick dirt over the fire. The fuel that's left will light again.")
 
-func _lighter(p: Player) -> ItemStack:
-	if p.held and p.held.def.has("lighter") and p.held.uses_left > 0:
-		return p.held
-	return p.backpack.find(func(s): return s.def.has("lighter") and s.uses_left > 0)
-
 func _pour(from: ItemStack, to: ItemStack, p: Player) -> void:
 	var before := to.water
 	var err := from.pour_into(to)
@@ -293,14 +291,36 @@ func _cook(p: Player) -> void:
 	p.work(3.0, 0.3, "Cooking " + raw.def.name.to_lower(), func():
 		p.receive(ItemStack.make(raw.def.cooks_into, GameClock.clock.hours, raw.count)))
 
+## The lighter first (quickest), then matches, then flint struck on the knife.
+func _lighter(p: Player) -> ItemStack:
+	for id in ["lighter", "matches", "flint"]:
+		if p.held and p.held.def.id == id and p.held.uses_left > 0:
+			return p.held
+		var s := p.backpack.find(func(s): return s.def.id == id and s.uses_left > 0)
+		if s:
+			return s
+	return null
+
 func _light_fire(p: Player) -> void:
 	var l := _lighter(p)
 	if l == null:
-		p.message.emit("You need a lighter.")
+		p.message.emit("You need a lighter, matches or flint.")
+		return
+	if l.def.id == "flint":
+		if not (p.holding("knife") or p.backpack.count_of("#knife") > 0):
+			p.message.emit("Flint needs steel to strike on: your knife.")
+			return
+		p.work(2.5, 0.1, "Striking sparks", func():
+			l.uses_left -= 1
+			lit = true
+			p.message.emit("A spark takes in the tinder. You blow it into flame. (%d strikes left in the flint)" % l.uses_left))
 		return
 	l.uses_left -= 1
 	lit = true
-	p.message.emit("The kindling catches. (%d strikes left)" % l.uses_left)
+	p.message.emit("The kindling catches. (%d %s left)" % [l.uses_left, "matches" if l.def.id == "matches" else "strikes"])
+
+func _light_from_torch(_p: Player) -> void:
+	lit = true
 
 func _add_fuel(p: Player, f: Array) -> void:
 	match f[2]:

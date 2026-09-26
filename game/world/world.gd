@@ -88,11 +88,13 @@ const MAP_CELLS := int((Terrain.WORLD_MAX - Terrain.WORLD_MIN) / MAP_CELL)
 func _cell(x: float) -> int:
 	return int(floor((x - Terrain.WORLD_MIN) / MAP_CELL))
 
-## Older saves mapped only the original valley (x from 0): pad it out to the whole world.
+## Older saves mapped a smaller world: pad it out to the whole of it. The original valley
+## started at x 0; the first wider world at Terrain.OLD_MIN.
 func set_explored(a: PackedByteArray) -> void:
-	if a.size() == int(48000.0 / MAP_CELL):
+	var old_start := {int(48000.0 / MAP_CELL): 0.0, int((Terrain.OLD_MAX - Terrain.OLD_MIN) / MAP_CELL): Terrain.OLD_MIN}
+	if a.size() != MAP_CELLS and old_start.has(a.size()):
 		var west := PackedByteArray()
-		west.resize(_cell(0.0))
+		west.resize(_cell(old_start[a.size()]))
 		west.fill(0)
 		west.append_array(a)
 		a = west
@@ -109,6 +111,11 @@ func explore(x: float) -> void:
 		"sage": Journal.note("sage", "Out on the sage flats at the western edge of the valley. Open country, wind, a small creek, and not much cover.")
 		"burn": Journal.note("burn", "Down the far side of the ridge into an old burn: standing dead trees, fireweed, black ground. Quiet here.")
 		"alpine": Journal.note("alpine", "Up into a high basin with a tarn, a small cold lake under the peaks. Twisted little firs and boulders.")
+		"desert": Journal.note("desert", "West of the sage the country dries out to semi-desert: junipers, cactus, yucca, red rock. Hotter by day. Water is scarce out here.")
+		"canyon": Journal.note("canyon", "The dry country breaks off into a canyon, red walls and a dry wash along the floor. Someone worked a mine down here once.")
+		"boulders": Journal.note("boulders", "East of the tarn the basin rim is a field of boulders the size of cabins, cold even at noon.")
+		"oldgrowth": Journal.note("oldgrowth", "Below the falls: old-growth forest. Cedars and firs so big three people couldn't reach around them, moss over everything, dim at midday.")
+		"grove": Journal.note("grove", "The far east end of the country: a great aspen grove on rising benches. All one tree underneath, they say, joined at the root.")
 
 func explore_range(a: float, b: float) -> void:
 	if explored.size() != MAP_CELLS:
@@ -215,6 +222,21 @@ func heat_at(p: Vector2) -> float:
 	for f in get_tree().get_nodes_in_group("heat"):
 		h = maxf(h, f.heat_at(p))
 	return h
+
+## The cellar, cave or mine a point (feet) is down in, if any.
+func under_at(pos: Vector2) -> Underground:
+	for u in get_tree().get_nodes_in_group("underground"):
+		if u.inside(pos):
+			return u
+	return null
+
+## The floor under a point: down in a cave or cellar, the floor there (not the ground up top).
+func floor_y(x: float, near_y: float) -> float:
+	if under_at(Vector2(x, near_y)) == null:
+		return ground_y(x)
+	var q := PhysicsRayQueryParameters2D.create(Vector2(x, near_y - 40.0), Vector2(x, near_y + 300.0), 1)
+	var hit := get_world_2d().direct_space_state.intersect_ray(q)
+	return hit.position.y if hit else near_y
 
 func sheltered_at(x: float) -> bool:
 	for s in get_tree().get_nodes_in_group("shelter"):

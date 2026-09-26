@@ -1,8 +1,7 @@
 class_name VineTangle extends Node2D
-## Wild vines trailing over the ground. Gather them (they regrow in a few days) and twist
+## Wild vines trailing over the ground. Gather them (they grow back in a season) and twist
 ## three into a cord: string for a bow or a fishing line.
 
-const REGROW_HOURS := 96.0
 const YIELD := 2
 
 var chunk: Chunk
@@ -20,8 +19,9 @@ func setup(c: Chunk, id: int, picked: float) -> void:
 	add_to_group("interactable")
 	z_index = 2
 
+## Grows back over one season of growing weather (winter doesn't count).
 func ripe() -> bool:
-	return GameClock.clock.hours - picked_hour >= REGROW_HOURS
+	return GameClock.clock.growing_hours(picked_hour) >= GameClock.clock.season_hours()
 
 func _process(_delta: float) -> void:
 	var turn := snappedf(GameClock.clock.leaf_turn(), 0.1)

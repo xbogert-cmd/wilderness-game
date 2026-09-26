@@ -1,11 +1,14 @@
 class_name ChoppableTree extends Node2D
 ## A standing tree in the gameplay plane. Chop it down with an axe: each blow bites a
 ## deeper notch on your side and throws chips, and it creaks and falls away from you,
-## leaving a stump plus a FelledTrunk to strip and buck into logs.
+## leaving a stump plus a FelledTrunk to strip and buck into logs. The stump rots away as a
+## sapling comes up in its place: a full tree again after about three seasons.
 
 const FALL_TIME := 1.7 ## matches the crash in sfx/tree_fall.wav
 const NOTCH_Y := -46.0 ## notch height above the ground
 const TREE_FALL := preload("res://assets/audio/sfx/tree_fall.wav")
+const REGROW_SEASONS := 3.0
+const SPROUT := 0.1 ## growth at which the sapling shows
 
 var chunk: Chunk
 var n := 0
@@ -15,10 +18,14 @@ var art: Node2D
 var hp := 10.0
 var max_hp := 10.0
 var felled := false
+var felled_at := -1.0 ## game hour it came down (-1 standing)
+var _stump: Node2D
+var _grow_check := 0.0
 var _notch: Polygon2D ## the cut, drawn into the trunk art so it falls with the tree
 var _chips: CPUParticles2D
 
-func setup(c: Chunk, id: int, h: float, is_conifer: bool, tree_art: Node2D, already_felled: bool) -> void:
+## felled_hour: when it was cut (-1 standing). A tree cut long enough ago has grown back.
+func setup(c: Chunk, id: int, h: float, is_conifer: bool, tree_art: Node2D, felled_hour: float) -> void:
 	chunk = c
 	n = id
 	height = h
@@ -26,13 +33,50 @@ func setup(c: Chunk, id: int, h: float, is_conifer: bool, tree_art: Node2D, alre
 	art = tree_art
 	hp = h / 100.0 * 1.2
 	max_hp = hp
-	felled = already_felled
+	add_child(art)
+	felled_at = felled_hour
+	if felled_at >= 0.0 and growth() >= 1.0:
+		chunk.world.chunk_state(chunk.index).felled.erase(str(n))
+		felled_at = -1.0
+	felled = felled_at >= 0.0
 	if felled:
-		art.free() # generated only to keep the chunk's rng sequence stable
-		add_child(_stump())
+		_stump = _make_stump()
+		add_child(_stump)
+		_show_growth()
 	else:
-		add_child(art)
 		add_to_group("choppable")
+
+## 0 just cut, 1 a full tree again.
+func growth() -> float:
+	return (GameClock.clock.hours - felled_at) / (REGROW_SEASONS * GameClock.clock.season_hours())
+
+## The stump shrinks as it rots; the sapling comes up where the tree stood.
+func _show_growth() -> void:
+	var g := clampf(growth(), 0.0, 1.0)
+	art.visible = g >= SPROUT
+	art.scale = Vector2.ONE * lerpf(0.08, 1.0, smoothstep(SPROUT, 1.0, g))
+	art.rotation = 0.0
+	_stump.scale = Vector2.ONE * (1.0 - 0.7 * smoothstep(0.3, 1.0, g))
+
+func _process(delta: float) -> void:
+	if not felled or felled_at < 0.0 or _stump == null:
+		return
+	_grow_check -= delta
+	if _grow_check > 0.0:
+		return
+	_grow_check = 2.0
+	if growth() < 1.0:
+		_show_growth()
+		return
+	felled = false # grown back
+	felled_at = -1.0
+	chunk.world.chunk_state(chunk.index).felled.erase(str(n))
+	_stump.queue_free()
+	_stump = null
+	art.scale = Vector2.ONE
+	art.visible = true
+	hp = max_hp
+	add_to_group("choppable")
 
 func girth() -> float:
 	return height * (0.03 if conifer else 0.024)
@@ -60,13 +104,22 @@ func hit(p: Player, power: float, _aim: Vector2) -> void:
 func _fell(dir: float) -> void:
 	felled = true
 	remove_from_group("choppable")
+	var seedling := art.duplicate() # what grows back in its place (without the notch)
+	if _notch:
+		seedling.get_child(_notch.get_index()).free()
 	Sfx.play_at(self, global_position + Vector2(0, -200), TREE_FALL, 2.0)
 	chunk.world.mark(chunk.index, "felled", n)
 	var tw := create_tween()
 	tw.tween_property(art, "rotation", dir * PI * 0.5, FALL_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func():
 		art.queue_free()
-		add_child(_stump())
+		art = seedling
+		_notch = null
+		add_child(art)
+		_stump = _make_stump()
+		add_child(_stump)
+		felled_at = GameClock.clock.hours
+		_show_growth()
 		chunk.world.spawn({"kind": "trunk", "x": global_position.x, "dir": dir, "length": height * 0.82,
 			"girth": girth(), "branches": int(height / 260.0), "conifer": conifer})
 		get_viewport().get_camera_2d().shake(8.0))
@@ -113,7 +166,7 @@ func _cut(side: float) -> void:
 	_chips.direction = Vector2(side, -0.6)
 	_chips.restart()
 
-func _stump() -> Node2D:
+func _make_stump() -> Node2D:
 	var g := girth()
 	var s := Polygon2D.new()
 	s.polygon = PackedVector2Array([Vector2(-g * 0.7, 4), Vector2(g * 0.7, 4), Vector2(g * 0.55, -g * 0.9), Vector2(-g * 0.55, -g * 0.7)])

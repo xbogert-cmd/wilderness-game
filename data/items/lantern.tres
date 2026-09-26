@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "lantern"
+name = "Miner's Lantern"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1)])
+weight = 0.9
+color = Color(0.36,0.40,0.36, 1)
+tags = PackedStringArray("light", "attachable")
+max_stack = 1
+description = "A tin lantern with a glass chimney. Hold it for steady light that rain can't put out: about twelve hours on a fill of lamp oil."

@@ -22,7 +22,7 @@ const STRUCTURES := {
 
 const RECIPES := {
 	"splint": {"needs": {"sticks": 2, "bandage": 1}, "hours": 0.25, "seconds": 2.0},
-	"vine_cord": {"needs": {"vine": 3}, "hours": 0.3, "seconds": 2.0},
+	"vine_cord": {"needs": {"#fibre": 3}, "hours": 0.3, "seconds": 2.0},
 	"fishing_pole": {"needs": {"sticks": 2, "#line": 1}, "hours": 0.3, "seconds": 2.5}, # line & hooks, or vine cord and a carved hook
 	# "bench": needs a workbench close by.
 	"bow": {"needs": {"sticks": 3, "#cord": 1}, "hours": 1.0, "seconds": 3.0, "bench": true}, # paracord or vine cord

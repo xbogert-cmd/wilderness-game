@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "glass_bottle"
+name = "Glass Bottle"
+shape = Array[Vector2i]([Vector2i(0, 0), Vector2i(0, 1)])
+weight = 0.3
+color = Color(0.55,0.70,0.62, 1)
+tags = PackedStringArray("container")
+max_stack = 1
+capacity = 0.75
+description = "An old glass bottle, dug out of the ground and rinsed. Holds 0.75 L."

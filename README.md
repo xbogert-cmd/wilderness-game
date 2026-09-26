@@ -27,7 +27,7 @@ godot
 | Z | Sleep under a shelter, or anywhere with your sleeping bag (out in the open the rain gets you and it isn't camp); time runs about 60× faster, and any key wakes you |
 | Esc | Pause menu: save to slots 1–3 (only when safe), load any slot or the autosave |
 | F5 | Quicksave to slot 1 |
-| W/S | Bound; climbing and deeper wading arrive later |
+| S | Go down: standing on a cellar door, a log over a sinkhole, planks over a shaft, or a ledge underground, S takes you down (E does too). Otherwise you just walk over them |
 
 **Camp, sleep, and death:** building or sleeping in a lean-to makes it your camp, which is your respawn point and triggers an autosave (the game also autosaves every 5 minutes when you're safe). If you die, you wake at camp without your pack, which stays where you fell. Food spoils, tools come back duller, and some consumables scatter, but nothing irreplaceable is ever lost. Walk back and press E to recover it.
 
@@ -46,6 +46,16 @@ godot
 
 **The whole country, west to east:** the sage flats and Alder Creek at the western edge, an old homestead in a meadow, a marsh with a pond, the Sweetwater River (chest-deep and cold: build a *log bridge*, 4 long and 2 medium logs, over it or any creek) with an old trapper's camp on its east bank, then the valley. Past the lookout the land drops into an old burn where a bush plane came down, then climbs to a high basin with a tarn. Each biome has its own plants and trees. The homestead, the trapper's camp and the wreck each have things to search (E shows the choices) and pages for the journal; the wreck is shelter. Some nights, from the ridge or anywhere east of it, pale lights move along the far skyline. Signal flares (from the wreck) light up the sky and scatter anything wild.
 
+**Further still:** west of the sage the country dries into semi-desert (junipers, cholla, prickly pear, yucca, red rock) around *Juniper Spring*, whose water is clean to drink unboiled, and breaks into a red-walled canyon with the old *Lucky Boy mine* on its floor. East of the tarn a boulder field runs to the basin rim, where the tarn's outlet pours over *the falls* into a deep pool; below lies old-growth forest along Cedar Creek (huge cedars and firs, ferns, mossy logs, mushrooms), and at the far east end a great aspen grove. Dry country runs warmer, the rocks and the deep timber cooler.
+
+**Underground:** the homestead's *root cellar* (down the steps under a board door), a *cave* in the foothills (drop through under a fallen log over a sinkhole, down a scree slope to a gallery, then a rope down a shaft to a lower chamber with a clear pool, flint, a bear's den, fossils and something painted on the rock), and the *Lucky Boy mine* (a ladder down the shaft under the headframe, a drift with rails and an ore cart, a collapse to clear with the axe, a coal seam, and a miners' cache). Openings are walked over like ground: S (or E) takes you down. Ledges drop through with S; ladders and ropes climb with E. It's pitch dark down there without a torch or lantern, sheltered, and about 8 °C all year; nothing up top can see or hear you. Break flint and coal out of their seams with the axe.
+
+**Regrowth:** felled trees come back: a sapling grows up where the stump rots away, full grown in about three seasons. Berries, vines and wild plants grow back after a season of growing weather (winter doesn't count).
+
+**Things to come across:** bleached bones and steer skulls on the flats, shed antlers, old fire rings (sometimes a tin or matches), wagon wheels sinking into the sage (boards for firewood), glass bottles half-buried near water (a second water bottle), brass survey benchmarks on high rocks, squirrels' hoards in hollow logs, rusted traps, lone graves. Each fits the country it's in.
+
+**Light and fire:** matches and flint light fires when the lighter runs dry (flint needs your knife and a moment to strike sparks), and a torch in hand lights a laid fire. The miner's *lantern* gives steady light that rain can't put out, for about twelve hours per can of lamp oil (fill it from the pack). Coal burns long.
+
 **The wider world:** east of the creek valley the land climbs through rockier foothills (fewer aspens, more boulders) past a *rock shelter*, then up the ridge to the *fire lookout* (about 450 m of country in all). The rock shelter is dry and a little warmer than outside, somewhere to sleep, and someone left a cache there. At the lookout, E at the ladder climbs the tower, hand over hand: the view pulls back, the whole map fills in, the cab is shelter to sleep in, and the keeper's cupboard holds supplies and the logbook. Don't step off the catwalk.
 
 **Map and journal (M):** the map is the land's profile as you've seen it (unexplored stretches stay blank), with the trailhead, creek, rock shelter, lookout, your camp and structures, a dropped pack, game trails you've crossed, and you. The field journal writes itself the first time things happen or are found: making camp, first snow, the seasons turning, your first deer, the rock shelter, the lookout, and pages left by the last keeper.
@@ -60,7 +70,7 @@ godot
 
 **Health:** unboiled water, raw or spoiled food can make you sick a few hours later (hunger and thirst drain faster, you tire). An open cut left unbandaged festers into infection and fever; bite wounds especially. Bare hands (and bare legs in deep snow) frostbite while you're freezing; a fire brings them back. All of it comes on slowly with warnings, is treatable, and left alone for a couple of days can kill.
 
-**Wild plants:** yarrow (wounds, infection), wild mint (a sick stomach), willow bark (fever), rose hips (a little food; they last into winter), arnica (sprains), and water hemlock, which looks like yarrow and is deadly. Until you've picked a kind it's "an unknown plant" with a description; after that it's named before you gather, so you can leave what you don't want. Most die back in winter.
+**Wild plants:** yarrow (wounds, infection), wild mint (a sick stomach), willow bark (fever), rose hips (a little food; they last into winter), arnica (sprains), and water hemlock, which looks like yarrow and is deadly. In the dry country prickly pear (fruit) and yucca (fiber that twists into cord like vines); in the old-growth chanterelles (good eating) and fly agaric (poison). Until you've picked a kind it's "an unknown plant" with a description; after that it's named before you gather, so you can leave what you don't want. Most die back in winter.
 
 **Cooking and camp supply:** with the pot hanging over a lit fire, E offers stews (2 meat or fish and 1 berries, rose hips or beans: three hot bowls that warm you and wet your throat) and herb teas (stronger than chewing the herb). Crafting, cooking and blueprints at camp use what's in the pack first, then any storage chest (or the sled's load) nearby: you walk over, rummage, and walk back before the work starts.
 
@@ -76,7 +86,7 @@ godot
 
 **Wind, trails, bait, calls:** the wind has a direction (arrow, bottom right): it blows up the valley toward the ridge by day and back down at night, turning around 9:00 and 19:00, and a passing front can reverse it. It carries your scent: a deer downwind smells you from 8-17 m depending on the wind, blind or no blind, so come at deer from downwind. Each part of the valley has a game trail, a worn path between bedding cover and a feeding ground; deer bed there by day and walk it at dawn and dusk. A *bait pile* (4 berries, via B) draws active deer within 26 m to feed until it's eaten or goes off in two days. A *deer call* (bench, 1 stick) bleats: curious deer walk toward you, but a third call in a short while makes them wary.
 
-**Vines and cord:** vine tangles trail over the ground (they regrow in a few days). Three vines twist into vine cord in the backpack. Recipes ask for "cord" (paracord or vine cord: bow, hide coat) or "line" (line & hooks, or vine cord with a carved hook: fishing pole).
+**Vines and cord:** vine tangles trail over the ground (they grow back in a season). Three vines (or yucca fiber) twist into vine cord in the backpack. Recipes ask for "cord" (paracord or vine cord: bow, hide coat) or "line" (line & hooks, or vine cord with a carved hook: fishing pole).
 
 **Chopping:** every blow sounds, throws chips and bites a deeper notch on your side of the trunk; the tree creaks, rushes down and crashes. The chop and fall sounds are synthesized (`tools/synth_audio.py`).
 
@@ -101,7 +111,8 @@ godot --headless --fixed-fps 60 -- --scenario=world               # foothills, r
 godot --headless --fixed-fps 60 -- --scenario=predators           # choices, torch, wolves, bear, spear, butchering, snares, clothing
 godot --headless --fixed-fps 60 -- --scenario=frontier            # the wider world: waters, sites, bridge, flares, the lights
 godot --headless --fixed-fps 60 -- --scenario=health              # sickness, infection, frostbite, plants, stews, chests, winter travel, settings
-godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu
+godot --headless --fixed-fps 60 -- --scenario=under               # cellar, cave, mine, drop-through, the dark, flint, finds, springs, falls, regrowth
+godot -- --x=9000 --hour=22 --wolves=torch --shot=out.png          # previews: --wolves[=torch] --bear[=0|1|2] --wear[=buckskin] --choices --attack[=bear] --climb --buildmenu --under=cellar|cave|mine[:x[:y]] [--lamp=1]
 godot -- --hour=19.5 --weather=rain --x=13500 --shot=out.png   # screenshot a scenario
 ```
 Other debug flags (after `--`): `--walk=1|-1`, `--run`, `--zoom=Z`, `--debug`, `--camp` (finished camp nearby), `--sleep`, `--pack`, `--menu`, `--deer`, `--flee`, `--fish`, `--load=SLOT`.

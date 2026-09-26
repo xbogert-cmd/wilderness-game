@@ -306,6 +306,22 @@ func _ready() -> void:
 		pause.toggle.call_deferred()
 		if args.menu == "settings":
 			pause._settings.call_deferred()
+	if args.has("under"): # preview: down in the cellar, cave or mine (--under=cave:1100 puts you that far in), torch lit
+		var bits: PackedStringArray = str(args.under).split(":")
+		for ux in Underground.PLACES:
+			if Underground.PLACES[ux] == bits[0]:
+				var k: String = bits[0]
+				var o := Underground.origin_of(ux, world.terrain)
+				var lx: float = float(bits[1]) if bits.size() > 1 else {"cellar": 600.0, "cave": 1000.0, "mine": 400.0}[k]
+				var ly: float = float(bits[2]) if bits.size() > 2 else 330.0 if k == "cellar" else (700.0 if k == "mine" else (400.0 if lx < 1350.0 and lx > 560.0 else 830.0))
+				if k == "cave" and lx <= 560.0:
+					ly = 2.0 + (lx + 80.0) * 0.59
+				player.global_position = o + Vector2(lx * Underground.DIR[k], ly - 6.0)
+				world.update_focus(player.global_position.x)
+		if args.get("lamp", "") != "":
+			player.hold(ItemStack.make("lantern", GameClock.clock.hours))
+		else:
+			player.hold(ItemStack.make("torch", GameClock.clock.hours))
 	if args.has("top"): # preview: up on the lookout catwalk
 		player.global_position = Vector2(Terrain.LOOKOUT_X - 40.0, world.terrain.summit_y + Lookout.FLOOR - 6.0)
 	if args.has("reveal"): # preview: the whole map explored

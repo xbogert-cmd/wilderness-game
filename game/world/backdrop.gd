@@ -49,7 +49,8 @@ func _process(delta: float) -> void:
 		l.node.position = Vector2(c.x * (1.0 - l.s), c.y * (1.0 - l.sy) + l.bias)
 	_fade_foreground(delta)
 	var fg: Node2D = layers[-1].node # the near foreground makes no sense in a wide view: let it go
-	fg.modulate.a = move_toward(fg.modulate.a, 0.0 if camera.zoom.x < 0.75 else 1.0, delta * 1.5)
+	var down: bool = player is Player and player.under > 0.3 # underground the trees in front make no sense either
+	fg.modulate.a = move_toward(fg.modulate.a, 0.0 if camera.zoom.x < 0.75 or down else 1.0, delta * 1.5)
 	if _far_tower:
 		_far_tower.modulate.a = 1.0 - smoothstep(Terrain.RIDGE_X - 8000.0, Terrain.RIDGE_X - 3000.0, c.x)
 	_lights(delta, c.x)
@@ -226,6 +227,22 @@ func _forest(node: Node2D, s: float, mat: Material, s_next: float) -> void:
 				tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max) * 0.35, Color("2f4a3e"), Color("2f4a3e"), Palette.BARK, mat)
 			elif b == "alpine" and roll < 0.5:
 				tree = SceneryArt.rock(_rng, _rng.randf_range(120.0, 300.0) * s, mat)
+			elif b == "desert" or b == "canyon": # buttes and red rock, junipers, sage
+				if roll < (0.16 if b == "canyon" else 0.07) and s < 0.7:
+					tree = SceneryArt.mesa(_rng, _rng.randf_range(1400.0, 2600.0) * s, _rng.randf_range(500.0, 1100.0) * s, SceneryArt.SANDSTONE.darkened(0.1), mat)
+				elif roll < 0.55:
+					tree = SceneryArt.bush(_rng, _rng.randf_range(70.0, 130.0) * s, Color("8f8a62"), mat)
+				elif roll < 0.8:
+					tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max) * 0.3, Color("2f4a3e"), Color("2f4a3e"), Palette.BARK, mat)
+				else:
+					tree = SceneryArt.rock(_rng, _rng.randf_range(120.0, 320.0) * s, mat, SceneryArt.SANDSTONE, SceneryArt.SANDSTONE_LIGHT)
+			elif b == "boulders":
+				tree = SceneryArt.rock(_rng, _rng.randf_range(160.0, 420.0) * s, mat) if roll < 0.7 \
+					else SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max) * 0.4, Color("2a4032"), Color("2a4032"), Palette.BARK, mat)
+			elif b == "oldgrowth": # the big timber, dark and close
+				tree = SceneryArt.conifer(_rng, _rng.randf_range(h_min, h_max) * 1.5, Color("1c3326"), Color("27402f") if detail else Color("1c3326"), Color("4a3226"), mat)
+			elif b == "grove" and roll < 0.85:
+				tree = SceneryArt.broadleaf(_rng, _rng.randf_range(h_min, h_max) * 0.8, Palette.ASPEN_LEAF_DARK, Palette.ASPEN_LEAF_LIGHT if detail else Palette.ASPEN_LEAF_DARK, Palette.ASPEN_BARK, mat)
 			elif roll > 0.9 - 0.2 * fh:
 				tree = SceneryArt.rock(_rng, _rng.randf_range(90.0, 260.0) * s, mat) if fh > 0.5 else SceneryArt.bush(_rng, 160.0 * s, Palette.BUSH, mat)
 			elif roll < 0.6:
@@ -274,8 +291,14 @@ func _foreground(node: Node2D, s: float, _mat: Material) -> void:
 		if near.any(func(g): return absf(x - g[0]) < g[1]):
 			continue
 		var item: Node2D
-		if _rng.randf() < 0.35:
-			var tw := _rng.randf_range(60, 130)
+		var fb := Terrain.biome(x / s)
+		if fb in ["desert", "canyon", "sage", "boulders"]: # dry, open country: rock and brush close by, no ferns
+			var rw := _rng.randf_range(120, 260)
+			item = SceneryArt.rock(_rng, rw, mat, Palette.FG_DARK, Palette.FG_MID)
+			item.set_meta("half_w", rw * 0.5)
+			item.set_meta("height", rw * 0.6)
+		elif _rng.randf() < (0.7 if fb == "oldgrowth" else 0.35): # trunks right in front of you; many more in the big timber
+			var tw := _rng.randf_range(60, 130) * (1.8 if fb == "oldgrowth" else 1.0)
 			item = Node2D.new()
 			item.add_child(SceneryArt.poly(PackedVector2Array([Vector2(-tw * 0.55, 40), Vector2(tw * 0.55, 40), Vector2(tw * 0.42, -2600), Vector2(-tw * 0.42, -2600)]), Palette.FG_DARK, mat))
 			item.set_meta("half_w", tw * 0.55)

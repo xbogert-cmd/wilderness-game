@@ -5,7 +5,7 @@ class_name Settings extends RefCounted
 const BUSES := ["Master", "Music", "SFX", "Ambience", "Weather"]
 ## Actions a player can rebind, with a friendly name.
 const ACTIONS := {
-	"move_left": "Move left", "move_right": "Move right", "run": "Run", "crouch": "Crouch", "hop": "Hop",
+	"move_left": "Move left", "move_right": "Move right", "run": "Run", "crouch": "Crouch", "hop": "Hop", "move_down": "Go down / drop through",
 	"interact": "Interact", "lift": "Lift / let go", "stow": "Put away", "backpack": "Backpack", "build": "Build menu",
 	"map": "Map & journal", "rest": "Sleep", "slot_1": "Strap 1", "slot_2": "Strap 2", "rotate_item": "Rotate item",
 }

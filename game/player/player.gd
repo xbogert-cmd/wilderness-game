@@ -29,6 +29,8 @@ const THRUST_STAMINA := 5.0
 const TORCH_HOURS := 3.0 ## a torch burns this long (faster in rain)
 const HAUL_SPEED := 0.42 ## dragging a whole deer
 const DEATH_LOSS_CHANCE := 0.2 ## per consumable stack (doubled roll, loses half the stack)
+const MASK := 1 | (1 << (Underground.PLATFORM_LAYER - 1)) ## the ground, and ledges you can drop through
+const LANTERN_HOURS := 12.0 ## on a fill of lamp oil
 
 var world: World
 var footsteps: Footsteps
@@ -90,11 +92,14 @@ var sleeping := false
 var dead := false
 var start_x := 0.0 ## where the trail begins; respawn point until a camp exists
 var camp_x := -1.0 ## last camp (shelter) used; -1 = none yet
+var underground: Underground ## the cellar, cave or mine you're down in, if any
+var under := 0.0 ## 0 above ground, 1 properly down in the dark
+var _drop_t := 0.0 ## dropping through a ledge: platforms ignored for this long
 
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = MASK
 	cond = Condition.new(GameClock.tuning)
 	var shape := CollisionShape2D.new()
 	var cap := CapsuleShape2D.new()
@@ -196,9 +201,15 @@ func _physics_process(delta: float) -> void:
 	elif swing < 0.0:
 		cond.recover_stamina(delta * (0.5 if dir != 0.0 else 1.0))
 
+	if _drop_t > 0.0:
+		_drop_t -= delta
+		if _drop_t <= 0.0:
+			collision_mask = MASK
 	if not was_on_floor:
 		velocity.y += GRAVITY * delta
 		_fall_vy = maxf(_fall_vy, velocity.y)
+	elif Input.is_action_just_pressed("move_down") and working <= 0.0 and _errand.is_empty():
+		go_down()
 	elif Input.is_action_just_pressed("hop") and carrying == null and hauling == null and pulling == null and working <= 0.0 and cond.spend_stamina(HOP_STAMINA):
 		velocity.y = -HOP
 	move_and_slide()
@@ -209,18 +220,46 @@ func _physics_process(delta: float) -> void:
 	if dir != 0.0 and bow_draw < 0.0:
 		facing = 1 if dir > 0.0 else -1
 	world.update_focus(global_position.x)
+	underground = world.under_at(global_position)
+	under = underground.depth(global_position) if underground else 0.0
 
 	_advance_swing(delta)
 	_advance_thrust(delta)
 	_advance_work(delta)
 	var torch := holding("torch")
-	_torch_light.visible = torch
+	var lamp := holding("light") and held.condition > 0.0
+	_torch_light.visible = torch or lamp
+	var dark := maxf(1.0 - GameClock.clock.daylight(), under)
+	_torch_light.texture_scale = lerpf(3.2, 5.0, under) # the walls close by catch the light
 	if torch:
 		_torch_light.position = Vector2(facing * 34.0, -175.0)
-		_torch_light.energy = (0.9 + 0.12 * sin(Time.get_ticks_msec() * 0.019) + 0.07 * sin(Time.get_ticks_msec() * 0.043)) * lerpf(0.25, 1.0, 1.0 - GameClock.clock.daylight())
+		_torch_light.color = Color(1.0, 0.66, 0.34)
+		_torch_light.energy = (0.9 + 0.12 * sin(Time.get_ticks_msec() * 0.019) + 0.07 * sin(Time.get_ticks_msec() * 0.043)) * lerpf(0.25, 1.0, dark)
+	elif lamp: # steadier and a little whiter than a torch
+		_torch_light.position = Vector2(facing * 30.0, -120.0)
+		_torch_light.color = Color(1.0, 0.82, 0.55)
+		_torch_light.energy = (0.95 + 0.03 * sin(Time.get_ticks_msec() * 0.011)) * lerpf(0.25, 1.0, dark)
 	_update_focus()
 	if menu and (menu != focus or dir != 0.0 or working > 0.0):
 		menu = null
+
+## S: down through the hatch or ledge you're standing on (or into the cellar, cave or mine).
+func go_down() -> void:
+	for u in get_tree().get_nodes_in_group("underground"):
+		if u.descend(self):
+			return
+	for i in get_slide_collision_count():
+		var c := get_slide_collision(i).get_collider()
+		if c is CollisionObject2D and c.get_collision_layer_value(Underground.PLATFORM_LAYER):
+			drop_through()
+			return
+
+## Falls through ledges and hatches for a moment (Terraria-style), onto whatever's below.
+func drop_through() -> void:
+	collision_mask = 1
+	_drop_t = 0.3
+	velocity.y = 80.0
+	global_position.y += 4.0
 
 func _on_landed(vy: float) -> void:
 	if vy > FALL_INJURY_SPEED:
@@ -232,6 +271,8 @@ func _on_landed(vy: float) -> void:
 ## Deep snow drags at every step: knee-deep (50 cm) costs about 40% of your pace.
 ## Snowshoes keep you on top of it (and are clumsy on bare ground).
 func snow_mult() -> float:
+	if under > 0.3:
+		return 1.0
 	var cm := GameClock.weather.snow_cm if wade_depth <= 0.0 else 0.0
 	if backpack.wearing("snowshoes"):
 		return 0.85 if cm < 8.0 else 1.0 - clampf(cm / 125.0, 0.0, 0.45) * 0.2
@@ -241,6 +282,8 @@ func snow_mult() -> float:
 func noise() -> float:
 	if sleeping or dead:
 		return 0.05
+	if under > 0.5: # nothing up top hears you down here
+		return 0.0
 	var moving := absf(velocity.x) > 5.0
 	var n := 0.06
 	if running:
@@ -259,6 +302,8 @@ func noise() -> float:
 
 ## How easy the player is to spot: crouching and holding still help most.
 func visibility() -> float:
+	if under > 0.5:
+		return 0.0
 	var moving := absf(velocity.x) > 5.0
 	if crouching:
 		return (0.45 if moving else 0.25) * (HuntingBlind.VISIBILITY if HuntingBlind.hiding(self) else 1.0)
@@ -284,7 +329,7 @@ func _on_tick(dh: float) -> void:
 		"sleep_quality": sleep_quality() if sleeping else 1.0,
 		"insulation_c": (GameClock.tuning.sleeping_bag_c if sleeping and backpack.count_of("sleeping_bag") > 0 else 0.0) \
 			+ backpack.insulation(),
-		"air_c": w.air_temp_c(GameClock.clock) - (10.0 * w.blizzard() if not world.sheltered_at(global_position.x) else 0.0), # a blizzard's wind cuts through
+		"air_c": air_c() - (10.0 * w.blizzard() if not world.sheltered_at(global_position.x) else 0.0), # a blizzard's wind cuts through
 		"precip": w.rain() + w.snowfall() * 0.25, # snow wets you far less than rain
 		"sheltered": world.sheltered_at(global_position.x),
 		"heat": world.heat_at(global_position + Vector2(0, -60)),
@@ -294,14 +339,24 @@ func _on_tick(dh: float) -> void:
 		"legs_covered": backpack.worn.legs != null,
 		"deep_snow": w.snow_cm > 25.0 and not world.sheltered_at(global_position.x),
 	})
+	if holding("light") and held.condition > 0.0:
+		held.condition = maxf(held.condition - dh / LANTERN_HOURS, 0.0)
+		if held.condition <= 0.0:
+			message.emit("The lantern flickers out: it needs lamp oil.")
 	if holding("torch"):
-		held.condition -= dh / TORCH_HOURS * (1.0 + 2.0 * w.rain())
+		held.condition -= dh / TORCH_HOURS * (1.0 + 2.0 * w.rain() * (1.0 - under))
 		if held.condition <= 0.0:
 			held = null
 			held_slot = -1
 			message.emit("The torch gutters out.")
 	if cond.is_dead():
 		_die()
+
+## The air where you stand: the day's temperature, warmer in dry country, cooler in the deep
+## timber and up on the rocks; underground it's about the same all year.
+func air_c() -> float:
+	var a := GameClock.weather.air_temp_c(GameClock.clock) + Terrain.temp_offset(global_position.x)
+	return lerpf(a, Underground.HOLDS_C, under)
 
 ## Bitten or mauled: damage and a wound, knocked back and off balance, blood on the ground.
 func take_hit(damage: float, region: String, severity: float, from_x: float, force: float) -> void:
@@ -425,7 +480,8 @@ func _update_focus() -> void:
 		for n in get_tree().get_nodes_in_group("choppable"):
 			var d: float = n.chop_distance(self) - (60.0 if n is FelledTrunk else 0.0) # finish processing a felled tree first
 			var ahead: bool = signf(n.global_position.x - global_position.x) == facing or d < 30.0
-			if d < best and ahead:
+			var level: bool = absf(n.global_position.y - global_position.y) < 300.0 # not a tree up top from down in a cave
+			if d < best and ahead and level:
 				best = d
 				chop_target = n
 
@@ -438,7 +494,9 @@ func use_held() -> void:
 	if d.has("rod"):
 		fishing.press()
 	elif d.has("bow"):
-		if backpack.count_of("arrows") == 0:
+		if under > 0.3:
+			message.emit("No room to draw a bow down here.")
+		elif backpack.count_of("arrows") == 0:
 			message.emit("No arrows. Craft some from sticks.")
 		else:
 			bow_draw = 0.0
@@ -449,6 +507,8 @@ func use_held() -> void:
 			thrust = 0.0
 	elif d.has("torch"):
 		_wave_torch()
+	elif d.has("light"):
+		message.emit("The lantern's lit (oil %d%%)." % int(held.condition * 100) if held.condition > 0.0 else "Out of oil. Fill it from a can of lamp oil (in the pack).")
 	elif d.has("call"):
 		_call()
 	elif d.has("axe"):
@@ -691,7 +751,10 @@ func drop_stack(s: ItemStack) -> void:
 		held = null
 		held_slot = -1
 	backpack.remove(s)
-	world.spawn({"kind": "item", "x": global_position.x + facing * 40.0, "stack": s.to_dict()})
+	var d := {"kind": "item", "x": global_position.x + facing * 40.0, "stack": s.to_dict()}
+	if under > 0.0: # down here it lands on the floor you're standing on, not the ground up top
+		d.y = global_position.y
+	world.spawn(d)
 
 # --- Oversized objects -------------------------------------------------------
 
@@ -840,9 +903,11 @@ func _advance_climb(delta: float) -> void:
 			step = 0.0
 	velocity = Vector2.ZERO
 	world.update_focus(global_position.x)
+	underground = world.under_at(global_position)
+	under = underground.depth(global_position) if underground else 0.0
 	if _climb_leg >= _climb_path.size() - 1:
 		climbing = false
-		collision_mask = 1
+		collision_mask = MASK
 		if _climb_done.is_valid():
 			_climb_done.call()
 
@@ -978,6 +1043,7 @@ func unsafe_reason() -> String:
 	if not is_on_floor(): return "Get your feet on the ground first."
 	if wade_depth > 0.0: return "Get out of the water first."
 	if climbing: return "Get off the ladder first."
+	if _drop_t > 0.0: return "Get your feet on the ground first."
 	if carrying: return "Set the log down first."
 	if hauling: return "Let go of the carcass first."
 	if pulling: return "Let go of the sled first."

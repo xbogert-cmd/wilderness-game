@@ -1,16 +1,21 @@
 class_name Terrain extends RefCounted
 ## Deterministic ground profile. 100 px = 1 m. Down is +y.
-## West to east: sage flats (Alder Creek), the old homestead meadow, the marsh, the Sweetwater
-## River bottoms and the trapper's camp, then the original valley at x >= 0 (Rattlesnake
-## Creek, the foothills and the rock shelter, the ridge and the fire lookout), and past the
-## summit down into the old burn where the plane came down, and the high basin with its tarn.
+## West to east: the dry canyon country at the far west (semi-desert, the canyon and the old
+## Lucky Boy mine), Juniper Spring, the sage flats (Alder Creek), the old homestead meadow,
+## the marsh, the Sweetwater River bottoms and the trapper's camp, then the original valley at
+## x >= 0 (Rattlesnake Creek, the foothills with the cave and the rock shelter, the ridge and
+## the fire lookout), and past the summit down into the old burn where the plane came down,
+## the high basin with its tarn, a boulder field on the far rim, the falls, the old-growth
+## forest along Cedar Creek, and an aspen grove at the eastern end.
 ## The valley kept its coordinates when the world grew: new country lies at negative x and
 ## past 48000, so older saves line up.
 ## Authored features (waters, level flats, summit, edges) are layered on seeded noise.
 
 const CHUNK_W := 6000.0
-const FIRST := -4 ## chunk indices run FIRST..LAST
-const LAST := 11
+const FIRST := -7 ## chunk indices run FIRST..LAST
+const LAST := 15
+const OLD_MIN := -24000.0 ## where the world's edges were before the canyon and the forest (kept
+const OLD_MAX := 72000.0 ## so the scatter in the chunks that had them doesn't shift)
 const CHUNKS := LAST - FIRST + 1
 const WORLD_MIN := FIRST * CHUNK_W
 const WORLD_MAX := (LAST + 1) * CHUNK_W
@@ -24,6 +29,10 @@ const BASIN_X := 53000.0 ## bottom of the descent east of the summit
 const HOMESTEAD_X := -16500.0
 const TRAPPER_X := -7000.0
 const CRASH_X := 57500.0
+const MINE_X := -35000.0 ## the Lucky Boy mine, on the canyon floor
+const ECHO_CAVE_X := 27000.0 ## the sinkhole into the cave in the foothills
+const FALLS_X := 78300.0
+const CANYON := Vector2(-31000.0, -39600.0) ## rim to rim
 
 ## The original creek (kept as constants: plenty of code and checks refer to it).
 const CREEK_X := 13500.0
@@ -39,9 +48,12 @@ const WATERS := [
 	{"name": "Marsh pond", "x": -12600.0, "half": 430.0, "depth": 75.0, "water": 22.0, "kind": "pond", "fish": false},
 	{"name": "Burnt Creek", "x": 54600.0, "half": 240.0, "depth": 100.0, "water": 35.0, "kind": "creek", "fish": true},
 	{"name": "Basin Tarn", "x": 64500.0, "half": 820.0, "depth": 190.0, "water": 40.0, "kind": "lake", "fish": true},
+	{"name": "Juniper Spring", "x": -28800.0, "half": 170.0, "depth": 55.0, "water": 16.0, "kind": "spring", "fish": false, "clean": true},
+	{"name": "Falls Pool", "x": FALLS_X, "half": 330.0, "depth": 160.0, "water": 30.0, "kind": "pool", "fish": true},
+	{"name": "Cedar Creek", "x": 84800.0, "half": 300.0, "depth": 130.0, "water": 38.0, "kind": "creek", "fish": true},
 ]
 ## Level ground for places people built or things came down: [x, half-width].
-const FLATS := [[HOMESTEAD_X, 520.0], [TRAPPER_X, 320.0], [CRASH_X, 650.0]]
+const FLATS := [[HOMESTEAD_X, 520.0], [TRAPPER_X, 320.0], [CRASH_X, 650.0], [MINE_X, 420.0]]
 
 var noise := FastNoiseLite.new()
 var detail := FastNoiseLite.new()
@@ -72,6 +84,9 @@ func _init(seed_value := 1) -> void:
 
 ## Which kind of country x is in.
 static func biome(x: float) -> String:
+	if x < CANYON.y: return "desert"
+	if x < CANYON.x: return "canyon"
+	if x < -26500.0: return "desert"
 	if x < -17800.0: return "sage"
 	if x < -14300.0: return "meadow"
 	if x < -10800.0: return "marsh"
@@ -80,7 +95,21 @@ static func biome(x: float) -> String:
 	if x < RIDGE_X: return "foothills"
 	if x < LOOKOUT_X + 2500.0: return "ridge"
 	if x < 61000.0: return "burn"
-	return "alpine"
+	if x < 73500.0: return "alpine"
+	if x < 77000.0: return "boulders"
+	if x < 89000.0: return "oldgrowth"
+	return "grove"
+
+## How much warmer (or colder) than the valley a place runs: dry country is warm, the high
+## rocks and the deep shade cool.
+const WARMER := {"desert": 3.0, "canyon": 2.0, "boulders": -2.0, "oldgrowth": -1.0}
+
+static func temp_offset(x: float) -> float:
+	return WARMER.get(biome(x), 0.0)
+
+## 0..1 on the canyon floor, easing up the walls.
+static func canyon(x: float) -> float:
+	return smoothstep(CANYON.x, CANYON.x - 1600.0, x) * (1.0 - smoothstep(CANYON.y + 1800.0, CANYON.y, x))
 
 static func inside(x: float, margin := 0.0) -> bool:
 	return x > WORLD_MIN + margin and x < WORLD_MAX - margin
@@ -106,6 +135,11 @@ func _smooth(x: float) -> float:
 	y -= smoothstep(61000.0, 70000.0, x) * 500.0 # and up again into the high basin
 	y += smoothstep(-1500.0, -8000.0, x) * 220.0 # the river bottoms lie lower
 	y -= smoothstep(-15500.0, -22000.0, x) * 320.0 # the sage flats rise west
+	y -= smoothstep(-25000.0, -30000.0, x) * 180.0 # and the dry country higher still
+	y += canyon(x) * 720.0 # down into the canyon
+	y += 60.0 * exp(-pow((x + 36300.0) / 260.0, 2.0)) # the dry wash along its floor
+	y += smoothstep(73500.0, 80500.0, x) * 1500.0 # off the basin rim, down past the falls
+	y -= smoothstep(88000.0, 95000.0, x) * 260.0 # the aspen benches rise east
 	return lerpf(y, _marsh_level(), marsh(x) * 0.85)
 
 func _marsh_level() -> float:
@@ -113,7 +147,8 @@ func _marsh_level() -> float:
 
 ## Rolling ground plus the long climb east (up is -y).
 func _base(x: float) -> float:
-	var rough := 16.0 + 14.0 * foothills(x) - 12.0 * marsh(x) + 10.0 * smoothstep(LOOKOUT_X + 2500.0, BASIN_X, x)
+	var rough := 16.0 + 14.0 * foothills(x) - 12.0 * marsh(x) + 10.0 * smoothstep(LOOKOUT_X + 2500.0, BASIN_X, x) \
+		+ 14.0 * smoothstep(-26000.0, -30000.0, x) - 18.0 * smoothstep(80000.0, 82000.0, x)
 	return _smooth(x) + detail.get_noise_1d(x) * rough
 
 func height_at(x: float) -> float:
