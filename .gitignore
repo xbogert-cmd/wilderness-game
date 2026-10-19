@@ -2,3 +2,9 @@
 *.tmp
 /export/
 .DS_Store
+
+# secrets & local config (never commit)
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
